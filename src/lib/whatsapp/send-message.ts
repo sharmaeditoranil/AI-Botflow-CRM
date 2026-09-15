@@ -47,6 +47,11 @@ import {
   templateBodyParams,
   templateContentText,
 } from '@/lib/whatsapp/template-body';
+import {
+  sendFacebookMessage,
+  sendInstagramMessage,
+  MetaSocialError,
+} from '@/lib/social/meta-social';
 
 export const MEDIA_KINDS = ['image', 'video', 'document', 'audio'] as const;
 export const VALID_MESSAGE_TYPES = [
@@ -233,6 +238,106 @@ export async function sendMessageToConversation(
   }
 
   const contact = conversation.contact;
+  const channel = conversation.channel || 'whatsapp';
+
+  // Handle Facebook Messenger & Instagram DM sends
+  if (channel === 'facebook' || channel === 'instagram') {
+    const isFb = channel === 'facebook';
+    const recipientId = isFb ? contact?.fb_user_id : contact?.ig_user_id;
+
+    if (!recipientId) {
+      throw new SendMessageError(
+        'bad_request',
+        `Contact does not have a ${isFb ? 'Facebook user ID (PSID)' : 'Instagram user ID (IGSID)'}`,
+        400
+      );
+    }
+
+    // Load meta_social_config
+    const { data: socialConfig, error: socialConfigError } = await db
+      .from('meta_social_config')
+      .select('*')
+      .eq('account_id', accountId)
+      .maybeSingle();
+
+    if (socialConfigError || !socialConfig || !socialConfig.facebook_page_access_token) {
+      throw new SendMessageError(
+        'social_not_configured',
+        `${isFb ? 'Facebook Messenger' : 'Instagram'} is not configured. Please connect your Facebook Page in Settings.`,
+        400
+      );
+    }
+
+    const pageAccessToken = decrypt(socialConfig.facebook_page_access_token);
+
+    try {
+      const result = isFb
+        ? await sendFacebookMessage({
+            pageAccessToken,
+            recipientId,
+            text: contentText,
+            mediaUrl,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            mediaType: isMediaKind ? (messageType as any) : undefined,
+          })
+        : await sendInstagramMessage({
+            pageAccessToken,
+            recipientId,
+            text: contentText,
+            mediaUrl,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            mediaType: isMediaKind ? (messageType as any) : undefined,
+          });
+
+      // Persist the sent message
+      const { data: savedMessage, error: insertError } = await db
+        .from('messages')
+        .insert({
+          conversation_id: conversationId,
+          channel: channel,
+          sender_type: 'agent',
+          content_type: messageType,
+          content_text: contentText || (mediaUrl ? `Sent a ${messageType}` : null),
+          media_url: mediaUrl || null,
+          message_id: result.messageId,
+          status: 'sent',
+        })
+        .select('id')
+        .single();
+
+      if (insertError || !savedMessage) {
+        throw new SendMessageError(
+          'internal_error',
+          'Message delivered to Meta but failed to save in database',
+          500
+        );
+      }
+
+      // Update conversation summary
+      await db
+        .from('conversations')
+        .update({
+          last_message_text: contentText || (mediaUrl ? `Sent a ${messageType}` : ''),
+          last_message_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', conversationId);
+
+      return {
+        messageId: savedMessage.id,
+        whatsappMessageId: result.messageId,
+      };
+    } catch (err) {
+      if (err instanceof MetaSocialError) {
+        throw new SendMessageError(err.code, err.message, err.status);
+      }
+      if (err instanceof SendMessageError) {
+        throw err;
+      }
+      const msg = err instanceof Error ? err.message : 'Failed to send message via Meta';
+      throw new SendMessageError('meta_api_error', msg, 500);
+    }
+  }
 
   // A contact is addressable by phone number OR by business-scoped user
   // ID. Meta withholds the phone number for a customer who has adopted

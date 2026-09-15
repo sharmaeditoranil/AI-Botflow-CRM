@@ -115,6 +115,10 @@ export interface Contact {
   /** WhatsApp username without the leading @. Display only: usernames
    *  are user-changeable, so they must never key a contact. */
   wa_username?: string | null;
+  /** Facebook Page-scoped user ID (PSID) for Messenger conversations. */
+  fb_user_id?: string | null;
+  /** Instagram-scoped user ID (IGSID) for Instagram DM conversations. */
+  ig_user_id?: string | null;
   name?: string;
   email?: string;
   company?: string;
@@ -167,11 +171,13 @@ export interface ContactNote {
 }
 
 export type ConversationStatus = 'open' | 'pending' | 'closed';
+export type SocialChannelType = 'whatsapp' | 'facebook' | 'instagram';
 
 export interface Conversation {
   id: string;
   user_id: string;
   contact_id: string;
+  channel?: SocialChannelType;
   status: ConversationStatus;
   assigned_agent_id?: string;
   last_message_text?: string;
@@ -232,6 +238,7 @@ export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read' | 'failed'
 export interface Message {
   id: string;
   conversation_id: string;
+  channel?: SocialChannelType;
   sender_type: SenderType;
   sender_id?: string;
   content_type: ContentType;
@@ -323,6 +330,22 @@ export interface WhatsAppConfig {
    * the CRM panel. Migration 044.
    */
   coexistence?: boolean;
+}
+
+export interface MetaSocialConfig {
+  id: string;
+  account_id: string;
+  user_id: string;
+  facebook_page_id?: string | null;
+  facebook_page_name?: string | null;
+  facebook_page_access_token?: string | null;
+  facebook_status: 'connected' | 'disconnected';
+  instagram_account_id?: string | null;
+  instagram_username?: string | null;
+  instagram_status: 'connected' | 'disconnected';
+  verify_token?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // Raw Meta status enum. We persist this verbatim from Meta (sync + webhook)

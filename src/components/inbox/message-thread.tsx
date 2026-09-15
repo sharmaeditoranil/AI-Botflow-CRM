@@ -54,6 +54,11 @@ import { AiThreadBanner } from "./ai-thread-banner";
 import { buildReplyPreview } from "./reply-quote";
 import { renderTemplateBody } from "@/lib/whatsapp/template-body";
 import { contactHandle } from "@/lib/whatsapp/wa-identity";
+import {
+  WhatsAppIcon,
+  MessengerIcon,
+  InstagramIcon,
+} from "@/components/icons/social-icons";
 import { toast } from "sonner";
 
 interface ReplyDraft {
@@ -881,6 +886,7 @@ export function MessageThread({
     );
   }
 
+  const channel = conversation.channel || "whatsapp";
   const displayName = contact.name || contactHandle(contact);
   const messageGroups = groupMessagesByDate(messages);
   const currentStatus = STATUS_OPTIONS.find(
@@ -918,13 +924,51 @@ export function MessageThread({
               <ArrowLeft className="h-5 w-5" />
             </button>
           )}
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
+          <div className="relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
             {displayName.charAt(0).toUpperCase()}
+            <span
+              className={cn(
+                "absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full ring-2 ring-card shadow-xs text-white",
+                channel === "facebook"
+                  ? "bg-[#0084FF]"
+                  : channel === "instagram"
+                  ? "bg-gradient-to-tr from-[#f09433] via-[#dc2743] to-[#bc1888]"
+                  : "bg-[#25D366]"
+              )}
+              title={channel === "facebook" ? "Facebook Messenger" : channel === "instagram" ? "Instagram DM" : "WhatsApp"}
+            >
+              {channel === "facebook" ? (
+                <MessengerIcon className="h-2 w-2 fill-current" />
+              ) : channel === "instagram" ? (
+                <InstagramIcon className="h-2 w-2 fill-current" />
+              ) : (
+                <WhatsAppIcon className="h-2 w-2 fill-current" />
+              )}
+            </span>
           </div>
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold text-foreground">{displayName}</h2>
+            <div className="flex items-center gap-1.5">
+              <h2 className="truncate text-sm font-semibold text-foreground">{displayName}</h2>
+              <Badge
+                variant="outline"
+                className={cn(
+                  "border-0 px-1 py-0 text-[9px] font-semibold uppercase tracking-wider",
+                  channel === "facebook"
+                    ? "bg-blue-500/10 text-[#0084FF]"
+                    : channel === "instagram"
+                    ? "bg-pink-500/10 text-pink-500"
+                    : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                )}
+              >
+                {channel === "facebook" ? "Messenger" : channel === "instagram" ? "Instagram" : "WhatsApp"}
+              </Badge>
+            </div>
             <p className="truncate text-xs text-muted-foreground">
-              {contactHandle(contact)}
+              {channel === "facebook"
+                ? "Facebook Messenger"
+                : channel === "instagram"
+                ? "Instagram Direct Message"
+                : contactHandle(contact)}
             </p>
           </div>
           {/* Session timer badge — hidden on the narrowest phones so
@@ -1179,7 +1223,8 @@ export function MessageThread({
       {/* Composer */}
       <MessageComposer
         conversationId={conversation.id}
-        sessionExpired={sessionInfo.expired}
+        channel={channel}
+        sessionExpired={channel === "whatsapp" ? sessionInfo.expired : false}
         onSend={handleSend}
         onSendMedia={handleSendMedia}
         onSendInteractive={handleSendInteractive}

@@ -21,6 +21,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  WhatsAppIcon,
+  MessengerIcon,
+  InstagramIcon,
+} from "@/components/icons/social-icons";
 
 interface ConversationListProps {
   activeConversationId: string | null;
@@ -42,8 +47,7 @@ const STATUS_COLORS: Record<ConversationStatus, string> = {
   closed: "bg-muted-foreground",
 };
 
-
-
+export type PlatformFilter = "all" | "whatsapp" | "facebook" | "instagram";
 type InboxFilter = ConversationStatus | "all" | "unread";
 
 export function ConversationList({
@@ -65,6 +69,7 @@ export function ConversationList({
 
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<InboxFilter>("all");
+  const [platformFilter, setPlatformFilter] = useState<PlatformFilter>("all");
   const [loading, setLoading] = useState(true);
   // Contact-based filters (issue #272). Tags use OR logic (a conversation
   // matches if its contact carries any selected tag), consistent with
@@ -72,6 +77,26 @@ export function ConversationList({
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
+
+  // Dynamic unread counters per social platform
+  const platformCounts = useMemo(() => {
+    let all = 0;
+    let whatsapp = 0;
+    let facebook = 0;
+    let instagram = 0;
+
+    for (const c of conversations) {
+      const unread = c.unread_count || 0;
+      if (unread > 0) {
+        all += unread;
+        const ch = c.channel || "whatsapp";
+        if (ch === "facebook") facebook += unread;
+        else if (ch === "instagram") instagram += unread;
+        else whatsapp += unread;
+      }
+    }
+    return { all, whatsapp, facebook, instagram };
+  }, [conversations]);
 
   // Keep the latest callback in a ref so the fetch effect below can
   // have a stable, empty-dep identity. Previously the fetch useCallback
@@ -161,6 +186,11 @@ export function ConversationList({
   const filtered = useMemo(() => {
     let result = conversations;
 
+    // Filter by social platform
+    if (platformFilter !== "all") {
+      result = result.filter((c) => (c.channel || "whatsapp") === platformFilter);
+    }
+
     if (filter === "unread") {
       result = result.filter((c) => c.unread_count > 0);
     } else if (filter !== "all") {
@@ -188,7 +218,7 @@ export function ConversationList({
     }
 
     return result;
-  }, [conversations, filter, search, selectedTagIds, selectedCompany]);
+  }, [conversations, platformFilter, filter, search, selectedTagIds, selectedCompany]);
 
   const toggleTag = useCallback((id: string) => {
     setSelectedTagIds((prev) =>
@@ -236,7 +266,201 @@ export function ConversationList({
           />
         </div>
 
+        {/* Platform Channel Tabs */}
+        <div className="flex items-center gap-1 overflow-x-auto pb-0.5 no-scrollbar">
+          <button
+            type="button"
+            onClick={() => setPlatformFilter("all")}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-all shrink-0",
+              platformFilter === "all"
+                ? "bg-primary text-primary-foreground shadow-xs font-semibold"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            <span>{t("filterAll")}</span>
+            {platformCounts.all > 0 && (
+              <span
+                className={cn(
+                  "rounded-full px-1.5 py-0.2 text-[10px] font-bold leading-tight",
+                  platformFilter === "all"
+                    ? "bg-primary-foreground/20 text-primary-foreground"
+                    : "bg-primary text-primary-foreground"
+                )}
+              >
+                {platformCounts.all}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setPlatformFilter("whatsapp")}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-all shrink-0",
+              platformFilter === "whatsapp"
+                ? "bg-[#25D366] text-white shadow-xs font-semibold"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            <WhatsAppIcon className="h-3 w-3 fill-current" />
+            <span>WhatsApp</span>
+            {platformCounts.whatsapp > 0 && (
+              <span
+                className={cn(
+                  "rounded-full px-1.5 py-0.2 text-[10px] font-bold leading-tight",
+                  platformFilter === "whatsapp"
+                    ? "bg-white/25 text-white"
+                    : "bg-[#25D366] text-white"
+                )}
+              >
+                {platformCounts.whatsapp}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setPlatformFilter("facebook")}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-all shrink-0",
+              platformFilter === "facebook"
+                ? "bg-[#0084FF] text-white shadow-xs font-semibold"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            <MessengerIcon className="h-3 w-3 fill-current" />
+            <span>Facebook</span>
+            {platformCounts.facebook > 0 && (
+              <span
+                className={cn(
+                  "rounded-full px-1.5 py-0.2 text-[10px] font-bold leading-tight",
+                  platformFilter === "facebook"
+                    ? "bg-white/25 text-white"
+                    : "bg-[#0084FF] text-white"
+                )}
+              >
+                {platformCounts.facebook}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setPlatformFilter("instagram")}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-all shrink-0",
+              platformFilter === "instagram"
+                ? "bg-gradient-to-r from-[#f09433] via-[#dc2743] to-[#bc1888] text-white shadow-xs font-semibold"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            <InstagramIcon className="h-3 w-3 fill-current" />
+            <span>Instagram</span>
+            {platformCounts.instagram > 0 && (
+              <span
+                className={cn(
+                  "rounded-full px-1.5 py-0.2 text-[10px] font-bold leading-tight",
+                  platformFilter === "instagram"
+                    ? "bg-white/25 text-white"
+                    : "bg-[#E1306C] text-white"
+                )}
+              >
+                {platformCounts.instagram}
+              </span>
+            )}
+          </button>
+        </div>
+
         <div className="flex flex-wrap items-center gap-1">
+          {/* Platform Channel Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground rounded-md hover:bg-muted border border-border/40">
+              {platformFilter === "all" && <span>All Platforms</span>}
+              {platformFilter === "whatsapp" && (
+                <span className="flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400">
+                  <WhatsAppIcon className="h-3 w-3 fill-current" /> WhatsApp
+                </span>
+              )}
+              {platformFilter === "facebook" && (
+                <span className="flex items-center gap-1 font-medium text-[#0084FF]">
+                  <MessengerIcon className="h-3 w-3 fill-current" /> Facebook
+                </span>
+              )}
+              {platformFilter === "instagram" && (
+                <span className="flex items-center gap-1 font-medium text-pink-500">
+                  <InstagramIcon className="h-3 w-3 fill-current" /> Instagram
+                </span>
+              )}
+              <ChevronDown className="h-3 w-3" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="border-border bg-popover">
+              <DropdownMenuItem
+                onClick={() => setPlatformFilter("all")}
+                className={cn(
+                  "text-sm flex items-center justify-between gap-3",
+                  platformFilter === "all" ? "text-primary font-medium" : "text-popover-foreground"
+                )}
+              >
+                <span>All Platforms</span>
+                {platformCounts.all > 0 && (
+                  <span className="rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                    {platformCounts.all}
+                  </span>
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setPlatformFilter("whatsapp")}
+                className={cn(
+                  "text-sm flex items-center justify-between gap-3",
+                  platformFilter === "whatsapp" ? "text-emerald-500 font-medium" : "text-popover-foreground"
+                )}
+              >
+                <span className="flex items-center gap-2">
+                  <WhatsAppIcon className="h-3.5 w-3.5 fill-current text-emerald-500" /> WhatsApp
+                </span>
+                {platformCounts.whatsapp > 0 && (
+                  <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-500">
+                    {platformCounts.whatsapp}
+                  </span>
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setPlatformFilter("facebook")}
+                className={cn(
+                  "text-sm flex items-center justify-between gap-3",
+                  platformFilter === "facebook" ? "text-[#0084FF] font-medium" : "text-popover-foreground"
+                )}
+              >
+                <span className="flex items-center gap-2">
+                  <MessengerIcon className="h-3.5 w-3.5 fill-current text-[#0084FF]" /> Facebook
+                </span>
+                {platformCounts.facebook > 0 && (
+                  <span className="rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-blue-500">
+                    {platformCounts.facebook}
+                  </span>
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => setPlatformFilter("instagram")}
+                className={cn(
+                  "text-sm flex items-center justify-between gap-3",
+                  platformFilter === "instagram" ? "text-pink-500 font-medium" : "text-popover-foreground"
+                )}
+              >
+                <span className="flex items-center gap-2">
+                  <InstagramIcon className="h-3.5 w-3.5 fill-current text-pink-500" /> Instagram
+                </span>
+                {platformCounts.instagram > 0 && (
+                  <span className="rounded-full bg-pink-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-pink-500">
+                    {platformCounts.instagram}
+                  </span>
+                )}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Status filter dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground rounded-md hover:bg-muted">
                 {activeFilter?.label ?? t("filterAll")}
@@ -439,6 +663,7 @@ function ConversationItem({
   const contact = conversation.contact;
   const displayName = contact?.name || contact?.phone || t("unknown");
   const initials = displayName.charAt(0).toUpperCase();
+  const channel = conversation.channel || "whatsapp";
 
   const handleClick = useCallback(() => {
     onSelect(conversation);
@@ -458,8 +683,8 @@ function ConversationItem({
         isActive && "border-l-2 border-primary bg-muted/70"
       )}
     >
-      {/* Avatar */}
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
+      {/* Avatar with Channel Badge */}
+      <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
         {contact?.avatar_url ? (
           <img
             src={contact.avatar_url}
@@ -469,14 +694,47 @@ function ConversationItem({
         ) : (
           initials
         )}
+        <span
+          className={cn(
+            "absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full ring-2 ring-card shadow-xs text-white",
+            channel === "facebook"
+              ? "bg-[#0084FF]"
+              : channel === "instagram"
+              ? "bg-gradient-to-tr from-[#f09433] via-[#dc2743] to-[#bc1888]"
+              : "bg-[#25D366]"
+          )}
+          title={channel === "facebook" ? "Facebook Messenger" : channel === "instagram" ? "Instagram DM" : "WhatsApp"}
+        >
+          {channel === "facebook" ? (
+            <MessengerIcon className="h-2.5 w-2.5 fill-current" />
+          ) : channel === "instagram" ? (
+            <InstagramIcon className="h-2.5 w-2.5 fill-current" />
+          ) : (
+            <WhatsAppIcon className="h-2.5 w-2.5 fill-current" />
+          )}
+        </span>
       </div>
 
       {/* Content */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-sm font-medium text-foreground">
-            {displayName}
-          </span>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="truncate text-sm font-medium text-foreground">
+              {displayName}
+            </span>
+            <span
+              className={cn(
+                "inline-flex shrink-0 items-center rounded px-1 py-0.2 text-[9px] font-semibold tracking-wide uppercase",
+                channel === "facebook"
+                  ? "bg-blue-500/10 text-[#0084FF]"
+                  : channel === "instagram"
+                  ? "bg-pink-500/10 text-pink-500"
+                  : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+              )}
+            >
+              {channel === "facebook" ? "FB" : channel === "instagram" ? "IG" : "WA"}
+            </span>
+          </div>
           <span className="shrink-0 text-[10px] text-muted-foreground">{timeAgo}</span>
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-2">

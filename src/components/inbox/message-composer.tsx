@@ -111,6 +111,7 @@ interface MediaDraft {
 
 interface MessageComposerProps {
   conversationId: string;
+  channel?: "whatsapp" | "facebook" | "instagram";
   sessionExpired: boolean;
   onSend: (text: string, replyToId?: string) => void;
   onSendMedia: (payload: SendMediaPayload) => void;
@@ -133,6 +134,7 @@ const OPUS_ENCODER_PATH = "/opus/encoderWorker.min.js";
 
 export function MessageComposer({
   conversationId,
+  channel = "whatsapp",
   sessionExpired,
   onSend,
   onSendMedia,
@@ -736,6 +738,10 @@ export function MessageComposer({
                 ? t("readOnlyPlaceholder")
                 : sessionExpired
                   ? t("sessionExpiredPlaceholder")
+                  : channel === "facebook"
+                  ? "Reply via Facebook Messenger..."
+                  : channel === "instagram"
+                  ? "Reply via Instagram DM..."
                   : t("typeMessagePlaceholder")
             }
             disabled={sessionExpired || readOnly}

@@ -174,6 +174,11 @@ export function SettingsOverview({
       ),
     },
     {
+      section: 'social',
+      loading: false,
+      subtitle: 'Facebook Messenger & Instagram DM',
+    },
+    {
       section: 'members',
       loading: countsLoading,
       subtitle:
