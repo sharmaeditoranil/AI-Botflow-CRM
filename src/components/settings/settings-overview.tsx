@@ -218,6 +218,11 @@ export function SettingsOverview({
             })}`,
     },
     {
+      section: 'billing',
+      loading: false,
+      subtitle: 'Manage subscription, usage limits & upgrade',
+    },
+    {
       section: 'appearance',
       loading: false,
       subtitle: t('appearance', { mode: cap(mode), theme: themeName }),

@@ -27,6 +27,7 @@ import {
   Workflow,
   X,
   Zap,
+  Sparkles,
 } from "lucide-react";
 import type { AccountRole } from "@/lib/auth/roles";
 
@@ -104,6 +105,7 @@ const navItems: NavItem[] = [
 ];
 
 const bottomNavItems = [
+  { href: "/billing", label: "Plans & Billing", labelKey: "billing", icon: CreditCard },
   { href: "/settings", labelKey: "settings", icon: Settings },
 ];
 
@@ -303,7 +305,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     )}
                   >
                     <item.icon className="h-4 w-4" />
-                    {t(item.labelKey as string)}
+                    {"label" in item && item.label ? item.label : t(item.labelKey as string)}
                   </Link>
                 </li>
               );
@@ -348,6 +350,23 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               ) : null}
             </div>
           ) : null}
+
+          {/* Trial status banner / upgrade link */}
+          {account?.subscription_status === 'trialing' && account?.trial_ends_at && (
+            <Link
+              href="/billing"
+              className="mb-2 flex items-center justify-between rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-300 transition-colors hover:bg-amber-500/15"
+            >
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Sparkles className="size-3.5 text-amber-400 shrink-0" />
+                <span className="font-semibold text-[11px] truncate">Free Trial</span>
+              </div>
+              <span className="shrink-0 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
+                Upgrade →
+              </span>
+            </Link>
+          )}
+
           <DropdownMenu>
             <DropdownMenuTrigger className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-muted/60 focus:bg-muted/60 focus:outline-none data-popup-open:bg-muted/60">
               <Avatar className="size-8 shrink-0">
