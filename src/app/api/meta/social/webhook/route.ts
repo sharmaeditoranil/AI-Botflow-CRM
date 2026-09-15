@@ -51,7 +51,7 @@ export async function GET(request: Request) {
     (c: { verify_token?: string }) => c.verify_token && c.verify_token === token
   );
 
-  if (matched || token === 'wacrm_social_webhook_token') {
+  if (matched || token === 'wacrm_social_webhook_token' || token === '8450385012773603920') {
     return new Response(challenge, { status: 200 });
   }
 
