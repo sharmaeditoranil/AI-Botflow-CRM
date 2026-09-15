@@ -703,44 +703,49 @@ export function BillingPanel() {
 
       {/* Redesigned Upgrade Modal (Triggered via "Upgrade Plan" buttons) */}
       <Dialog open={upgradeModalOpen} onOpenChange={setUpgradeModalOpen}>
-        <DialogContent className="max-w-5xl max-h-[92vh] flex flex-col p-0 border-border bg-card overflow-hidden shadow-2xl">
+        <DialogContent
+          style={{ width: 'min(96vw, 1180px)', maxWidth: 'min(96vw, 1180px)' }}
+          className="max-h-[92vh] flex flex-col p-0 border-border bg-card overflow-hidden shadow-2xl"
+        >
           {/* Modal Header */}
-          <div className="p-6 pb-4 border-b border-border/60 bg-muted/20">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="p-6 pb-5 border-b border-border/60 bg-muted/20">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <DialogTitle className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2.5">
-                  <Sparkles className="h-5 w-5 text-primary" />
+                <DialogTitle className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 text-primary shrink-0">
+                    <Sparkles className="h-5 w-5" />
+                  </div>
                   Upgrade Your Aibotflow Plan
                 </DialogTitle>
-                <DialogDescription className="mt-1 text-xs text-muted-foreground">
+                <DialogDescription className="mt-1.5 text-sm text-muted-foreground">
                   Choose the right plan to scale your WhatsApp marketing, automated broadcasts, and AI chatbots.
                 </DialogDescription>
               </div>
 
               {/* Billing Cycle Switcher */}
-              <div className="flex items-center rounded-xl border border-border bg-muted/60 p-1 text-xs shrink-0 self-start sm:self-auto">
+              <div className="flex items-center rounded-xl border border-border bg-muted/70 p-1 text-xs shrink-0 self-start sm:self-auto">
                 <button
                   type="button"
                   onClick={() => setBillingCycle('monthly')}
-                  className={`rounded-lg px-3 py-1 font-medium transition-all ${
+                  className={`rounded-lg px-4 py-2 font-medium transition-all ${
                     billingCycle === 'monthly'
                       ? 'bg-card text-foreground shadow-sm'
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  Monthly
+                  Monthly Billing
                 </button>
                 <button
                   type="button"
                   onClick={() => setBillingCycle('yearly')}
-                  className={`flex items-center gap-1 rounded-lg px-3 py-1 font-medium transition-all ${
+                  className={`flex items-center gap-1.5 rounded-lg px-4 py-2 font-medium transition-all ${
                     billingCycle === 'yearly'
                       ? 'bg-card text-foreground shadow-sm'
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  Yearly
-                  <span className="rounded-full bg-emerald-500/20 px-1.5 py-0.2 text-[9px] font-semibold text-emerald-400">
+                  Yearly Billing
+                  <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-400">
                     Save 17%
                   </span>
                 </button>
@@ -749,8 +754,8 @@ export function BillingPanel() {
           </div>
 
           {/* Modal Body: Scrollable 3-Column Plan Grid */}
-          <div className="overflow-y-auto p-6 space-y-6 flex-1">
-            <div className="grid gap-5 md:grid-cols-3 items-stretch">
+          <div className="overflow-y-auto p-6 md:p-8 space-y-6 flex-1">
+            <div className="grid gap-6 grid-cols-1 md:grid-cols-3 items-stretch">
               {paidPlans.map((p) => {
                 const rawPrice = billingCycle === 'yearly' ? p.price_yearly : p.price_monthly;
                 const displayPrice = calculatePrice(rawPrice);
@@ -760,119 +765,123 @@ export function BillingPanel() {
                 return (
                   <div
                     key={p.id}
-                    className={`relative flex flex-col justify-between rounded-2xl border p-5 transition-all ${
+                    className={`relative flex flex-col justify-between rounded-2xl border p-6 transition-all duration-200 ${
                       isGrowth
-                        ? 'border-primary bg-primary/[0.04] shadow-md shadow-primary/5 ring-1 ring-primary/30'
-                        : 'border-border bg-card hover:border-border/80'
+                        ? 'border-primary bg-primary/[0.04] shadow-lg shadow-primary/10 ring-2 ring-primary/40'
+                        : 'border-border bg-card shadow-sm hover:border-border/80'
                     }`}
                   >
                     <div>
                       {/* Fixed Top Badge Slot to Align Titles */}
-                      <div className="flex h-6 items-center justify-between">
+                      <div className="flex h-7 items-center justify-between">
                         {isGrowth ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-semibold text-primary border border-primary/20">
-                            <Sparkles className="h-3 w-3" /> Most Popular
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/20 px-3 py-0.5 text-xs font-semibold text-primary border border-primary/30">
+                            <Sparkles className="h-3.5 w-3.5" /> Most Popular
                           </span>
                         ) : (
-                          <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                            {p.slug === 'enterprise' ? 'High Volume' : 'Starter Tier'}
+                          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                            {p.slug === 'enterprise' ? 'High Volume' : 'Small Business'}
                           </span>
                         )}
 
                         {isCurrent && (
-                          <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-400 text-[10px]">
+                          <Badge variant="outline" className="border-emerald-500/40 bg-emerald-500/10 text-emerald-400 text-[11px] font-medium">
                             Current Plan
                           </Badge>
                         )}
                       </div>
 
                       {/* Plan Name & Tagline */}
-                      <div className="mt-2 min-h-[50px]">
-                        <h3 className="text-lg font-bold tracking-tight text-foreground">{p.name}</h3>
-                        <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">
+                      <div className="mt-3 min-h-[54px]">
+                        <h3 className="text-xl font-bold tracking-tight text-foreground">{p.name}</h3>
+                        <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
                           {p.description}
                         </p>
                       </div>
 
                       {/* Pricing Box */}
-                      <div className="my-4 rounded-xl border border-border/60 bg-muted/30 p-3.5">
-                        <div className="flex items-baseline gap-1.5">
-                          <span className="text-2xl font-extrabold tracking-tight text-foreground">
+                      <div className="my-4 rounded-xl border border-border/70 bg-muted/40 p-4">
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-3xl font-extrabold tracking-tight text-foreground">
                             ₹{displayPrice.toLocaleString('en-IN')}
                           </span>
-                          <span className="text-xs font-medium text-muted-foreground">
-                            /{billingCycle === 'yearly' ? 'yr' : 'mo'}
+                          <span className="text-sm font-medium text-muted-foreground">
+                            /{billingCycle === 'yearly' ? 'year' : 'month'}
                           </span>
                           {appliedCoupon && (
-                            <span className="ml-auto text-xs text-muted-foreground line-through">
+                            <span className="ml-auto text-sm text-muted-foreground line-through font-medium">
                               ₹{rawPrice.toLocaleString('en-IN')}
                             </span>
                           )}
                         </div>
                         {billingCycle === 'yearly' ? (
-                          <div className="mt-1 text-[10px] font-medium text-emerald-500">
-                            Equiv. ₹{Math.round(displayPrice / 12).toLocaleString('en-IN')}/mo (2 Mos Free)
+                          <div className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-emerald-500">
+                            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                            <span>Equiv. ₹{Math.round(displayPrice / 12).toLocaleString('en-IN')}/mo (2 Months Free)</span>
                           </div>
                         ) : (
-                          <div className="mt-1 text-[10px] text-muted-foreground">
+                          <div className="mt-1.5 text-xs text-muted-foreground">
                             Billed monthly, cancel anytime
                           </div>
                         )}
                       </div>
 
                       {/* Features List with Top-Aligned Checkmarks */}
-                      <div className="space-y-2.5 text-xs">
-                        <ul className="space-y-2">
-                          <li className="flex items-start gap-2 text-muted-foreground">
+                      <div className="space-y-3 text-xs flex-1">
+                        <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                          Plan Features:
+                        </div>
+                        <ul className="space-y-2.5">
+                          <li className="flex items-start gap-2.5 text-muted-foreground">
                             <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
-                            <span>
+                            <span className="text-xs">
                               <strong className="text-foreground">{p.max_contacts.toLocaleString('en-IN')}</strong> Contacts
                             </span>
                           </li>
-                          <li className="flex items-start gap-2 text-muted-foreground">
+                          <li className="flex items-start gap-2.5 text-muted-foreground">
                             <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
-                            <span>
-                              <strong className="text-foreground">{p.max_broadcasts_monthly.toLocaleString('en-IN')}</strong> Broadcasts/mo
+                            <span className="text-xs">
+                              <strong className="text-foreground">{p.max_broadcasts_monthly.toLocaleString('en-IN')}</strong> Monthly Broadcasts
                             </span>
                           </li>
-                          <li className="flex items-start gap-2 text-muted-foreground">
+                          <li className="flex items-start gap-2.5 text-muted-foreground">
                             <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
-                            <span>
-                              <strong className="text-foreground">{p.max_team_members}</strong> Team Members
+                            <span className="text-xs">
+                              <strong className="text-foreground">{p.max_team_members}</strong> Team Member Seats
                             </span>
                           </li>
-                          <li className="flex items-start gap-2 text-muted-foreground">
+                          <li className="flex items-start gap-2.5 text-muted-foreground">
                             <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
-                            <span>
+                            <span className="text-xs">
                               <strong className="text-foreground">{p.max_automations}</strong> Automations & Flows
                             </span>
                           </li>
-                          <li className="flex items-start gap-2">
+                          <li className="flex items-start gap-2.5">
                             {p.ai_agents_enabled ? (
                               <>
                                 <Check className="h-4 w-4 shrink-0 text-primary mt-0.5" />
-                                <span className="font-semibold text-foreground">
+                                <span className="text-xs font-semibold text-foreground">
                                   AI Chatbot & Knowledge Base
                                 </span>
                               </>
                             ) : (
                               <>
                                 <X className="h-4 w-4 shrink-0 text-muted-foreground/40 mt-0.5" />
-                                <span className="text-muted-foreground/50 line-through">
-                                  AI Chatbot
+                                <span className="text-xs text-muted-foreground/50 line-through">
+                                  AI Chatbot & Knowledge Base
                                 </span>
                               </>
                             )}
                           </li>
-                          <li className="flex items-start gap-2 text-muted-foreground">
+                          <li className="flex items-start gap-2.5 text-muted-foreground">
                             <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
-                            <span>
+                            <span className="text-xs">
                               {p.slug === 'enterprise' ? (
-                                <strong className="text-foreground">24/7 Dedicated Support</strong>
+                                <strong className="text-foreground">24/7 Dedicated Support & VIP API</strong>
                               ) : isGrowth ? (
-                                <span>Priority Meta Support</span>
+                                <span>Priority Support & Social Channels</span>
                               ) : (
-                                <span>Standard Support</span>
+                                <span>Standard WhatsApp Support</span>
                               )}
                             </span>
                           </li>
@@ -881,27 +890,29 @@ export function BillingPanel() {
                     </div>
 
                     {/* Action Button */}
-                    <div className="mt-5 pt-3 border-t border-border/60">
+                    <div className="mt-6 pt-4 border-t border-border/60">
                       <Button
                         onClick={() => handleCheckout(p.id)}
                         disabled={isCurrent || upgradingPlanId === p.id}
-                        className={`w-full text-xs font-semibold shadow-sm transition-all ${
+                        className={`w-full font-semibold shadow-sm transition-all text-sm h-11 ${
                           isGrowth
-                            ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                            ? 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-primary/20'
                             : isCurrent
                             ? 'bg-muted text-muted-foreground border border-border cursor-default'
                             : 'bg-card text-foreground border border-border hover:bg-muted'
                         }`}
                       >
                         {upgradingPlanId === p.id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          <span className="flex items-center justify-center gap-2">
+                            <Loader2 className="h-4 w-4 animate-spin" /> Preparing Checkout...
+                          </span>
                         ) : isCurrent ? (
-                          <span className="flex items-center gap-1.5">
-                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" /> Current Plan
+                          <span className="flex items-center justify-center gap-2">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Current Plan
                           </span>
                         ) : (
-                          <span className="flex items-center justify-center gap-1">
-                            Upgrade to {p.name} <ArrowRight className="h-3 w-3" />
+                          <span className="flex items-center justify-center gap-2">
+                            Upgrade to {p.name} <ArrowRight className="h-4 w-4" />
                           </span>
                         )}
                       </Button>
@@ -912,15 +923,17 @@ export function BillingPanel() {
             </div>
 
             {/* Promo Code Input in Modal */}
-            <div className="rounded-xl border border-border bg-muted/30 p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5 text-xs">
-                <Tag className="h-4 w-4 text-primary shrink-0" />
+            <div className="rounded-xl border border-border bg-muted/40 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3 text-xs">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary shrink-0">
+                  <Tag className="h-4 w-4" />
+                </div>
                 <div>
-                  <div className="font-semibold text-foreground">Have a Promo Code?</div>
-                  <div className="text-muted-foreground text-[11px]">
+                  <div className="font-semibold text-sm text-foreground">Have a Promo or Coupon Code?</div>
+                  <div className="text-muted-foreground text-xs">
                     {appliedCoupon
-                      ? `Applied: ${appliedCoupon.code} (${appliedCoupon.description})`
-                      : 'Apply coupon code before checkout for extra discount.'}
+                      ? `Applied: ${appliedCoupon.code} (${appliedCoupon.description}) — discounts reflected on cards above!`
+                      : 'Enter promo code to apply instant discounts before checkout.'}
                   </div>
                 </div>
               </div>
@@ -931,7 +944,7 @@ export function BillingPanel() {
                     variant="outline"
                     size="sm"
                     onClick={handleRemoveCoupon}
-                    className="text-xs text-destructive hover:bg-destructive/10 h-8"
+                    className="text-xs text-destructive hover:bg-destructive/10 border-destructive/30 h-9"
                   >
                     Remove ({appliedCoupon.code})
                   </Button>
@@ -942,16 +955,16 @@ export function BillingPanel() {
                       value={couponCode}
                       onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
                       onKeyDown={(e) => e.key === 'Enter' && handleApplyCoupon()}
-                      className="w-32 sm:w-40 text-xs uppercase bg-card border-border h-8"
+                      className="w-36 sm:w-44 text-xs uppercase bg-card border-border h-9"
                     />
                     <Button
                       type="button"
                       size="sm"
                       onClick={handleApplyCoupon}
                       disabled={validatingCoupon || !couponCode.trim()}
-                      className="text-xs h-8 bg-primary text-primary-foreground hover:bg-primary/90"
+                      className="text-xs h-9 px-4 bg-primary text-primary-foreground hover:bg-primary/90 font-medium"
                     >
-                      {validatingCoupon ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Apply'}
+                      {validatingCoupon ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Apply Code'}
                     </Button>
                   </>
                 )}
@@ -960,21 +973,21 @@ export function BillingPanel() {
           </div>
 
           {/* Modal Trust Footer */}
-          <div className="p-4 px-6 bg-muted/20 border-t border-border/60 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
-            <div className="flex items-center gap-2">
+          <div className="p-4 px-6 md:px-8 bg-muted/30 border-t border-border/60 flex flex-wrap items-center justify-between gap-4 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2 font-medium">
               <ShieldCheck className="h-4 w-4 text-emerald-500" />
-              <span>Secured by <strong>Razorpay</strong></span>
+              <span>100% Safe & Secure Checkout via <strong>Razorpay</strong></span>
             </div>
-            <div className="flex items-center gap-2 text-[11px]">
-              <span className="rounded border border-border/80 bg-background px-1.5 py-0.5">UPI</span>
-              <span className="rounded border border-border/80 bg-background px-1.5 py-0.5">Google Pay</span>
-              <span className="rounded border border-border/80 bg-background px-1.5 py-0.5">PhonePe</span>
-              <span className="rounded border border-border/80 bg-background px-1.5 py-0.5">Cards</span>
-              <span className="rounded border border-border/80 bg-background px-1.5 py-0.5">NetBanking</span>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="rounded-md border border-border/80 bg-background px-2 py-0.5 font-medium">UPI</span>
+              <span className="rounded-md border border-border/80 bg-background px-2 py-0.5 font-medium">Google Pay</span>
+              <span className="rounded-md border border-border/80 bg-background px-2 py-0.5 font-medium">PhonePe</span>
+              <span className="rounded-md border border-border/80 bg-background px-2 py-0.5 font-medium">Cards</span>
+              <span className="rounded-md border border-border/80 bg-background px-2 py-0.5 font-medium">NetBanking</span>
             </div>
-            <div className="flex items-center gap-1 text-[11px]">
-              <Lock className="h-3 w-3 text-muted-foreground" />
-              <span>Instant Activation</span>
+            <div className="flex items-center gap-1.5 text-xs">
+              <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+              <span>Instant Activation • Cancel Anytime</span>
             </div>
           </div>
         </DialogContent>
