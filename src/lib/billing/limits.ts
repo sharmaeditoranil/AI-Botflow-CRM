@@ -12,6 +12,7 @@ export interface AccountUsageInfo {
     id: string;
     name: string;
     slug: string;
+    description?: string | null;
     max_contacts: number;
     max_team_members: number;
     max_broadcasts_monthly: number;

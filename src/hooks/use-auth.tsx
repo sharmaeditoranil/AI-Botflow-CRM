@@ -487,6 +487,7 @@ export function useAuth(): AuthContextValue {
       canManageMembers: false,
       canEditSettings: false,
       canSendMessages: false,
+      isSuperAdmin: false,
     };
   }
   return ctx;
