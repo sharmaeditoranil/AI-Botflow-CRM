@@ -1055,6 +1055,10 @@ async function processMessageEcho(
 ) {
   const recipientIdentity: WaIdentity = {
     phone: normalizePhone(recipientPhoneOrId),
+    waUserId: null,
+    waParentUserId: null,
+    waUsername: null,
+    name: '',
   }
   if (!hasUsableIdentity(recipientIdentity)) {
     console.warn(
@@ -1157,13 +1161,10 @@ async function processMessageEcho(
     .eq('id', conversation.id)
 
   // Dispatch public webhook event
-  await dispatchWebhookEvent(supabaseAdmin(), accountId, 'message.sent', {
-    conversation_id: conversation.id,
-    contact_id: contactRecord.id,
+  await dispatchWebhookEvent(supabaseAdmin(), accountId, 'message.status_updated', {
     whatsapp_message_id: message.id,
-    content_type: contentType,
-    text: contentText,
-    source: 'whatsapp_business_app_coexistence',
+    conversation_id: conversation.id,
+    status: 'sent',
   })
 }
 
