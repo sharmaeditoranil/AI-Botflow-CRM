@@ -14,7 +14,8 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-import { MessageSquare, CheckCircle, UsersRound } from "lucide-react";
+} from "@/components/ui/card";
+import { CheckCircle, UsersRound } from "lucide-react";
 import { BrandLogo } from "@/components/brand/brand-logo";
 
 // `useSearchParams` opts the component out of static prerendering

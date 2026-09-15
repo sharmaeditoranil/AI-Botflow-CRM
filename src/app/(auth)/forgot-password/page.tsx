@@ -13,7 +13,8 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-import { MessageSquare, CheckCircle, ArrowLeft } from "lucide-react";
+} from "@/components/ui/card";
+import { ArrowLeft } from "lucide-react";
 import { BrandLogo } from "@/components/brand/brand-logo";
 
 export default function ForgotPasswordPage() {
