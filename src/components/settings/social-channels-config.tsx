@@ -129,7 +129,8 @@ export function SocialChannelsConfig() {
   const handleLaunchOAuth = async () => {
     try {
       setConnectingOAuth(true);
-      const res = await fetch("/api/meta/social/oauth/url");
+      const redirectUri = `${window.location.origin}/api/meta/social/oauth/callback`;
+      const res = await fetch(`/api/meta/social/oauth/url?redirectUri=${encodeURIComponent(redirectUri)}`);
       const data = await res.json();
       if (!res.ok || !data.oauthUrl) {
         throw new Error(data.error || "Failed to initialize Facebook login.");

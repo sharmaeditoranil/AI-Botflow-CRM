@@ -32,8 +32,15 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const origin = req.headers.get('origin') || req.nextUrl.origin || 'https://dash.aibotflow.in';
-    const redirectUri = `${origin}/api/meta/social/oauth/callback`;
+    const requestedRedirectUri = req.nextUrl.searchParams.get('redirectUri');
+    const forwardedHost = req.headers.get('x-forwarded-host') || req.headers.get('host');
+    const forwardedProto = req.headers.get('x-forwarded-proto') || 'https';
+    const computedOrigin =
+      forwardedHost && !forwardedHost.includes('0.0.0.0') && !forwardedHost.includes('127.0.0.1')
+        ? `${forwardedProto}://${forwardedHost}`
+        : (process.env.NEXT_PUBLIC_SITE_URL || 'https://dash.aibotflow.in');
+
+    const redirectUri = requestedRedirectUri || `${computedOrigin}/api/meta/social/oauth/callback`;
     const state = `${profile.account_id}:${user.id}`;
     const scope = [
       'pages_show_list',

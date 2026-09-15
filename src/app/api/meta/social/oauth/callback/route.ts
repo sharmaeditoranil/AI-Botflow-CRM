@@ -66,8 +66,15 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // 1. Exchange code for user access token
-  const redirectUri = `${req.nextUrl.origin}/api/meta/social/oauth/callback`;
+  // 1. Exchange code for user access token (must match the exact redirect_uri used in OAuth)
+  const forwardedHost = req.headers.get('x-forwarded-host') || req.headers.get('host');
+  const forwardedProto = req.headers.get('x-forwarded-proto') || 'https';
+  const origin =
+    forwardedHost && !forwardedHost.includes('0.0.0.0') && !forwardedHost.includes('127.0.0.1')
+      ? `${forwardedProto}://${forwardedHost}`
+      : (process.env.NEXT_PUBLIC_SITE_URL || baseUrl);
+
+  const redirectUri = `${origin}/api/meta/social/oauth/callback`;
   const tokenRes = await exchangeCodeForUserToken(code, appId, appSecret, redirectUri);
   if ('error' in tokenRes) {
     return NextResponse.redirect(
