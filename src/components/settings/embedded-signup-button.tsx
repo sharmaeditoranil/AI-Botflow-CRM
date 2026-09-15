@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
@@ -24,6 +24,7 @@ export function EmbeddedSignupButton({ onConnected }: EmbeddedSignupButtonProps)
     isConfigured: false,
   });
   const [sdkLoaded, setSdkLoaded] = useState(false);
+  const sessionDataRef = useRef<{ wabaId?: string; phoneNumberId?: string }>({});
 
   // Fetch public Meta App ID and Config ID
   useEffect(() => {
@@ -53,7 +54,10 @@ export function EmbeddedSignupButton({ onConnected }: EmbeddedSignupButtonProps)
           console.log('[Meta Embedded] Received session event:', data.event, data.data);
           if (data.event === 'FINISH') {
             const { waba_id, phone_number_id } = data.data || {};
-            // Will be processed when auth code returns from FB.login
+            sessionDataRef.current = {
+              wabaId: waba_id,
+              phoneNumberId: phone_number_id,
+            };
           }
         }
       } catch (_) {}
@@ -108,7 +112,11 @@ export function EmbeddedSignupButton({ onConnected }: EmbeddedSignupButtonProps)
           fetch('/api/whatsapp/embedded-signup', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code }),
+            body: JSON.stringify({
+              code,
+              wabaId: sessionDataRef.current.wabaId,
+              phoneNumberId: sessionDataRef.current.phoneNumberId,
+            }),
           })
             .then(async (res) => {
               const result = await res.json();

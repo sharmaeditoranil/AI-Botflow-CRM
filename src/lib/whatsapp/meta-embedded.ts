@@ -125,3 +125,27 @@ export async function fetchWabaPhoneNumbers(
     return [];
   }
 }
+
+/**
+ * Inspects access token via debug_token to extract the shared WABA ID if not provided in session payload.
+ */
+export async function getWabaFromToken(
+  accessToken: string,
+  appId: string,
+  appSecret: string
+): Promise<string | null> {
+  const url = `${GRAPH_BASE}/debug_token?input_token=${accessToken}&access_token=${appId}|${appSecret}`;
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    const scopes = data?.data?.granular_scopes || [];
+    const waScope = scopes.find((s: any) => s.scope === 'whatsapp_business_management');
+    if (waScope && waScope.target_ids && waScope.target_ids.length > 0) {
+      return waScope.target_ids[0];
+    }
+    return null;
+  } catch (err) {
+    console.error('[Meta Embedded] Failed to inspect token for WABA:', err);
+    return null;
+  }
+}

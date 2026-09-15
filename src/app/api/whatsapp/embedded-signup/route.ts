@@ -6,6 +6,7 @@ import {
   exchangeCodeForAccessToken,
   subscribeWabaToApp,
   fetchWabaPhoneNumbers,
+  getWabaFromToken,
 } from '@/lib/whatsapp/meta-embedded';
 import { encrypt } from '@/lib/whatsapp/encryption';
 
@@ -85,6 +86,10 @@ export async function POST(req: NextRequest) {
   let wabaId = inputWabaId;
   let phoneNumberId = inputPhoneId;
   let displayPhoneNumber = '';
+
+  if (!wabaId) {
+    wabaId = (await getWabaFromToken(accessToken, appId, appSecret)) || undefined;
+  }
 
   // 2. If phone number ID is missing, fetch phone numbers under the WABA
   if (wabaId && !phoneNumberId) {
