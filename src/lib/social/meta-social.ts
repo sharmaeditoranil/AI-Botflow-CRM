@@ -5,8 +5,21 @@
 // Messenger and Instagram Messaging Graph API.
 // ============================================================
 
+import { createClient as createAdminClient } from '@supabase/supabase-js';
+
 const META_GRAPH_VERSION = 'v21.0';
 const META_GRAPH_BASE_URL = `https://graph.facebook.com/${META_GRAPH_VERSION}`;
+
+export interface FacebookPage {
+  id: string;
+  name: string;
+  access_token: string;
+  category?: string;
+  instagram_business_account?: {
+    id: string;
+    username?: string;
+  } | null;
+}
 
 export interface SocialSendParams {
   pageAccessToken: string;
@@ -265,3 +278,142 @@ export async function getInstagramUserProfile(
     return null;
   }
 }
+
+function getAdminSupabase() {
+  return createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+}
+
+/**
+ * Reads Meta App credentials for Facebook & Instagram OAuth.
+ */
+export async function getSocialAppCredentials(): Promise<{
+  appId: string | null;
+  appSecret: string | null;
+}> {
+  try {
+    const supabase = getAdminSupabase();
+    const { data } = await supabase
+      .from('platform_settings')
+      .select('meta_app_id, meta_app_secret')
+      .eq('id', 'default')
+      .maybeSingle();
+
+    return {
+      appId: data?.meta_app_id || process.env.META_APP_ID || null,
+      appSecret: data?.meta_app_secret || process.env.META_APP_SECRET || null,
+    };
+  } catch {
+    return {
+      appId: process.env.META_APP_ID || null,
+      appSecret: process.env.META_APP_SECRET || null,
+    };
+  }
+}
+
+/**
+ * Exchanges the OAuth authorization code returned by Facebook for a user access token.
+ */
+export async function exchangeCodeForUserToken(
+  code: string,
+  appId: string,
+  appSecret: string,
+  redirectUri: string
+): Promise<{ userAccessToken: string } | { error: string }> {
+  const url = new URL(`${META_GRAPH_BASE_URL}/oauth/access_token`);
+  url.searchParams.set('client_id', appId);
+  url.searchParams.set('client_secret', appSecret);
+  url.searchParams.set('code', code);
+  url.searchParams.set('redirect_uri', redirectUri);
+
+  try {
+    const res = await fetch(url.toString());
+    const data = (await res.json()) as { access_token?: string; error?: { message?: string } };
+    if (!res.ok || !data.access_token) {
+      return { error: data.error?.message || 'Failed to exchange authorization code with Meta.' };
+    }
+    return { userAccessToken: data.access_token };
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : 'Network error connecting to Meta Graph API.' };
+  }
+}
+
+/**
+ * Exchanges a short-lived user token for a long-lived user token (valid ~60 days).
+ */
+export async function getLongLivedUserToken(
+  shortLivedToken: string,
+  appId: string,
+  appSecret: string
+): Promise<{ longLivedToken: string } | { error: string }> {
+  const url = new URL(`${META_GRAPH_BASE_URL}/oauth/access_token`);
+  url.searchParams.set('grant_type', 'fb_exchange_token');
+  url.searchParams.set('client_id', appId);
+  url.searchParams.set('client_secret', appSecret);
+  url.searchParams.set('fb_exchange_token', shortLivedToken);
+
+  try {
+    const res = await fetch(url.toString());
+    const data = (await res.json()) as { access_token?: string; error?: { message?: string } };
+    if (!res.ok || !data.access_token) {
+      return { longLivedToken: shortLivedToken };
+    }
+    return { longLivedToken: data.access_token };
+  } catch {
+    return { longLivedToken: shortLivedToken };
+  }
+}
+
+/**
+ * Fetches all Facebook Pages the user manages, with their permanent Page Access Tokens
+ * and connected Instagram Business Accounts.
+ */
+export async function fetchUserFacebookPages(
+  userAccessToken: string
+): Promise<{ pages: FacebookPage[] } | { error: string }> {
+  const url = new URL(`${META_GRAPH_BASE_URL}/me/accounts`);
+  url.searchParams.set('fields', 'id,name,access_token,category,instagram_business_account{id,username}');
+  url.searchParams.set('access_token', userAccessToken);
+
+  try {
+    const res = await fetch(url.toString());
+    const data = (await res.json()) as { data?: FacebookPage[]; error?: { message?: string } };
+    if (!res.ok || !Array.isArray(data.data)) {
+      return { error: data.error?.message || 'Failed to fetch Facebook Pages for user.' };
+    }
+    return { pages: data.data };
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : 'Network error connecting to Meta Graph API.' };
+  }
+}
+
+/**
+ * Subscribes a Facebook Page to the Meta App so incoming webhooks (messages) are dispatched.
+ */
+export async function subscribePageToApp(
+  pageId: string,
+  pageAccessToken: string
+): Promise<{ success: boolean; error?: string }> {
+  const url = `${META_GRAPH_BASE_URL}/${encodeURIComponent(pageId)}/subscribed_apps`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        subscribed_fields: ['messages', 'messaging_postbacks'],
+        access_token: pageAccessToken,
+      }),
+    });
+    const data = (await res.json()) as { success?: boolean; error?: { message?: string } };
+    if (!res.ok || !data.success) {
+      console.warn(`[Meta Social] Subscribed apps warning for page ${pageId}:`, data);
+      return { success: false, error: data.error?.message };
+    }
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Network error' };
+  }
+}
+

@@ -19,6 +19,9 @@ import {
   ShieldCheck,
   Loader2,
   Info,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import {
   MessengerIcon,
@@ -26,10 +29,21 @@ import {
 } from "@/components/icons/social-icons";
 import type { MetaSocialConfig } from "@/types";
 
-export function SocialChannelsConfig() {
+interface AvailablePage {
+  id: string;
+  name: string;
+  category?: string;
+  has_instagram?: boolean;
+  instagram_id?: string | null;
+  instagram_username?: string | null;
+}
 
+export function SocialChannelsConfig() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [connectingOAuth, setConnectingOAuth] = useState(false);
+  const [switchingPage, setSwitchingPage] = useState(false);
+  const [showManualConfig, setShowManualConfig] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
   // Form states
@@ -42,6 +56,7 @@ export function SocialChannelsConfig() {
   const [igUsername, setIgUsername] = useState("");
   const [igConnected, setIgConnected] = useState(false);
 
+  const [availablePages, setAvailablePages] = useState<AvailablePage[]>([]);
   const [verifyToken, setVerifyToken] = useState("wacrm_social_webhook_token");
   const [callbackUrl, setCallbackUrl] = useState("");
 
@@ -71,6 +86,11 @@ export function SocialChannelsConfig() {
         if (c.verify_token) {
           setVerifyToken(c.verify_token);
         }
+
+        const meta = c.metadata as { available_pages?: AvailablePage[] } | undefined;
+        if (meta?.available_pages) {
+          setAvailablePages(meta.available_pages);
+        }
       }
     } catch (err) {
       console.error("Failed to load social config:", err);
@@ -83,6 +103,66 @@ export function SocialChannelsConfig() {
   useEffect(() => {
     loadConfig();
   }, [loadConfig]);
+
+  // Handle URL redirect query params from OAuth
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("connected") === "true") {
+        const page = params.get("pageName") || "Facebook Page";
+        const hasIg = params.get("hasIg") === "true";
+        const igUser = params.get("igUser");
+        if (hasIg && igUser) {
+          toast.success(`Connected ${page} and Instagram (@${igUser}) successfully!`);
+        } else {
+          toast.success(`Connected ${page} successfully!`);
+        }
+        window.history.replaceState({}, document.title, window.location.pathname + "?tab=social");
+        loadConfig();
+      } else if (params.get("error")) {
+        toast.error(`Connection failed: ${decodeURIComponent(params.get("error")!)}`);
+        window.history.replaceState({}, document.title, window.location.pathname + "?tab=social");
+      }
+    }
+  }, [loadConfig]);
+
+  const handleLaunchOAuth = async () => {
+    try {
+      setConnectingOAuth(true);
+      const res = await fetch("/api/meta/social/oauth/url");
+      const data = await res.json();
+      if (!res.ok || !data.oauthUrl) {
+        throw new Error(data.error || "Failed to initialize Facebook login.");
+      }
+      window.location.href = data.oauthUrl;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to launch Facebook login";
+      toast.error(msg);
+      setConnectingOAuth(false);
+    }
+  };
+
+  const handleSwitchPage = async (pageId: string) => {
+    try {
+      setSwitchingPage(true);
+      const res = await fetch("/api/meta/social/switch-page", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pageId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to switch active page");
+      }
+      toast.success("Active Facebook Page updated!");
+      loadConfig();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to switch page";
+      toast.error(msg);
+    } finally {
+      setSwitchingPage(false);
+    }
+  };
 
   const copyToClipboard = async (text: string, fieldName: string) => {
     try {
@@ -147,6 +227,78 @@ export function SocialChannelsConfig() {
         </p>
       </div>
 
+      {/* 1-Click Embedded OAuth Sign-up Card */}
+      <Card className="border-primary/30 bg-gradient-to-br from-primary/5 via-card to-blue-500/5 shadow-sm overflow-hidden relative">
+        <div className="absolute top-0 right-0 p-6 opacity-10 pointer-events-none flex gap-2">
+          <MessengerIcon className="h-28 w-28 fill-current text-blue-500" />
+          <InstagramIcon className="h-28 w-28 fill-current text-pink-500" />
+        </div>
+        <CardHeader className="pb-3 relative z-10">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5 text-foreground">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-[#0084FF] to-[#E1306C] text-white shadow-xs">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div>
+                <CardTitle className="text-base font-semibold">1-Click Embedded Connect (Recommended)</CardTitle>
+                <CardDescription className="text-xs">
+                  Login with Facebook to automatically link your Facebook Page and Instagram Account. Zero manual token entry required.
+                </CardDescription>
+              </div>
+            </div>
+            {(fbConnected || igConnected) && (
+              <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 gap-1 font-medium">
+                <Check className="h-3.5 w-3.5" /> Connected
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4 relative z-10">
+          <div className="flex flex-wrap items-center gap-3">
+            <Button
+              type="button"
+              onClick={handleLaunchOAuth}
+              disabled={connectingOAuth || switchingPage}
+              className="bg-[#1877F2] hover:bg-[#166fe5] text-white font-medium shadow-sm transition-all gap-2 px-5 h-11 text-sm"
+            >
+              {connectingOAuth ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <MessengerIcon className="h-4 w-4 fill-current" />
+                  <InstagramIcon className="h-4 w-4 fill-current text-pink-200" />
+                </div>
+              )}
+              <span>{fbConnected ? "Reconnect or Change Accounts" : "Connect with Facebook & Instagram"}</span>
+            </Button>
+
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <ShieldCheck className="h-4 w-4 text-emerald-500" />
+              Auto-subscribes webhooks and securely saves permanent Page Access Tokens.
+            </p>
+          </div>
+
+          {availablePages.length > 1 && (
+            <div className="pt-3 border-t border-border/40 flex flex-wrap items-center gap-3">
+              <Label className="text-xs text-muted-foreground whitespace-nowrap">Switch Active Facebook Page:</Label>
+              <select
+                value={fbPageId}
+                disabled={switchingPage}
+                onChange={(e) => handleSwitchPage(e.target.value)}
+                className="h-9 rounded-md border border-border bg-background px-2.5 text-xs text-foreground focus:outline-hidden"
+              >
+                {availablePages.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} {p.has_instagram ? `(IG: @${p.instagram_username})` : ""}
+                  </option>
+                ))}
+              </select>
+              {switchingPage && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Overview Status Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Facebook Messenger Status */}
@@ -158,7 +310,7 @@ export function SocialChannelsConfig() {
             <div>
               <h4 className="text-sm font-medium text-foreground">Facebook Messenger</h4>
               <p className="text-xs text-muted-foreground">
-                {fbPageName || (fbPageId ? `Page ID: ${fbPageId}` : "Not configured")}
+                {fbPageName || (fbPageId ? `Page ID: ${fbPageId}` : "Not connected")}
               </p>
             </div>
           </div>
@@ -183,7 +335,7 @@ export function SocialChannelsConfig() {
             <div>
               <h4 className="text-sm font-medium text-foreground">Instagram Direct Messages</h4>
               <p className="text-xs text-muted-foreground">
-                {igUsername ? `@${igUsername}` : (igAccountId ? `ID: ${igAccountId}` : "Not configured")}
+                {igUsername ? `@${igUsername}` : (igAccountId ? `ID: ${igAccountId}` : "Not connected")}
               </p>
             </div>
           </div>
@@ -200,103 +352,15 @@ export function SocialChannelsConfig() {
         </div>
       </div>
 
-      {/* Facebook Messenger Settings Card */}
-      <Card className="border-border bg-card shadow-2xs">
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-2 text-foreground">
-            <MessengerIcon className="h-5 w-5 fill-[#0084FF]" />
-            <CardTitle className="text-base">Facebook Page Connection</CardTitle>
-          </div>
-          <CardDescription>
-            Messages sent to your Facebook Page will automatically show in the Inbox with a Messenger badge.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="fb-page-name">Facebook Page Name</Label>
-              <Input
-                id="fb-page-name"
-                placeholder="e.g. My Business Brand"
-                value={fbPageName}
-                onChange={(e) => setFbPageName(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="fb-page-id">Facebook Page ID</Label>
-              <Input
-                id="fb-page-id"
-                placeholder="e.g. 104829104829104"
-                value={fbPageId}
-                onChange={(e) => setFbPageId(e.target.value)}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="fb-token">Page Access Token</Label>
-            <Input
-              id="fb-token"
-              type="password"
-              placeholder="EAA..."
-              value={fbAccessToken}
-              onChange={(e) => setFbAccessToken(e.target.value)}
-            />
-            <p className="text-[11px] text-muted-foreground">
-              Never shared with clients. Encrypted securely in the database with AES-256-GCM.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Instagram Settings Card */}
-      <Card className="border-border bg-card shadow-2xs">
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-2 text-foreground">
-            <InstagramIcon className="h-5 w-5 fill-[#E1306C]" />
-            <CardTitle className="text-base">Instagram Professional Account</CardTitle>
-          </div>
-          <CardDescription>
-            Connect your Instagram Business or Creator account that is linked to your Facebook Page.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="ig-username">Instagram Handle</Label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-semibold">@</span>
-                <Input
-                  id="ig-username"
-                  className="pl-7"
-                  placeholder="brand_handle"
-                  value={igUsername}
-                  onChange={(e) => setIgUsername(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="ig-account-id">Instagram Business Account ID</Label>
-              <Input
-                id="ig-account-id"
-                placeholder="e.g. 17841400000000000"
-                value={igAccountId}
-                onChange={(e) => setIgAccountId(e.target.value)}
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Webhook Configuration Card */}
       <Card className="border-border bg-card shadow-2xs">
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2 text-foreground">
             <ShieldCheck className="h-5 w-5 text-primary" />
-            <CardTitle className="text-base">Meta Webhook Setup</CardTitle>
+            <CardTitle className="text-base">Meta Webhook Configuration</CardTitle>
           </div>
           <CardDescription>
-            Configure this Webhook Callback URL and Verify Token in your Meta App Dashboard under <strong>Messenger &gt; Webhooks</strong> and <strong>Instagram &gt; Webhooks</strong>.
+            Configure this Webhook Callback URL and Verify Token in your Meta Developer Portal under <strong>Messenger &gt; Webhooks</strong> and <strong>Instagram &gt; Webhooks</strong>.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -352,33 +416,138 @@ export function SocialChannelsConfig() {
 
           <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground space-y-1.5 border border-border/50">
             <div className="font-semibold text-foreground flex items-center gap-1.5">
-              <Info className="h-3.5 w-3.5 text-primary" /> Required Webhook Subscription Fields:
+              <Info className="h-3.5 w-3.5 text-primary" /> Required Webhook Subscription Fields in Meta Console:
             </div>
             <ul className="list-disc list-inside space-y-0.5 ml-1">
-              <li><strong>Page (Messenger):</strong> Subscribe to <code>messages</code>, <code>messaging_postbacks</code></li>
+              <li><strong>Page (Messenger):</strong> Subscribe to <code>messages</code> and <code>messaging_postbacks</code></li>
               <li><strong>Instagram:</strong> Subscribe to <code>messages</code></li>
             </ul>
           </div>
         </CardContent>
       </Card>
 
-      {/* Save Action */}
-      <div className="flex justify-end gap-3 pt-2">
+      {/* Collapsible Manual Credentials Configuration */}
+      <div className="pt-2">
         <Button
           type="button"
-          onClick={handleSave}
-          disabled={saving}
-          className="gap-2 min-w-32"
+          variant="ghost"
+          onClick={() => setShowManualConfig(!showManualConfig)}
+          className="text-xs text-muted-foreground hover:text-foreground gap-1.5 px-2"
         >
-          {saving ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            "Save Changes"
-          )}
+          <span>Manual Configuration (Advanced)</span>
+          {showManualConfig ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
         </Button>
+
+        {showManualConfig && (
+          <div className="mt-3 space-y-4">
+            {/* Facebook Messenger Settings Card */}
+            <Card className="border-border bg-card shadow-2xs">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2 text-foreground">
+                  <MessengerIcon className="h-5 w-5 fill-[#0084FF]" />
+                  <CardTitle className="text-base">Facebook Page Manual Connection</CardTitle>
+                </div>
+                <CardDescription>
+                  Manually paste Facebook Page credentials if not using 1-Click Connect.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="fb-page-name">Facebook Page Name</Label>
+                    <Input
+                      id="fb-page-name"
+                      placeholder="e.g. My Business Brand"
+                      value={fbPageName}
+                      onChange={(e) => setFbPageName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="fb-page-id">Facebook Page ID</Label>
+                    <Input
+                      id="fb-page-id"
+                      placeholder="e.g. 104829104829104"
+                      value={fbPageId}
+                      onChange={(e) => setFbPageId(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="fb-token">Page Access Token</Label>
+                  <Input
+                    id="fb-token"
+                    type="password"
+                    placeholder="EAA..."
+                    value={fbAccessToken}
+                    onChange={(e) => setFbAccessToken(e.target.value)}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Encrypted securely in the database with AES-256-GCM.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Instagram Settings Card */}
+            <Card className="border-border bg-card shadow-2xs">
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2 text-foreground">
+                  <InstagramIcon className="h-5 w-5 fill-[#E1306C]" />
+                  <CardTitle className="text-base">Instagram Professional Account Manual Connection</CardTitle>
+                </div>
+                <CardDescription>
+                  Manually enter Instagram Business Account details.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ig-username">Instagram Handle</Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs font-semibold">@</span>
+                      <Input
+                        id="ig-username"
+                        className="pl-7"
+                        placeholder="brand_handle"
+                        value={igUsername}
+                        onChange={(e) => setIgUsername(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ig-account-id">Instagram Business Account ID</Label>
+                    <Input
+                      id="ig-account-id"
+                      placeholder="e.g. 17841400000000000"
+                      value={igAccountId}
+                      onChange={(e) => setIgAccountId(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Save Action for Manual Config */}
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="gap-2 min-w-32"
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save Manual Settings"
+                )}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

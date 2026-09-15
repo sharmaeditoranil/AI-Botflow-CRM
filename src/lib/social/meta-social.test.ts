@@ -4,6 +4,9 @@ import {
   sendInstagramMessage,
   getFacebookUserProfile,
   getInstagramUserProfile,
+  exchangeCodeForUserToken,
+  fetchUserFacebookPages,
+  subscribePageToApp,
 } from './meta-social';
 
 describe('Meta Social Messaging', () => {
@@ -157,6 +160,51 @@ describe('Meta Social Messaging', () => {
         username: 'janestudio',
         avatarUrl: 'https://cdn.instagram.com/pic.jpg',
       });
+    });
+  });
+
+  describe('OAuth helpers', () => {
+    it('exchangeCodeForUserToken handles valid response', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ access_token: 'user-token-123' }),
+      } as Response);
+
+      const res = await exchangeCodeForUserToken('code-123', 'app-id', 'app-secret', 'http://localhost/callback');
+      expect(res).toEqual({ userAccessToken: 'user-token-123' });
+    });
+
+    it('fetchUserFacebookPages returns pages array', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          data: [
+            {
+              id: 'page-1',
+              name: 'My Brand',
+              access_token: 'page-token-1',
+              instagram_business_account: { id: 'ig-1', username: 'mybrand' },
+            },
+          ],
+        }),
+      } as Response);
+
+      const res = await fetchUserFacebookPages('user-token-123');
+      expect('pages' in res).toBe(true);
+      if ('pages' in res) {
+        expect(res.pages[0].id).toBe('page-1');
+        expect(res.pages[0].instagram_business_account?.username).toBe('mybrand');
+      }
+    });
+
+    it('subscribePageToApp returns success', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true }),
+      } as Response);
+
+      const res = await subscribePageToApp('page-1', 'token-1');
+      expect(res.success).toBe(true);
     });
   });
 });
