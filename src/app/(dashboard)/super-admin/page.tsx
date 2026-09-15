@@ -106,7 +106,7 @@ export default function SuperAdminOverviewPage() {
           <CardHeader>
             <CardTitle className="text-sm font-semibold text-foreground">Manage Customers</CardTitle>
             <CardDescription className="text-xs text-muted-foreground">
-              View tenant list, suspend or reactivate accounts, and inspect connection statuses.
+              View tenants, manually change plans & validity, and suspend/reactivate accounts.
             </CardDescription>
           </CardHeader>
           <CardContent>

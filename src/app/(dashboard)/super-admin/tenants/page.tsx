@@ -39,6 +39,8 @@ interface Tenant {
   planName: string;
   planId?: string;
   subscriptionStatus: string;
+  trialEndsAt?: string | null;
+  currentPeriodEnd?: string | null;
   isSuspended: boolean;
   whatsappConnected: boolean;
   createdAt: string;
@@ -64,6 +66,7 @@ export default function SuperAdminTenantsPage() {
   const [selectedPlanId, setSelectedPlanId] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('active');
   const [selectedDuration, setSelectedDuration] = useState('keep');
+  const [customDate, setCustomDate] = useState('');
   const [savingPlan, setSavingPlan] = useState(false);
 
   const fetchData = async () => {
@@ -102,6 +105,7 @@ export default function SuperAdminTenantsPage() {
     setSelectedPlanId(tenant.planId || (plans[0]?.id ?? ''));
     setSelectedStatus(tenant.subscriptionStatus || 'active');
     setSelectedDuration('keep');
+    setCustomDate('');
   };
 
   const handleSavePlanChange = async (e: React.FormEvent) => {
@@ -139,6 +143,11 @@ export default function SuperAdminTenantsPage() {
         now.setDate(now.getDate() + 14);
         payload.trialEndsAt = now.toISOString();
         payload.subscriptionStatus = 'trialing';
+      } else if (selectedDuration === 'custom' && customDate) {
+        const chosen = new Date(customDate);
+        chosen.setHours(23, 59, 59, 999);
+        payload.currentPeriodEnd = chosen.toISOString();
+        payload.trialEndsAt = null;
       }
 
       const res = await fetch('/api/super-admin/tenants', {
@@ -353,6 +362,40 @@ export default function SuperAdminTenantsPage() {
 
           {editingTenant && (
             <form onSubmit={handleSavePlanChange} className="space-y-4 pt-2">
+              {/* Current Status Overview */}
+              <div className="rounded-lg border border-border bg-muted/40 p-3 text-xs space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Current Plan:</span>
+                  <Badge variant="outline" className="border-border font-semibold text-foreground">
+                    {editingTenant.planName}
+                  </Badge>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Subscription Status:</span>
+                  <span className="capitalize font-semibold text-foreground">
+                    {editingTenant.subscriptionStatus || 'N/A'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-muted-foreground">Active Expiry / Trial:</span>
+                  <span className="font-medium text-foreground">
+                    {editingTenant.currentPeriodEnd
+                      ? new Date(editingTenant.currentPeriodEnd).toLocaleDateString(undefined, {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                        })
+                      : editingTenant.trialEndsAt
+                      ? `Trial ends ${new Date(editingTenant.trialEndsAt).toLocaleDateString(undefined, {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                        })}`
+                      : 'Not set (Unlimited)'}
+                  </span>
+                </div>
+              </div>
+
               {/* Select Plan */}
               <div className="space-y-1.5">
                 <Label htmlFor="plan" className="text-xs font-semibold text-foreground">
@@ -408,7 +451,25 @@ export default function SuperAdminTenantsPage() {
                   <option value="365_days">Set Valid for +1 Year (365 Days)</option>
                   <option value="lifetime">Lifetime / Permanent Access (25 Years)</option>
                   <option value="14_days_trial">Reset to 14 Days Free Trial</option>
+                  <option value="custom">Pick Custom Expiry Date...</option>
                 </select>
+
+                {selectedDuration === 'custom' && (
+                  <div className="pt-2">
+                    <Label htmlFor="customDate" className="text-[11px] font-semibold text-foreground">
+                      Choose Expiry Date
+                    </Label>
+                    <Input
+                      id="customDate"
+                      type="date"
+                      value={customDate}
+                      onChange={(e) => setCustomDate(e.target.value)}
+                      className="mt-1 text-xs border-border bg-muted"
+                      required
+                    />
+                  </div>
+                )}
+
                 <p className="text-[11px] text-muted-foreground">
                   Controls when the account’s subscription will renew or require payment.
                 </p>

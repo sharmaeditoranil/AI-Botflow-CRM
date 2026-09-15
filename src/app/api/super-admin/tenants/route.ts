@@ -43,6 +43,8 @@ export async function GET() {
         planName: acct.plans?.name || 'No Plan',
         planId: acct.plans?.id,
         subscriptionStatus: acct.subscription_status,
+        trialEndsAt: acct.trial_ends_at,
+        currentPeriodEnd: acct.current_period_end,
         isSuspended: !!acct.is_suspended,
         whatsappConnected: acct.whatsapp_config?.[0]?.status === 'connected',
         createdAt: acct.created_at,
