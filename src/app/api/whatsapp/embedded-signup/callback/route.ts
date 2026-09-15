@@ -109,8 +109,20 @@ export async function GET(req: NextRequest) {
   if (wabaId) {
     const numbers = await fetchWabaPhoneNumbers(wabaId, accessToken);
     if (numbers.length > 0) {
-      phoneNumberId = numbers[0].id;
-      displayPhoneNumber = numbers[0].display_phone_number;
+      // If the account already has a connected phone number and a new number was added to the WABA,
+      // pick the newly added number (which Meta appends at the end) so adding a new number works seamlessly.
+      const { data: existingRow } = await adminSupabase
+        .from('whatsapp_config')
+        .select('phone_number_id')
+        .eq('account_id', targetAccountId)
+        .maybeSingle();
+
+      const existingId = existingRow?.phone_number_id;
+      const newlyAdded = existingId ? numbers.find((n) => n.id !== existingId) : null;
+      const selected = (newlyAdded && numbers.length > 1) ? numbers[numbers.length - 1] : numbers[0];
+
+      phoneNumberId = selected.id;
+      displayPhoneNumber = selected.display_phone_number;
     }
     // Subscribe WABA
     await subscribeWabaToApp(wabaId, accessToken);
