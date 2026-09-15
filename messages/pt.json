@@ -7,11 +7,18 @@
     "emailLabel": "E-mail",
     "emailPlaceholder": "you@example.com",
     "passwordLabel": "Senha",
+    "passwordPlaceholder": "••••••••",
     "forgotPassword": "Esqueceu a senha?",
-    "passwordPlaceholder": "Digite sua senha",
-    "signingIn": "Entrando...",
-    "signIn": "Entrar",
+    "submitting": "Entrando...",
+    "submit": "Entrar",
     "noAccount": "Não tem uma conta?",
+    "signUp": "Cadastre-se"
+  },
+  "SignupPage": {
+    "titleAccept": "Crie uma conta para aceitar",
+    "titleWelcome": "Criar uma conta",
+    "descAccept": "Crie uma conta e levaremos você ao convite.",
+    "descWelcome": "Cadastre-se no Aibotflow",
     "createAccount": "Criar conta"
   },
   "Sidebar": {
@@ -472,7 +479,11 @@
       "resultTags": "{count} tag atribuída",
       "resultTags_plural": "{count} tags atribuídas",
       "resultSkipped": "{count} ignorados",
+      "resultInvalidPhone": "{count} telefone inválido",
+      "resultInvalidPhone_plural": "{count} telefones inválidos",
       "resultFailed": "{count} com falha",
+      "failedRowsHeading": "Linhas com falha",
+      "unknownReason": "Erro desconhecido",
       "willBeCreated": "{name} (será criada na importação)",
       "columns": {
         "phone": "Telefone",
@@ -494,6 +505,8 @@
       "toastTagsSkipped": "Tags desconhecidas ignoradas (crie-as primeiro em Configurações): {sample}{more}",
       "toastSkipped": "{count} duplicado ignorado",
       "toastSkipped_plural": "{count} duplicados ignorados",
+      "toastInvalidPhone": "{count} contato não tinha um número de telefone válido",
+      "toastInvalidPhone_plural": "{count} contatos não tinham um número de telefone válido",
       "toastFailed": "{count} contato não pôde ser importado",
       "toastFailed_plural": "{count} contatos não puderam ser importados",
       "toastError": "Falha na importação"

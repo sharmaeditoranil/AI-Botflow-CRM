@@ -1,4 +1,3 @@
-import { encrypt } from '@/lib/whatsapp/encryption';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 
 const GRAPH_API_VERSION = 'v21.0';

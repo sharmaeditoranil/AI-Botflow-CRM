@@ -7,11 +7,18 @@
     "emailLabel": "이메일",
     "emailPlaceholder": "you@example.com",
     "passwordLabel": "비밀번호",
+    "passwordPlaceholder": "••••••••",
     "forgotPassword": "비밀번호를 잊으셨나요?",
-    "passwordPlaceholder": "비밀번호를 입력하세요",
-    "signingIn": "로그인 중...",
-    "signIn": "로그인",
+    "submitting": "로그인 중...",
+    "submit": "로그인",
     "noAccount": "계정이 없으신가요?",
+    "signUp": "회원가입"
+  },
+  "SignupPage": {
+    "titleAccept": "초대를 수락하려면 계정을 만드세요",
+    "titleWelcome": "계정 만들기",
+    "descAccept": "계정을 만들면 초대로 이동합니다.",
+    "descWelcome": "Aibotflow 가입하기",
     "createAccount": "계정 만들기"
   },
   "Sidebar": {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import {
@@ -22,27 +22,6 @@ interface EmbeddedSignupButtonProps {
 
 type SignupMode = 'coexistence' | 'standard';
 
-declare global {
-  interface Window {
-    fbAsyncInit?: () => void;
-    FB?: {
-      init: (options: Record<string, unknown>) => void;
-      login: (
-        callback: (response: {
-          authResponse?: {
-            code?: string;
-            accessToken?: string;
-            userID?: string;
-          };
-          status?: string;
-          error?: unknown;
-        }) => void,
-        options: Record<string, unknown>
-      ) => void;
-    };
-  }
-}
-
 export function EmbeddedSignupButton({ onConnected }: EmbeddedSignupButtonProps) {
   const { user, accountId } = useAuth();
   const [loadingMode, setLoadingMode] = useState<SignupMode | null>(null);
@@ -56,10 +35,6 @@ export function EmbeddedSignupButton({ onConnected }: EmbeddedSignupButtonProps)
     configId: null,
     isConfigured: false,
   });
-  const [sdkReady, setSdkReady] = useState(false);
-
-  // Stored asset IDs received from postMessage during Embedded Signup
-  const sessionDataRef = useRef<{ wabaId?: string; phoneNumberId?: string }>({});
 
   // Listen for success or error in query params (from OAuth redirect callback)
   useEffect(() => {
@@ -97,113 +72,6 @@ export function EmbeddedSignupButton({ onConnected }: EmbeddedSignupButtonProps)
       })
       .catch((err) => console.error('[EmbeddedSignup] Config fetch error:', err));
   }, []);
-
-  // Initialize Facebook JavaScript SDK for Embedded Signup popup flow
-  useEffect(() => {
-    if (typeof window === 'undefined' || !config.appId) return;
-
-    // Load Meta JS SDK if not already in document
-    const initSdk = () => {
-      if (window.FB) {
-        try {
-          window.FB.init({
-            appId: config.appId,
-            cookie: true,
-            xfbml: true,
-            version: 'v21.0',
-          });
-          setSdkReady(true);
-        } catch (err) {
-          console.warn('[EmbeddedSignup] FB.init error:', err);
-        }
-      }
-    };
-
-    if (window.FB) {
-      initSdk();
-    } else {
-      window.fbAsyncInit = () => {
-        initSdk();
-      };
-      const existingScript = document.getElementById('facebook-jssdk');
-      if (!existingScript) {
-        const script = document.createElement('script');
-        script.id = 'facebook-jssdk';
-        script.src = 'https://connect.facebook.net/en_US/sdk.js';
-        script.async = true;
-        script.defer = true;
-        script.crossOrigin = 'anonymous';
-        document.body.appendChild(script);
-      }
-    }
-
-    // Capture asset IDs emitted by Meta's Embedded Signup popup via window postMessage
-    const handlePostMessage = (event: MessageEvent) => {
-      if (
-        event.origin !== 'https://www.facebook.com' &&
-        event.origin !== 'https://web.facebook.com'
-      ) {
-        return;
-      }
-      try {
-        const payload = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-        if (payload?.type === 'WA_EMBEDDED_SIGNUP') {
-          if (payload.event === 'FINISH') {
-            const { phone_number_id, waba_id } = payload.data || {};
-            sessionDataRef.current = {
-              phoneNumberId: phone_number_id,
-              wabaId: waba_id,
-            };
-            console.log('[EmbeddedSignup] Session info captured:', sessionDataRef.current);
-          }
-        }
-      } catch {
-        // Ignore unparseable post messages
-      }
-    };
-
-    window.addEventListener('message', handlePostMessage);
-    return () => {
-      window.removeEventListener('message', handlePostMessage);
-    };
-  }, [config.appId]);
-
-  // Exchange auth code with backend
-  const exchangeCode = async (
-    code: string,
-    wabaId?: string,
-    phoneNumberId?: string,
-    isCoexistence?: boolean
-  ) => {
-    try {
-      const res = await fetch('/api/whatsapp/embedded-signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code,
-          wabaId,
-          phoneNumberId,
-          coexistence: isCoexistence,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        toast.error(data.error || 'Failed to complete WhatsApp connection with Meta.');
-      } else {
-        toast.success(
-          isCoexistence
-            ? `WhatsApp Connected in Coexistence Mode (${data.displayPhoneNumber || ''})! Mobile App aur CRM Panel dono active hain.`
-            : `WhatsApp Connected (${data.displayPhoneNumber || ''}) successfully!`
-        );
-        onConnected?.();
-      }
-    } catch (err: any) {
-      console.error('[EmbeddedSignup] Exchange error:', err);
-      toast.error('Network error saving WhatsApp configuration.');
-    } finally {
-      setLoadingMode(null);
-    }
-  };
 
   // Launch Embedded Signup flow via direct OAuth redirect
   const handleLaunchSignup = (mode: SignupMode) => {
