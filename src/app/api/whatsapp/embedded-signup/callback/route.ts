@@ -89,8 +89,9 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // 1. Exchange code for access token
-  const tokenRes = await exchangeCodeForAccessToken(code, appId, appSecret);
+  // 1. Exchange code for access token (must pass the same redirect_uri used in the OAuth dialog)
+  const redirectUri = `${baseUrl}/api/whatsapp/embedded-signup/callback`;
+  const tokenRes = await exchangeCodeForAccessToken(code, appId, appSecret, redirectUri);
   if ('error' in tokenRes) {
     return NextResponse.redirect(
       `${baseUrl}/settings?tab=whatsapp&error=${encodeURIComponent(tokenRes.error)}`

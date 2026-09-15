@@ -53,12 +53,16 @@ export async function getMetaAppCredentials(): Promise<{
 export async function exchangeCodeForAccessToken(
   code: string,
   appId: string,
-  appSecret: string
+  appSecret: string,
+  redirectUri?: string
 ): Promise<{ accessToken: string } | { error: string }> {
   const url = new URL(`${GRAPH_BASE}/oauth/access_token`);
   url.searchParams.set('client_id', appId);
   url.searchParams.set('client_secret', appSecret);
   url.searchParams.set('code', code);
+  if (redirectUri) {
+    url.searchParams.set('redirect_uri', redirectUri);
+  }
 
   try {
     const res = await fetch(url.toString(), { method: 'GET' });
