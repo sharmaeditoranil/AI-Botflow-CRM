@@ -1,20 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 
 interface EmbeddedSignupButtonProps {
   onConnected?: () => void;
-}
-
-declare global {
-  interface Window {
-    FB?: any;
-    fbAsyncInit?: () => void;
-  }
 }
 
 export function EmbeddedSignupButton({ onConnected }: EmbeddedSignupButtonProps) {
@@ -25,8 +18,6 @@ export function EmbeddedSignupButton({ onConnected }: EmbeddedSignupButtonProps)
     configId: null,
     isConfigured: false,
   });
-  const [sdkLoaded, setSdkLoaded] = useState(false);
-  const sessionDataRef = useRef<{ wabaId?: string; phoneNumberId?: string }>({});
 
   // Listen for success or error in query params (from OAuth redirect callback)
   useEffect(() => {
@@ -51,63 +42,10 @@ export function EmbeddedSignupButton({ onConnected }: EmbeddedSignupButtonProps)
       .then((data) => {
         if (data && data.appId) {
           setConfig(data);
-          loadFacebookSDK(data.appId);
         }
       })
       .catch((err) => console.error('[EmbeddedSignup] Config fetch error:', err));
   }, []);
-
-  // Listen for session info message from Meta Embedded Signup popup
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      if (
-        event.origin !== 'https://www.facebook.com' &&
-        event.origin !== 'https://web.facebook.com'
-      ) {
-        return;
-      }
-      try {
-        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-        if (data.type === 'WA_EMBEDDED_SIGNUP') {
-          console.log('[Meta Embedded] Received session event:', data.event, data.data);
-          if (data.event === 'FINISH') {
-            const { waba_id, phone_number_id } = data.data || {};
-            sessionDataRef.current = {
-              wabaId: waba_id,
-              phoneNumberId: phone_number_id,
-            };
-          }
-        }
-      } catch (_) {}
-    };
-
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
-
-  const loadFacebookSDK = (appId: string) => {
-    if (window.FB) {
-      setSdkLoaded(true);
-      return;
-    }
-
-    window.fbAsyncInit = function () {
-      window.FB.init({
-        appId: appId,
-        cookie: true,
-        xfbml: true,
-        version: 'v21.0',
-      });
-      setSdkLoaded(true);
-    };
-
-    if (!document.getElementById('facebook-jssdk')) {
-      const js = document.createElement('script');
-      js.id = 'facebook-jssdk';
-      js.src = 'https://connect.facebook.net/en_US/sdk.js';
-      document.body.appendChild(js);
-    }
-  };
 
   const handleConnectWithMeta = () => {
     if (!config.isConfigured || !config.appId || !config.configId) {
