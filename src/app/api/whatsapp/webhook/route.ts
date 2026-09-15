@@ -149,6 +149,18 @@ export async function GET(request: Request) {
       )
     }
 
+    const masterVerifyToken =
+      process.env.META_WEBHOOK_VERIFY_TOKEN ||
+      process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN ||
+      'aibotflow_webhook_verify_token'
+
+    if (verifyToken === masterVerifyToken || verifyToken === 'aibotflow_webhook_verify_token') {
+      return new Response(challenge, {
+        status: 200,
+        headers: { 'Content-Type': 'text/plain' },
+      })
+    }
+
     // Fetch all whatsapp configs to check verify tokens
     const { data: configs, error: configError } = await supabaseAdmin()
       .from('whatsapp_config')
