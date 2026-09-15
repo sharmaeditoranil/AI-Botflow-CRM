@@ -24,6 +24,7 @@ import {
   resolveAuditUserId,
   ContactError,
 } from '@/lib/api/v1/contacts';
+import { assertCanAddContact } from '@/lib/billing/limits';
 
 // PostgREST filter values are comma/paren-delimited; strip anything
 // that could break the `.or()` grammar before interpolating a search
@@ -111,6 +112,7 @@ export async function POST(request: Request) {
     }
 
     const auditUserId = await resolveAuditUserId(ctx.supabase, ctx.accountId);
+    await assertCanAddContact(ctx.accountId);
 
     const { id, created } = await findOrCreateContact(
       ctx.supabase,

@@ -1,0 +1,195 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
+import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+
+interface EmbeddedSignupButtonProps {
+  onConnected?: () => void;
+}
+
+declare global {
+  interface Window {
+    FB?: any;
+    fbAsyncInit?: () => void;
+  }
+}
+
+export function EmbeddedSignupButton({ onConnected }: EmbeddedSignupButtonProps) {
+  const [loading, setLoading] = useState(false);
+  const [config, setConfig] = useState<{ appId: string | null; configId: string | null; isConfigured: boolean }>({
+    appId: null,
+    configId: null,
+    isConfigured: false,
+  });
+  const [sdkLoaded, setSdkLoaded] = useState(false);
+
+  // Fetch public Meta App ID and Config ID
+  useEffect(() => {
+    fetch('/api/whatsapp/embedded-signup')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.appId) {
+          setConfig(data);
+          loadFacebookSDK(data.appId);
+        }
+      })
+      .catch((err) => console.error('[EmbeddedSignup] Config fetch error:', err));
+  }, []);
+
+  // Listen for session info message from Meta Embedded Signup popup
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (
+        event.origin !== 'https://www.facebook.com' &&
+        event.origin !== 'https://web.facebook.com'
+      ) {
+        return;
+      }
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (data.type === 'WA_EMBEDDED_SIGNUP') {
+          console.log('[Meta Embedded] Received session event:', data.event, data.data);
+          if (data.event === 'FINISH') {
+            const { waba_id, phone_number_id } = data.data || {};
+            // Will be processed when auth code returns from FB.login
+          }
+        }
+      } catch (_) {}
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  const loadFacebookSDK = (appId: string) => {
+    if (window.FB) {
+      setSdkLoaded(true);
+      return;
+    }
+
+    window.fbAsyncInit = function () {
+      window.FB.init({
+        appId: appId,
+        cookie: true,
+        xfbml: true,
+        version: 'v21.0',
+      });
+      setSdkLoaded(true);
+    };
+
+    if (!document.getElementById('facebook-jssdk')) {
+      const js = document.createElement('script');
+      js.id = 'facebook-jssdk';
+      js.src = 'https://connect.facebook.net/en_US/sdk.js';
+      document.body.appendChild(js);
+    }
+  };
+
+  const handleConnectWithMeta = () => {
+    if (!config.isConfigured || !config.appId || !config.configId) {
+      toast.error('Meta App ID and Config ID are not configured yet. Super-Admin must configure them.');
+      return;
+    }
+
+    if (!window.FB) {
+      toast.error('Facebook SDK is still loading. Please try again in a few seconds.');
+      return;
+    }
+
+    setLoading(true);
+
+    window.FB.login(
+      function (response: any) {
+        if (response.authResponse && response.authResponse.code) {
+          const code = response.authResponse.code;
+          // Send code to backend
+          fetch('/api/whatsapp/embedded-signup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code }),
+          })
+            .then(async (res) => {
+              const result = await res.json();
+              if (res.ok && result.success) {
+                toast.success(result.message || 'WhatsApp Connected successfully!');
+                onConnected?.();
+              } else {
+                toast.error(result.error || 'Failed to connect WhatsApp account.');
+              }
+            })
+            .catch((err) => {
+              toast.error(err.message || 'Network error connecting WhatsApp.');
+            })
+            .finally(() => {
+              setLoading(false);
+            });
+        } else {
+          setLoading(false);
+          if (response.status !== 'unknown') {
+            toast.error('Embedded signup canceled or failed to authorize.');
+          }
+        }
+      },
+      {
+        config_id: config.configId,
+        response_type: 'code',
+        override_default_response_type: true,
+        extras: {
+          feature: 'whatsapp_embedded_signup',
+          version: 2,
+          sessionInfoVersion: 2,
+        },
+      }
+    );
+  };
+
+  return (
+    <div className="rounded-xl border border-primary/20 bg-primary/5 p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <h3 className="text-base font-semibold text-foreground">
+              Option 1: Connect with Meta (Recommended)
+            </h3>
+            <span className="rounded-full bg-primary/20 px-2 py-0.5 text-xs font-medium text-primary">
+              1-Click Setup
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Connect your official WhatsApp Business Account instantly without manually copying tokens or IDs.
+          </p>
+        </div>
+
+        <Button
+          type="button"
+          onClick={handleConnectWithMeta}
+          disabled={loading}
+          className="shrink-0 bg-[#1877F2] text-white hover:bg-[#166fe5]"
+        >
+          {loading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Connecting...
+            </>
+          ) : (
+            <>
+              <svg className="mr-2 h-4 w-4 fill-current" viewBox="0 0 24 24">
+                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+              </svg>
+              Connect with Meta
+            </>
+          )}
+        </Button>
+      </div>
+
+      {!config.isConfigured && (
+        <div className="mt-3 flex items-center gap-2 text-xs text-amber-500">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>Meta App configuration is pending. Configure Meta App ID & Config ID in Super-Admin settings, or use manual setup below.</span>
+        </div>
+      )}
+    </div>
+  );
+}

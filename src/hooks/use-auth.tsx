@@ -35,6 +35,7 @@ interface Profile {
   beta_features: string[];
   account_id: string | null;
   account_role: AccountRole | null;
+  is_super_admin?: boolean;
 }
 
 interface AccountSummary {
@@ -118,6 +119,8 @@ interface AuthContextValue {
   defaultCurrency: string;
   /** True if `accountRole === 'owner'`. */
   isOwner: boolean;
+  /** True if profile.is_super_admin is true. */
+  isSuperAdmin: boolean;
   /** True if `accountRole === 'admin'` (does NOT include owner — use canManageMembers for "admin or above"). */
   isAdmin: boolean;
   /** True if `accountRole === 'agent'`. */
@@ -152,6 +155,7 @@ interface ProfileRow {
   beta_features: string[] | null;
   account_id: string | null;
   account_role: string | null;
+  is_super_admin?: boolean | null;
 }
 
 /**
@@ -192,7 +196,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const result = await supabase
           .from("profiles")
           .select(
-            "id, full_name, email, avatar_url, role, beta_features, account_id, account_role",
+            "id, full_name, email, avatar_url, role, beta_features, account_id, account_role, is_super_admin",
           )
           .eq("user_id", userId)
           .maybeSingle();
@@ -280,6 +284,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           beta_features: data.beta_features ?? [],
           account_id: data.account_id ?? null,
           account_role: accountRole,
+          is_super_admin: !!data.is_super_admin,
         });
         setAccount(accountRow);
         if (!data.account_id || !accountRole) {
@@ -403,6 +408,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return {
       accountRole: role,
       accountId: profile?.account_id ?? null,
+      isSuperAdmin: !!profile?.is_super_admin,
       isOwner: role === "owner",
       isAdmin: role === "admin",
       isAgent: role === "agent",
