@@ -129,24 +129,33 @@ export async function POST(req: NextRequest) {
   const adminSupabase = getAdminSupabase();
   const now = new Date().toISOString();
 
-  const { error: upsertError } = await adminSupabase
+  const configPayload: Record<string, unknown> = {
+    account_id: profile.account_id,
+    user_id: user.id,
+    phone_number_id: phoneNumberId,
+    waba_id: wabaId || null,
+    access_token: encryptedToken,
+    status: 'connected',
+    coexistence: isCoexistence,
+    connected_at: now,
+    registered_at: now,
+    subscribed_apps_at: now,
+    updated_at: now,
+  };
+
+  let { error: upsertError } = await adminSupabase
     .from('whatsapp_config')
-    .upsert(
-      {
-        account_id: profile.account_id,
-        user_id: user.id,
-        phone_number_id: phoneNumberId,
-        waba_id: wabaId || null,
-        access_token: encryptedToken,
-        status: 'connected',
-        coexistence: isCoexistence,
-        connected_at: now,
-        registered_at: now,
-        subscribed_apps_at: now,
-        updated_at: now,
-      },
-      { onConflict: 'account_id' }
-    );
+    .upsert(configPayload, { onConflict: 'account_id' });
+
+  // If the database has not run migration 044 yet, gracefully retry without the coexistence column
+  if (upsertError && (upsertError.message?.includes('coexistence') || upsertError.code === 'PGRST204')) {
+    console.warn('[Meta Embedded] coexistence column not in schema yet, falling back:', upsertError.message);
+    delete configPayload.coexistence;
+    const retry = await adminSupabase
+      .from('whatsapp_config')
+      .upsert(configPayload, { onConflict: 'account_id' });
+    upsertError = retry.error;
+  }
 
   if (upsertError) {
     console.error('[Meta Embedded] Error upserting whatsapp_config:', upsertError);

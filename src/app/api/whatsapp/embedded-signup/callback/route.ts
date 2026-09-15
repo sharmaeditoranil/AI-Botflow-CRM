@@ -126,24 +126,33 @@ export async function GET(req: NextRequest) {
   const encryptedToken = encrypt(accessToken);
   const now = new Date().toISOString();
 
-  const { error: dbError } = await adminSupabase
+  const callbackPayload: Record<string, unknown> = {
+    account_id: targetAccountId,
+    user_id: targetUserId,
+    phone_number_id: phoneNumberId,
+    waba_id: wabaId || null,
+    access_token: encryptedToken,
+    status: 'connected',
+    coexistence: isCoexistence,
+    connected_at: now,
+    registered_at: now,
+    subscribed_apps_at: now,
+    updated_at: now,
+  };
+
+  let { error: dbError } = await adminSupabase
     .from('whatsapp_config')
-    .upsert(
-      {
-        account_id: targetAccountId,
-        user_id: targetUserId,
-        phone_number_id: phoneNumberId,
-        waba_id: wabaId || null,
-        access_token: encryptedToken,
-        status: 'connected',
-        coexistence: isCoexistence,
-        connected_at: now,
-        registered_at: now,
-        subscribed_apps_at: now,
-        updated_at: now,
-      },
-      { onConflict: 'account_id' }
-    );
+    .upsert(callbackPayload, { onConflict: 'account_id' });
+
+  // If the database has not run migration 044 yet, gracefully retry without the coexistence column
+  if (dbError && (dbError.message?.includes('coexistence') || dbError.code === 'PGRST204')) {
+    console.warn('[Meta Embedded Callback] coexistence column not in schema yet, falling back:', dbError.message);
+    delete callbackPayload.coexistence;
+    const retry = await adminSupabase
+      .from('whatsapp_config')
+      .upsert(callbackPayload, { onConflict: 'account_id' });
+    dbError = retry.error;
+  }
 
   if (dbError) {
     console.error('[Meta Embedded Callback] DB save error:', dbError);
