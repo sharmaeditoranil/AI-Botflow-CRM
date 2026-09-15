@@ -93,6 +93,8 @@ export async function POST(req: NextRequest) {
   let phoneNumberId = inputPhoneId;
   let displayPhoneNumber = '';
 
+  const adminSupabase = getAdminSupabase();
+
   if (!wabaId) {
     wabaId = (await getWabaFromToken(accessToken, appId, appSecret)) || undefined;
   }
@@ -136,7 +138,6 @@ export async function POST(req: NextRequest) {
 
   // 5. Save to whatsapp_config using admin client to ensure bypass of any RLS ambiguity
   const isCoexistence = Boolean(inputCoex);
-  const adminSupabase = getAdminSupabase();
   const now = new Date().toISOString();
 
   const configPayload: Record<string, unknown> = {
