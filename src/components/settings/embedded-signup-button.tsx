@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useAuth } from '@/hooks/use-auth';
 
 interface EmbeddedSignupButtonProps {
   onConnected?: () => void;
@@ -17,6 +18,7 @@ declare global {
 }
 
 export function EmbeddedSignupButton({ onConnected }: EmbeddedSignupButtonProps) {
+  const { user, accountId } = useAuth();
   const [loading, setLoading] = useState(false);
   const [config, setConfig] = useState<{ appId: string | null; configId: string | null; isConfigured: boolean }>({
     appId: null,
@@ -25,6 +27,22 @@ export function EmbeddedSignupButton({ onConnected }: EmbeddedSignupButtonProps)
   });
   const [sdkLoaded, setSdkLoaded] = useState(false);
   const sessionDataRef = useRef<{ wabaId?: string; phoneNumberId?: string }>({});
+
+  // Listen for success or error in query params (from OAuth redirect callback)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('connected') === 'true') {
+        const phone = params.get('phone');
+        toast.success(phone ? `WhatsApp Connected successfully (${phone})!` : 'WhatsApp Connected successfully!');
+        onConnected?.();
+        window.history.replaceState({}, document.title, window.location.pathname + '?tab=whatsapp');
+      } else if (params.get('error')) {
+        toast.error(`WhatsApp connection failed: ${decodeURIComponent(params.get('error')!)}`);
+        window.history.replaceState({}, document.title, window.location.pathname + '?tab=whatsapp');
+      }
+    }
+  }, [onConnected]);
 
   // Fetch public Meta App ID and Config ID
   useEffect(() => {
@@ -97,8 +115,18 @@ export function EmbeddedSignupButton({ onConnected }: EmbeddedSignupButtonProps)
       return;
     }
 
-    if (!window.FB) {
-      toast.error('Facebook SDK is still loading. Please try again in a few seconds.');
+    const isMobile =
+      typeof navigator !== 'undefined' &&
+      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+        navigator.userAgent
+      );
+
+    if (isMobile || !window.FB) {
+      setLoading(true);
+      const redirectUri = `${window.location.origin}/api/whatsapp/embedded-signup/callback`;
+      const state = `${accountId || ''}:${user?.id || ''}`;
+      const oauthUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${config.appId}&redirect_uri=${encodeURIComponent(redirectUri)}&config_id=${config.configId}&response_type=code&state=${encodeURIComponent(state)}`;
+      window.location.href = oauthUrl;
       return;
     }
 
