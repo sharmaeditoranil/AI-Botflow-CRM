@@ -1,6 +1,7 @@
 import { Metadata } from "next";
 import { LegalLayout } from "@/components/legal/legal-layout";
-import { Mail, Phone, MapPin, Clock, MessageSquare } from "lucide-react";
+import { Mail, Phone, MapPin, Clock } from "lucide-react";
+import { BrandLogo } from "@/components/brand/brand-logo";
 
 export const metadata: Metadata = {
   title: "Contact Us - AI Botflow CRM",
@@ -63,8 +64,8 @@ export default function ContactUsPage() {
       </div>
 
       <section className="space-y-3 pt-4 border-t border-border">
-        <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-          <MessageSquare className="h-4 w-4 text-primary" /> Live Customer Portal
+        <h2 className="text-lg font-semibold text-foreground flex items-center gap-2.5">
+          <BrandLogo size={22} /> Live Customer Portal
         </h2>
         <p className="text-sm text-muted-foreground">
           Existing customers can also open a support ticket or manage their billing profile by logging into the CRM dashboard at{" "}

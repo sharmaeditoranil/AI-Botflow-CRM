@@ -30,6 +30,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import type { AccountRole } from "@/lib/auth/roles";
+import { BrandLogo } from "@/components/brand/brand-logo";
 
 // Per-role chip metadata used in the sidebar's account strip + the
 // Members tab roster. Keeping this near both consumers in a single
@@ -191,11 +192,9 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         {/* Logo row. On mobile we put a close button here; on desktop the
             close button is hidden since the sidebar is always-visible. */}
         <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <MessageSquare className="h-4 w-4" />
-            </div>
-            <span className="text-sm font-semibold text-foreground">
+          <Link href="/dashboard" className="flex items-center gap-2.5 transition-opacity hover:opacity-90">
+            <BrandLogo size={32} variant="glow" priority />
+            <span className="text-sm font-bold tracking-tight text-foreground">
               {t("title")}
             </span>
           </Link>
@@ -358,7 +357,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               className="mb-2 flex items-center justify-between rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-300 transition-colors hover:bg-amber-500/15"
             >
               <div className="flex items-center gap-1.5 min-w-0">
-                <Sparkles className="size-3.5 text-amber-400 shrink-0" />
+                <BrandLogo size={18} />
                 <span className="font-semibold text-[11px] truncate">Free Trial</span>
               </div>
               <span className="shrink-0 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">

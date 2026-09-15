@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { BrandLogo } from '@/components/brand/brand-logo';
 import {
   Card,
   CardContent,
@@ -282,8 +283,8 @@ export default function JoinPage() {
   // ----- Peek OK -----
   const inviteHeader = (
     <CardHeader className="items-center text-center">
-      <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-        <UsersRound className="h-6 w-6 text-primary" />
+      <div className="mb-3 flex items-center justify-center">
+        <BrandLogo size={54} variant="glow" priority />
       </div>
       <CardTitle className="text-xl text-foreground">
         {t.rich('invitedTo', {

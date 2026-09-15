@@ -27,6 +27,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input';
 import { SettingsPanelHead } from './settings-panel-head';
 import type { AccountUsageInfo } from '@/lib/billing/limits';
+import { BrandLogo } from '@/components/brand/brand-logo';
 
 declare global {
   interface Window {
@@ -712,9 +713,7 @@ export function BillingPanel() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <DialogTitle className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/15 text-primary shrink-0">
-                    <Sparkles className="h-5 w-5" />
-                  </div>
+                  <BrandLogo size={38} variant="glow" priority />
                   Upgrade Your Aibotflow Plan
                 </DialogTitle>
                 <DialogDescription className="mt-1.5 text-sm text-muted-foreground">

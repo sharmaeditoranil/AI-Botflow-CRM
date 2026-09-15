@@ -14,8 +14,8 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
 import { MessageSquare, UsersRound } from "lucide-react";
+import { BrandLogo } from "@/components/brand/brand-logo";
 
 // `useSearchParams` opts the component out of static prerendering
 // unless it sits under a Suspense boundary. We split the form into
@@ -78,11 +78,13 @@ function LoginPageInner() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md border-border bg-card">
         <CardHeader className="items-center text-center">
-          <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+          <div className="mb-3 flex items-center justify-center">
             {inviteToken ? (
-              <UsersRound className="h-6 w-6 text-primary" />
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+                <UsersRound className="h-7 w-7 text-primary" />
+              </div>
             ) : (
-              <MessageSquare className="h-6 w-6 text-primary" />
+              <BrandLogo size={56} variant="glow" priority />
             )}
           </div>
           <CardTitle className="text-xl text-foreground">

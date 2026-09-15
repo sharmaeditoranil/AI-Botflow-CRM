@@ -14,6 +14,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { BrandLogo } from '@/components/brand/brand-logo';
 
 export default function SuperAdminLayout({ children }: { children: React.ReactNode }) {
   const { isSuperAdmin, profileLoading } = useAuth();
@@ -49,10 +50,8 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     <div className="space-y-6">
       {/* Super Admin Top Banner */}
       <div className="flex flex-col gap-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/20 text-amber-400">
-            <ShieldAlert className="h-5 w-5" />
-          </div>
+        <div className="flex items-center gap-3.5">
+          <BrandLogo size={42} variant="glow" priority />
           <div>
             <h1 className="text-lg font-bold text-amber-200">Aibotflow Super-Admin Console</h1>
             <p className="text-xs text-amber-300/80">

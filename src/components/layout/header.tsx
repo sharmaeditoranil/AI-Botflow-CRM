@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { LogOut, Menu, Settings as SettingsIcon, User } from "lucide-react";
+import { BrandLogo } from "@/components/brand/brand-logo";
 import {
   Avatar,
   AvatarFallback,
@@ -68,6 +69,9 @@ export function Header({ onOpenSidebar }: HeaderProps) {
         >
           <Menu className="h-5 w-5" />
         </button>
+        <div className="flex items-center gap-2 lg:hidden">
+          <BrandLogo size={24} />
+        </div>
         <h1 className="truncate text-base font-semibold text-foreground sm:text-lg">
           {t(titleKey as string)}
         </h1>

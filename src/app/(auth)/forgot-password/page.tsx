@@ -13,8 +13,8 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
 import { MessageSquare, CheckCircle, ArrowLeft } from "lucide-react";
+import { BrandLogo } from "@/components/brand/brand-logo";
 
 export default function ForgotPasswordPage() {
   const t = useTranslations("ForgotPasswordPage");
@@ -82,8 +82,8 @@ export default function ForgotPasswordPage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md border-border bg-card">
         <CardHeader className="items-center text-center">
-          <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-            <MessageSquare className="h-6 w-6 text-primary" />
+          <div className="mb-3 flex items-center justify-center">
+            <BrandLogo size={56} variant="glow" priority />
           </div>
           <CardTitle className="text-xl text-foreground">{t("title")}</CardTitle>
           <CardDescription className="text-muted-foreground">

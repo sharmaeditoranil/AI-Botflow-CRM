@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { MessageSquare, ShieldCheck, Mail, Phone } from "lucide-react";
+import { ShieldCheck, Mail, Phone } from "lucide-react";
+import { BrandLogo } from "@/components/brand/brand-logo";
 
 interface LegalLayoutProps {
   title: string;
@@ -13,11 +14,9 @@ export function LegalLayout({ title, lastUpdated = "September 16, 2026", childre
       {/* Top Navigation */}
       <header className="sticky top-0 z-30 border-b border-border/60 bg-background/80 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:px-6">
-          <Link href="/" className="flex items-center gap-2.5 font-bold text-base tracking-tight hover:opacity-90 transition-opacity">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-xs">
-              <MessageSquare className="h-5 w-5" />
-            </div>
-            <span>AI Botflow CRM</span>
+          <Link href="/" className="flex items-center gap-3 font-bold text-base tracking-tight hover:opacity-90 transition-opacity">
+            <BrandLogo size={36} variant="glow" priority />
+            <span className="text-lg font-bold tracking-tight text-foreground">Aibotflow</span>
           </Link>
           <div className="flex items-center gap-3">
             <Link

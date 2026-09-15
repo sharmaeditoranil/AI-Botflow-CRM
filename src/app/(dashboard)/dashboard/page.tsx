@@ -13,6 +13,7 @@ import {
   Sparkles,
   ArrowRight,
 } from 'lucide-react'
+import { BrandLogo } from '@/components/brand/brand-logo'
 
 import {
   loadActivity,
@@ -138,10 +139,8 @@ export default function DashboardPage() {
       {/* Trial Countdown & Upgrade Banner */}
       {account?.subscription_status === 'trialing' && account?.trial_ends_at && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent p-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/20 text-amber-300 shrink-0">
-              <Sparkles className="h-5 w-5" />
-            </div>
+          <div className="flex items-center gap-3.5">
+            <BrandLogo size={42} variant="glow" priority />
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-sm text-foreground">Free Trial Active</span>
