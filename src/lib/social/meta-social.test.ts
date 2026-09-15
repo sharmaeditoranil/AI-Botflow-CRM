@@ -4,7 +4,6 @@ import {
   sendInstagramMessage,
   getFacebookUserProfile,
   getInstagramUserProfile,
-  MetaSocialError,
 } from './meta-social';
 
 describe('Meta Social Messaging', () => {

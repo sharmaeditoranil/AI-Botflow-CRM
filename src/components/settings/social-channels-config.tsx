@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
-import { useTranslations } from "next-intl";
 import {
   Card,
   CardContent,
@@ -17,22 +16,17 @@ import { Badge } from "@/components/ui/badge";
 import {
   Copy,
   Check,
-  ExternalLink,
   ShieldCheck,
-  AlertCircle,
   Loader2,
-  RefreshCw,
   Info,
 } from "lucide-react";
 import {
-  WhatsAppIcon,
   MessengerIcon,
   InstagramIcon,
 } from "@/components/icons/social-icons";
 import type { MetaSocialConfig } from "@/types";
 
 export function SocialChannelsConfig() {
-  const t = useTranslations("Settings");
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
