@@ -140,6 +140,31 @@ export async function GET() {
     )
   }
 
+  // If Meta confirms the phone number is reachable and the WABA is subscribed to our app,
+  // ensure the database row is marked as registered/live so the UI turns green.
+  if (checks.phone_metadata_ok && (checks.waba_subscribed_to_app ?? false)) {
+    const now = new Date().toISOString()
+    const registeredAt = config.registered_at || now
+    const subscribedAppsAt = config.subscribed_apps_at || now
+
+    if (!config.registered_at || !config.subscribed_apps_at) {
+      await supabase
+        .from('whatsapp_config')
+        .update({
+          registered_at: registeredAt,
+          subscribed_apps_at: subscribedAppsAt,
+          status: 'connected',
+          last_registration_error: null,
+          updated_at: now,
+        })
+        .eq('account_id', accountId)
+    }
+
+    checks.locally_marked_registered = true
+    config.registered_at = registeredAt
+    config.subscribed_apps_at = subscribedAppsAt
+  }
+
   const live =
     checks.phone_metadata_ok &&
     (checks.waba_subscribed_to_app ?? false) &&

@@ -205,7 +205,7 @@ export function EmbeddedSignupButton({ onConnected }: EmbeddedSignupButtonProps)
     }
   };
 
-  // Launch Embedded Signup flow
+  // Launch Embedded Signup flow via direct OAuth redirect
   const handleLaunchSignup = (mode: SignupMode) => {
     if (!config.isConfigured || !config.appId || !config.configId) {
       toast.error('Meta App ID and Config ID are not configured yet. Super-Admin must configure them in settings.');
@@ -213,7 +213,6 @@ export function EmbeddedSignupButton({ onConnected }: EmbeddedSignupButtonProps)
     }
 
     setLoadingMode(mode);
-    sessionDataRef.current = {};
 
     const isCoex = mode === 'coexistence';
     const extras = isCoex
@@ -231,39 +230,9 @@ export function EmbeddedSignupButton({ onConnected }: EmbeddedSignupButtonProps)
     const redirectUri = `${window.location.origin}/api/whatsapp/embedded-signup/callback`;
     const state = `${accountId || ''}:${user?.id || ''}:${isCoex ? 'coex' : 'std'}`;
 
-    // Prefer FB.login popup if FB SDK is ready
-    if (sdkReady && window.FB) {
-      try {
-        window.FB.login(
-          (response) => {
-            if (response.authResponse?.code) {
-              exchangeCode(
-                response.authResponse.code,
-                sessionDataRef.current.wabaId,
-                sessionDataRef.current.phoneNumberId,
-                isCoex
-              );
-            } else {
-              setLoadingMode(null);
-              if (response.status !== 'connected') {
-                toast.info('WhatsApp Embedded Signup was cancelled or closed.');
-              }
-            }
-          },
-          {
-            config_id: config.configId,
-            response_type: 'code',
-            override_default_response_type: true,
-            extras,
-          }
-        );
-        return;
-      } catch (fbErr) {
-        console.warn('[EmbeddedSignup] FB.login failed, falling back to redirect flow:', fbErr);
-      }
-    }
-
-    // Direct OAuth Redirect URL fallback with extras encoded in query param
+    // Direct OAuth redirect flow: seamlessly navigates to Meta without popups getting
+    // blocked or stranded at "dialog/close_window" (Please close this tab). Meta will
+    // redirect directly back to our server callback with the auth code.
     const oauthUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${config.appId}&redirect_uri=${encodeURIComponent(redirectUri)}&config_id=${config.configId}&response_type=code&state=${encodeURIComponent(state)}&extras=${encodeURIComponent(JSON.stringify(extras))}`;
     window.location.href = oauthUrl;
   };

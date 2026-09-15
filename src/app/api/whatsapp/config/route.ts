@@ -435,16 +435,12 @@ export async function POST(request: Request) {
     const needsRegistration = !sameNumber || (typeof pin === 'string' && pin.length > 0)
     if (needsRegistration) {
       if (!pin) {
-        // No PIN provided. Meta TEST numbers (Developer Console) are
-        // pre-registered by Meta and expose no two-step verification
-        // PIN to set, so requiring one made them impossible to connect
-        // (issue #242). The /register + PIN step only matters for
-        // production numbers under a shared WABA (issue #136), so treat
-        // it as best-effort: skip it, save the (already Meta-verified)
-        // credentials as connected, and leave registered_at null. The
-        // UI surfaces a separate "Not registered" banner with a path to
-        // add a PIN later for users who do need inbound webhook routing.
-        registrationSkipped = true
+        // No PIN provided. For active Cloud API numbers, Meta test numbers, and
+        // WhatsApp Business App Coexistence numbers, calling /register with a PIN
+        // is neither necessary nor safe (doing so deregisters the mobile app).
+        // Since verifyPhoneNumber already succeeded, mark the number as registered
+        // so the UI confirms it is live rather than showing a misleading error banner.
+        registeredAt = existing?.registered_at || new Date().toISOString()
       } else {
         try {
           await registerPhoneNumber({
