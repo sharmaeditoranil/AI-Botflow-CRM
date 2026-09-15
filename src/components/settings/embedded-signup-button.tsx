@@ -115,70 +115,11 @@ export function EmbeddedSignupButton({ onConnected }: EmbeddedSignupButtonProps)
       return;
     }
 
-    const isMobile =
-      typeof navigator !== 'undefined' &&
-      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-        navigator.userAgent
-      );
-
-    if (isMobile || !window.FB) {
-      setLoading(true);
-      const redirectUri = `${window.location.origin}/api/whatsapp/embedded-signup/callback`;
-      const state = `${accountId || ''}:${user?.id || ''}`;
-      const oauthUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${config.appId}&redirect_uri=${encodeURIComponent(redirectUri)}&config_id=${config.configId}&response_type=code&state=${encodeURIComponent(state)}`;
-      window.location.href = oauthUrl;
-      return;
-    }
-
     setLoading(true);
-
-    window.FB.login(
-      function (response: any) {
-        if (response.authResponse && response.authResponse.code) {
-          const code = response.authResponse.code;
-          // Send code to backend
-          fetch('/api/whatsapp/embedded-signup', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              code,
-              wabaId: sessionDataRef.current.wabaId,
-              phoneNumberId: sessionDataRef.current.phoneNumberId,
-            }),
-          })
-            .then(async (res) => {
-              const result = await res.json();
-              if (res.ok && result.success) {
-                toast.success(result.message || 'WhatsApp Connected successfully!');
-                onConnected?.();
-              } else {
-                toast.error(result.error || 'Failed to connect WhatsApp account.');
-              }
-            })
-            .catch((err) => {
-              toast.error(err.message || 'Network error connecting WhatsApp.');
-            })
-            .finally(() => {
-              setLoading(false);
-            });
-        } else {
-          setLoading(false);
-          if (response.status !== 'unknown') {
-            toast.error('Embedded signup canceled or failed to authorize.');
-          }
-        }
-      },
-      {
-        config_id: config.configId,
-        response_type: 'code',
-        override_default_response_type: true,
-        extras: {
-          feature: 'whatsapp_embedded_signup',
-          version: 2,
-          sessionInfoVersion: 2,
-        },
-      }
-    );
+    const redirectUri = `${window.location.origin}/api/whatsapp/embedded-signup/callback`;
+    const state = `${accountId || ''}:${user?.id || ''}`;
+    const oauthUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${config.appId}&redirect_uri=${encodeURIComponent(redirectUri)}&config_id=${config.configId}&response_type=code&state=${encodeURIComponent(state)}`;
+    window.location.href = oauthUrl;
   };
 
   return (
