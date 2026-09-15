@@ -60,7 +60,7 @@ export async function PATCH(req: NextRequest) {
     const admin = await assertSuperAdmin();
     const supabase = getAdminSupabase();
     const body = await req.json();
-    const { accountId, isSuspended, planId } = body;
+    const { accountId, isSuspended, planId, subscriptionStatus, trialEndsAt, currentPeriodEnd } = body;
 
     if (!accountId) {
       return NextResponse.json({ error: 'Account ID is required.' }, { status: 400 });
@@ -69,6 +69,9 @@ export async function PATCH(req: NextRequest) {
     const updates: Record<string, any> = {};
     if (typeof isSuspended === 'boolean') updates.is_suspended = isSuspended;
     if (planId) updates.plan_id = planId;
+    if (subscriptionStatus) updates.subscription_status = subscriptionStatus;
+    if (trialEndsAt !== undefined) updates.trial_ends_at = trialEndsAt;
+    if (currentPeriodEnd !== undefined) updates.current_period_end = currentPeriodEnd;
 
     const { error } = await supabase.from('accounts').update(updates).eq('id', accountId);
 
