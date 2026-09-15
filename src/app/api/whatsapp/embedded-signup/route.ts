@@ -133,6 +133,7 @@ export async function POST(req: NextRequest) {
         access_token: encryptedToken,
         status: 'connected',
         connected_at: now,
+        registered_at: now,
         subscribed_apps_at: now,
         updated_at: now,
       },
