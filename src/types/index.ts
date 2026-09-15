@@ -344,6 +344,7 @@ export interface MetaSocialConfig {
   instagram_username?: string | null;
   instagram_status: 'connected' | 'disconnected';
   verify_token?: string | null;
+  metadata?: Record<string, any> | null;
   created_at: string;
   updated_at: string;
 }
