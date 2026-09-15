@@ -88,6 +88,12 @@ interface WhatsAppMessage {
   button?: { text?: string; payload?: string }
   /** Present when the customer swipe-replies to one of our messages. */
   context?: { id: string }
+  /** Coexistence message echoes: recipient phone number */
+  to?: string
+  /** Coexistence message echoes: recipient ID */
+  recipient_id?: string
+  /** Coexistence message echoes: indicates message was sent by the business from mobile app */
+  message_echoes?: boolean
 }
 
 /** One entry of a failed status's `errors` array, as Meta sends it. */
@@ -309,8 +315,8 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
         }
       }
 
-      // Handle incoming messages
-      if (!value.messages || !value.contacts) continue
+      // Handle incoming messages or coexistence echoes
+      if (!value.messages || value.messages.length === 0) continue
 
       const phoneNumberId = value.metadata.phone_number_id
 
@@ -352,9 +358,37 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
       const config = configRows[0]
 
       const decryptedAccessToken = decrypt(config.access_token)
+      const isEchoField = change.field === 'smb_message_echoes'
 
       for (let i = 0; i < value.messages.length; i++) {
         const message = value.messages[i]
+        const isEcho = isEchoField || message.message_echoes === true
+
+        // Coexistence echo: message sent from WhatsApp Business mobile app
+        if (isEcho) {
+          const recipient =
+            message.recipient_id ||
+            message.to ||
+            (value.contacts && value.contacts[i]?.wa_id) ||
+            (value.contacts && value.contacts[0]?.wa_id)
+
+          if (recipient) {
+            await processMessageEcho(
+              message,
+              recipient,
+              config.account_id,
+              config.user_id,
+              decryptedAccessToken,
+              config.mirror_inbound_media !== false
+            )
+          } else {
+            console.warn('[webhook] Echo message missing recipient identifier; skipping:', message.id)
+          }
+          continue
+        }
+
+        // Standard inbound customer message requires contact
+        if (!value.contacts) continue
         const contact = value.contacts[i] || value.contacts[0]
 
         await processMessage(
@@ -996,6 +1030,140 @@ async function processMessage(
     whatsapp_message_id: message.id,
     content_type: contentType,
     text: contentText,
+  })
+}
+
+/**
+ * Processes WhatsApp Coexistence message echoes (`smb_message_echoes` or messages with `message_echoes: true`).
+ * These represent outbound messages sent by the business owner/agent directly from the
+ * mobile WhatsApp Business App.
+ *
+ * This ensures the Ai Botflow CRM panel is immediately kept in sync with messages sent on the phone:
+ * - Creates/resolves contact and conversation for the recipient
+ * - Inserts into `messages` as `sender_type: 'agent'`, `status: 'sent'`
+ * - Updates conversation `last_message_text` and `last_message_at` without bumping unread count
+ * - Fires `message.sent` event on public webhooks
+ * - Does NOT trigger automations or AI replies
+ */
+async function processMessageEcho(
+  message: WhatsAppMessage,
+  recipientPhoneOrId: string,
+  accountId: string,
+  configOwnerUserId: string,
+  accessToken: string,
+  mirrorMedia: boolean
+) {
+  const recipientIdentity: WaIdentity = {
+    phone: normalizePhone(recipientPhoneOrId),
+  }
+  if (!hasUsableIdentity(recipientIdentity)) {
+    console.warn(
+      '[webhook-echo] echo message has no usable recipient identity; skipping:',
+      message.id
+    )
+    return
+  }
+
+  // Find or create contact for the customer
+  const contactOutcome = await findOrCreateContact(
+    accountId,
+    configOwnerUserId,
+    recipientIdentity
+  )
+  if (!contactOutcome) return
+  const contactRecord = contactOutcome.contact
+
+  // Find or create conversation with the customer
+  const convResult = await findOrCreateConversation(
+    accountId,
+    configOwnerUserId,
+    contactRecord.id
+  )
+  if (!convResult) return
+  const conversation = convResult.conversation
+
+  if (convResult.created) {
+    await dispatchWebhookEvent(supabaseAdmin(), accountId, 'conversation.created', {
+      conversation_id: conversation.id,
+      contact_id: contactRecord.id,
+    })
+  }
+
+  // Parse message content (text, image, audio, doc, etc.)
+  const { contentText, mediaUrl, mediaType } = await parseMessageContent(
+    message,
+    accessToken,
+    mirrorMedia ? { accountId } : null
+  )
+
+  const ALLOWED_CONTENT_TYPES = new Set([
+    'text', 'image', 'document', 'audio', 'video',
+    'location', 'template', 'interactive',
+  ])
+  const contentType = ALLOWED_CONTENT_TYPES.has(message.type)
+    ? message.type
+    : message.type === 'sticker'
+      ? 'image'
+      : 'text'
+
+  let replyToInternalId: string | null = null
+  if (message.context?.id) {
+    replyToInternalId = await lookupInternalIdByMetaId(
+      message.context.id,
+      conversation.id
+    )
+  }
+
+  const createdAtIso = new Date(parseInt(message.timestamp) * 1000).toISOString()
+
+  // Insert sent message into thread (agent sender)
+  const { data: insertedRows, error: msgError } = await supabaseAdmin()
+    .from('messages')
+    .upsert(
+      {
+        conversation_id: conversation.id,
+        sender_type: 'agent',
+        content_type: contentType,
+        content_text: contentText,
+        media_url: mediaUrl,
+        media_type: mediaType,
+        message_id: message.id,
+        status: 'sent',
+        created_at: createdAtIso,
+        reply_to_message_id: replyToInternalId,
+      },
+      { onConflict: 'conversation_id,message_id', ignoreDuplicates: true }
+    )
+    .select('id')
+
+  if (msgError) {
+    console.error('[webhook-echo] error inserting message echo:', msgError)
+    return
+  }
+
+  if (!insertedRows || insertedRows.length === 0) {
+    // Replay/duplicate delivery
+    return
+  }
+
+  // Update conversation's preview and timestamp (WITHOUT bumping unread count)
+  await supabaseAdmin()
+    .from('conversations')
+    .update({
+      last_message_text: contentText || `[${contentType}]`,
+      last_message_at: createdAtIso,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', conversation.id)
+
+  // Dispatch public webhook event
+  await dispatchWebhookEvent(supabaseAdmin(), accountId, 'message.sent', {
+    conversation_id: conversation.id,
+    contact_id: contactRecord.id,
+    whatsapp_message_id: message.id,
+    content_type: contentType,
+    text: contentText,
+    source: 'whatsapp_business_app_coexistence',
   })
 }
 

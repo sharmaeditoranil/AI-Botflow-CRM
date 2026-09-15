@@ -13,6 +13,7 @@ import {
   Zap,
   AlertTriangle,
   RotateCcw,
+  Smartphone,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
@@ -619,6 +620,12 @@ export function WhatsAppConfig() {
                   ? t('wabaSubscribed')
                   : wabaSubscription.error}
             </p>
+          )}
+          {connectionStatus === 'connected' && config?.coexistence && (
+            <div className="mt-2.5 flex items-center gap-2 rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-3 py-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+              <Smartphone className="size-3.5 shrink-0" />
+              <span>Coexistence Mode Active: WhatsApp Business Mobile App + CRM Panel dono ek saath connected hain.</span>
+            </div>
           )}
           {connectionStatus !== 'connected' && statusMeta && renderMetaDetails(statusMeta)}
         </Alert>

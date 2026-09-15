@@ -8,6 +8,7 @@ export interface EmbeddedSignupPayload {
   code: string;
   wabaId?: string;
   phoneNumberId?: string;
+  coexistence?: boolean;
 }
 
 export interface EmbeddedSignupResult {
@@ -15,7 +16,31 @@ export interface EmbeddedSignupResult {
   wabaId: string;
   phoneNumberId: string;
   displayPhoneNumber?: string;
+  coexistence?: boolean;
   error?: string;
+}
+
+/**
+ * Returns the extras parameter payload for Meta Embedded Signup in Coexistence mode
+ * (allowing existing WhatsApp Business App mobile accounts to connect without losing app access).
+ */
+export function getCoexistenceExtras() {
+  return {
+    setup: {},
+    featureType: 'whatsapp_business_app_onboarding',
+    sessionInfoVersion: '3',
+    coex: true,
+  };
+}
+
+/**
+ * Returns the extras parameter payload for standard Meta Embedded Signup.
+ */
+export function getStandardExtras() {
+  return {
+    setup: {},
+    sessionInfoVersion: '3',
+  };
 }
 
 function getAdminSupabase() {

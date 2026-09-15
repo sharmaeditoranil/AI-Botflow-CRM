@@ -317,6 +317,12 @@ export interface WhatsAppConfig {
    * inbound attachments expire. Migration 039.
    */
   mirror_inbound_media?: boolean;
+  /**
+   * When true, this number was connected in WhatsApp Business App Coexistence
+   * mode, allowing simultaneous use of WhatsApp Business app on phone and
+   * the CRM panel. Migration 044.
+   */
+  coexistence?: boolean;
 }
 
 // Raw Meta status enum. We persist this verbatim from Meta (sync + webhook)

@@ -40,9 +40,17 @@ export async function GET(req: NextRequest) {
 
   const adminSupabase = getAdminSupabase();
 
-  // Resolve user & account
+  // Resolve user & account, and coexistence mode from state
   let targetAccountId: string | null = null;
   let targetUserId: string | null = null;
+  let isCoexistence = false;
+
+  if (state) {
+    const parts = state.split(':');
+    if (parts[0]) targetAccountId = parts[0];
+    if (parts[1]) targetUserId = parts[1] || null;
+    if (parts[2] === 'coex') isCoexistence = true;
+  }
 
   try {
     const supabase = await createClient();
@@ -64,15 +72,6 @@ export async function GET(req: NextRequest) {
     }
   } catch (err) {
     console.warn('[Meta Embedded Callback] Cookie auth check error:', err);
-  }
-
-  // Fallback to state param if cookie session was not attached on cross-site redirect
-  if (!targetAccountId && state) {
-    const [sAccountId, sUserId] = state.split(':');
-    if (sAccountId) {
-      targetAccountId = sAccountId;
-      targetUserId = sUserId || null;
-    }
   }
 
   if (!targetAccountId) {
@@ -137,6 +136,7 @@ export async function GET(req: NextRequest) {
         waba_id: wabaId || null,
         access_token: encryptedToken,
         status: 'connected',
+        coexistence: isCoexistence,
         connected_at: now,
         registered_at: now,
         subscribed_apps_at: now,
@@ -153,6 +153,6 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.redirect(
-    `${baseUrl}/settings?tab=whatsapp&connected=true&phone=${encodeURIComponent(displayPhoneNumber)}`
+    `${baseUrl}/settings?tab=whatsapp&connected=true&coex=${isCoexistence ? 'true' : 'false'}&phone=${encodeURIComponent(displayPhoneNumber)}`
   );
 }

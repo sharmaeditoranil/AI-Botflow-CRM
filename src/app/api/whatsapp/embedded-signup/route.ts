@@ -26,6 +26,7 @@ export async function GET() {
     appId: appId || null,
     configId: configId || null,
     isConfigured: !!(appId && configId),
+    coexistenceSupported: true,
   });
 }
 
@@ -58,7 +59,12 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { code, wabaId: inputWabaId, phoneNumberId: inputPhoneId } = body;
+  const {
+    code,
+    wabaId: inputWabaId,
+    phoneNumberId: inputPhoneId,
+    coexistence: inputCoex,
+  } = body;
 
   if (!code) {
     return NextResponse.json({ error: 'Authorization code is required.' }, { status: 400 });
@@ -119,6 +125,7 @@ export async function POST(req: NextRequest) {
   const encryptedToken = encrypt(accessToken);
 
   // 5. Save to whatsapp_config using admin client to ensure bypass of any RLS ambiguity
+  const isCoexistence = Boolean(inputCoex);
   const adminSupabase = getAdminSupabase();
   const now = new Date().toISOString();
 
@@ -132,6 +139,7 @@ export async function POST(req: NextRequest) {
         waba_id: wabaId || null,
         access_token: encryptedToken,
         status: 'connected',
+        coexistence: isCoexistence,
         connected_at: now,
         registered_at: now,
         subscribed_apps_at: now,
@@ -150,9 +158,12 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     success: true,
-    message: 'WhatsApp Business Account connected successfully via Meta Embedded Signup!',
+    message: isCoexistence
+      ? 'WhatsApp Business Account connected successfully with Coexistence mode! (Mobile App & CRM Panel active)'
+      : 'WhatsApp Business Account connected successfully via Meta Embedded Signup!',
     wabaId,
     phoneNumberId,
     displayPhoneNumber,
+    coexistence: isCoexistence,
   });
 }
