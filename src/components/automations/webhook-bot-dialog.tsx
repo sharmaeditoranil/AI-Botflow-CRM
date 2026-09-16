@@ -383,7 +383,9 @@ export function WebhookBotDialog({
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium flex items-center gap-1">
                   Recipient Phone JSON Path *
-                  <HelpCircle className="h-3 w-3 text-muted-foreground" title="Path in incoming JSON containing phone number (e.g. phone, customer.mobile)" />
+                  <span title="Path in incoming JSON containing phone number (e.g. phone, customer.mobile)">
+                    <HelpCircle className="h-3 w-3 text-muted-foreground cursor-help" />
+                  </span>
                 </Label>
                 <Input
                   value={phonePath}
