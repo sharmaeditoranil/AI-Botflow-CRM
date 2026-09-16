@@ -19,6 +19,7 @@ import type {
   MessageTemplate,
   TemplateButton,
   TemplateSampleValues,
+  TemplateVariableMappingConfig,
 } from '@/types';
 
 export const TEMPLATE_LIMITS = {
@@ -46,6 +47,7 @@ export interface TemplatePayload {
   footer_text?: string;
   buttons?: TemplateButton[];
   sample_values?: TemplateSampleValues;
+  variable_mapping?: Record<string, TemplateVariableMappingConfig>;
 }
 
 export function validateTemplateName(name: string): void {

@@ -196,6 +196,9 @@ export async function PATCH(
         footer_text: payload.footer_text ?? null,
         buttons: payload.buttons ?? null,
         sample_values: payload.sample_values ?? null,
+        ...(payload.variable_mapping !== undefined && {
+          variable_mapping: payload.variable_mapping,
+        }),
         status: 'PENDING',
         submission_error: null,
         rejection_reason: null,

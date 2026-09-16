@@ -12,6 +12,12 @@ import {
   Pencil,
   RotateCcw,
   Upload,
+  SlidersHorizontal,
+  Sparkles,
+  ImageIcon,
+  Video,
+  FileText,
+  CheckCircle2,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import {
@@ -48,15 +54,18 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type {
+  CustomField,
   MessageTemplate,
   TemplateButton,
   TemplateSampleValues,
+  TemplateVariableMappingConfig,
 } from '@/types';
 import { templateStatusConfig } from '@/lib/template-status';
 import {
   extractVariableIndices,
   TEMPLATE_LIMITS,
 } from '@/lib/whatsapp/template-validators';
+import { TemplateDataMappingDialog } from './template-data-mapping-dialog';
 
 const CATEGORIES = ['Marketing', 'Utility', 'Authentication'] as const;
 type HeaderFormat = 'none' | 'text' | 'image' | 'video' | 'document';
@@ -78,6 +87,7 @@ interface TemplateFormData {
   header_sample: string;
   body_text: string;
   body_samples: string[];
+  variable_mapping: Record<string, TemplateVariableMappingConfig>;
   footer_text: string;
   buttons: TemplateButton[];
 }
@@ -92,6 +102,7 @@ const emptyForm: TemplateFormData = {
   header_sample: '',
   body_text: '',
   body_samples: [],
+  variable_mapping: {},
   footer_text: '',
   buttons: [],
 };
@@ -136,6 +147,7 @@ export function TemplateManager() {
 
   const [loading, setLoading] = useState(true);
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -145,24 +157,25 @@ export function TemplateManager() {
   // dialog title + CTA. Set to the template id to pre-fill from a row.
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  // Template selected for the confirm-delete dialog. The destructive
-  // action goes through this two-step so a slip on the trash icon
-  // doesn't take the template off Meta as well as locally.
+  // Template selected for the confirm-delete dialog.
   const [templateToDelete, setTemplateToDelete] =
     useState<MessageTemplate | null>(null);
-  // Header-media upload (image #230; video/document #562). Uploads to the
-  // account-scoped chat-media bucket and stores the public URL in
-  // header_media_url; the submit route turns that into a Meta
-  // Resumable-Upload handle.
+  // Template selected for the dedicated Data Mapping dialog
+  const [templateToMap, setTemplateToMap] = useState<MessageTemplate | null>(
+    null,
+  );
+  const [mappingModalOpen, setMappingModalOpen] = useState(false);
+
+  // Header-media upload
   const [uploadingHeader, setUploadingHeader] = useState(false);
   const headerFileRef = useRef<HTMLInputElement>(null);
+  const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Body variable indices — `[1, 2, 3]` for "{{1}} {{2}} {{3}}". We
-  // re-run the extractor on every render to keep the sample-value rows
-  // in sync with what the user typed.
+  // Body variable indices — `[1, 2, 3]` for "{{1}} {{2}} {{3}}".
   const bodyVarCount = useMemo(
     () => extractVariableIndices(form.body_text).length,
     [form.body_text],
+  );
   );
   const headerVarCount = useMemo(
     () =>
@@ -190,8 +203,21 @@ export function TemplateManager() {
       return;
     }
     fetchTemplates(user.id);
+    loadCustomFields();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authLoading, user?.id]);
+
+  async function loadCustomFields() {
+    try {
+      const { data } = await supabase
+        .from('custom_fields')
+        .select('*')
+        .order('field_name');
+      setCustomFields(data || []);
+    } catch (err) {
+      console.error('Failed to load custom fields:', err);
+    }
+  }
 
   async function fetchTemplates(userId: string) {
     try {
@@ -199,7 +225,6 @@ export function TemplateManager() {
       const { data, error } = await supabase
         .from('message_templates')
         .select('*')
-        .eq('user_id', userId)
         .order('created_at', { ascending: false });
       if (error) throw error;
       setTemplates(data || []);
@@ -209,6 +234,90 @@ export function TemplateManager() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function insertVariableIntoBody(
+    kind: 'name' | 'first_name' | 'date' | 'phone' | 'custom',
+  ) {
+    const existingIndices = extractVariableIndices(form.body_text);
+    const nextN =
+      existingIndices.length > 0 ? Math.max(...existingIndices) + 1 : 1;
+    const token = `{{${nextN}}}`;
+
+    const textarea = bodyTextareaRef.current;
+    let nextText = form.body_text;
+    if (textarea) {
+      const start = textarea.selectionStart ?? nextText.length;
+      const end = textarea.selectionEnd ?? nextText.length;
+      nextText = nextText.slice(0, start) + token + nextText.slice(end);
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start + token.length, start + token.length);
+      }, 50);
+    } else {
+      nextText = nextText ? `${nextText} ${token}` : token;
+    }
+
+    const key = String(nextN);
+    let newMapping: TemplateVariableMappingConfig = {
+      type: 'field',
+      value: 'name',
+    };
+    let sample = 'Sample';
+    if (kind === 'name') {
+      newMapping = {
+        type: 'field',
+        value: 'name',
+        fallback: 'Customer',
+        label: 'Full Name',
+      };
+      sample = 'Rahul Sharma';
+    } else if (kind === 'first_name') {
+      newMapping = {
+        type: 'field',
+        value: 'first_name',
+        fallback: 'Customer',
+        label: 'First Name',
+      };
+      sample = 'Rahul';
+    } else if (kind === 'date') {
+      newMapping = {
+        type: 'date',
+        value: 'today',
+        dateFormat: 'DD/MM/YYYY',
+        label: "Today's Date",
+      };
+      const now = new Date();
+      sample = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+    } else if (kind === 'phone') {
+      newMapping = { type: 'field', value: 'phone', label: 'Phone' };
+      sample = '+91 98765 43210';
+    }
+
+    const nextSamples = [...form.body_samples];
+    while (nextSamples.length < nextN) nextSamples.push('');
+    nextSamples[nextN - 1] = sample;
+
+    setForm((prev) => ({
+      ...prev,
+      body_text: nextText,
+      body_samples: nextSamples,
+      variable_mapping: {
+        ...prev.variable_mapping,
+        [key]: newMapping,
+      },
+    }));
+  }
+
+  function openDataMapping(template: MessageTemplate) {
+    setTemplateToMap(template);
+    setMappingModalOpen(true);
+  }
+
+  function handleMappingSaved(updatedTemplate: MessageTemplate) {
+    setTemplates((prev) =>
+      prev.map((t) => (t.id === updatedTemplate.id ? updatedTemplate : t)),
+    );
   }
 
   function buildSubmitPayload() {
@@ -236,6 +345,10 @@ export function TemplateManager() {
       buttons: form.buttons.length > 0 ? form.buttons : undefined,
       sample_values:
         Object.keys(sample_values).length > 0 ? sample_values : undefined,
+      variable_mapping:
+        Object.keys(form.variable_mapping).length > 0
+          ? form.variable_mapping
+          : undefined,
     };
   }
 
@@ -251,6 +364,7 @@ export function TemplateManager() {
       header_sample: template.sample_values?.header?.[0] ?? '',
       body_text: template.body_text,
       body_samples: template.sample_values?.body ?? [],
+      variable_mapping: template.variable_mapping ?? {},
       footer_text: template.footer_text ?? '',
       buttons: template.buttons ?? [],
     });
@@ -555,6 +669,16 @@ export function TemplateManager() {
           {templates.map((template) => {
             const statusKey = template.status || 'DRAFT';
             const status = templateStatusConfig[statusKey];
+            const vars = extractVariableIndices(template.body_text);
+            const varCount = vars.length;
+            const mapping = template.variable_mapping ?? {};
+            const isFullyMapped =
+              varCount > 0 &&
+              vars.every((v) => {
+                const conf = mapping[String(v)];
+                return Boolean(conf?.value?.trim() || conf?.fallback?.trim());
+              });
+
             return (
               <Card key={template.id}>
                 <CardContent className="flex items-start justify-between pt-4">
@@ -569,6 +693,44 @@ export function TemplateManager() {
                       <Badge className={`text-xs border ${status.classes}`}>
                         {status.label}
                       </Badge>
+
+                      {/* Header media indicator */}
+                      {template.header_type && template.header_type !== 'text' && (
+                        <Badge variant="outline" className="text-xs capitalize flex items-center gap-1 border-border/80">
+                          {template.header_type === 'image' && <ImageIcon className="size-3 text-purple-400" />}
+                          {template.header_type === 'video' && <Video className="size-3 text-blue-400" />}
+                          {template.header_type === 'document' && <FileText className="size-3 text-amber-400" />}
+                          {template.header_type}
+                        </Badge>
+                      )}
+
+                      {/* Variables & Mapping status */}
+                      {varCount > 0 ? (
+                        <Badge
+                          className={`text-xs border flex items-center gap-1 ${
+                            isFullyMapped
+                              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                              : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                          }`}
+                        >
+                          {isFullyMapped ? (
+                            <>
+                              <CheckCircle2 className="size-3" />
+                              {t('dataMapped')} ({varCount})
+                            </>
+                          ) : (
+                            <>
+                              <AlertCircle className="size-3" />
+                              {t('needsMapping')} ({varCount})
+                            </>
+                          )}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs text-muted-foreground border-border/60">
+                          {t('noVariables')}
+                        </Badge>
+                      )}
+
                       {template.language && (
                         <span className="text-xs text-muted-foreground uppercase">
                           {template.language}
@@ -606,7 +768,24 @@ export function TemplateManager() {
                       </div>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 shrink-0 ml-2">
+                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                    {/* Map Variables Action Button */}
+                    {varCount > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openDataMapping(template)}
+                        className={`h-8 px-2 text-xs border ${
+                          isFullyMapped
+                            ? 'border-border text-muted-foreground hover:text-foreground'
+                            : 'border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
+                        }`}
+                        title={t('mapVariables')}
+                      >
+                        <SlidersHorizontal className="size-3.5 mr-1" />
+                        {t('mapVariables')}
+                      </Button>
+                    )}
                     {statusKey === 'APPROVED' && (
                       <Button
                         variant="ghost"
@@ -899,8 +1078,62 @@ export function TemplateManager() {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-muted-foreground">{t('bodyText')}</Label>
+              <div className="flex items-center justify-between flex-wrap gap-1.5">
+                <Label className="text-muted-foreground">{t('bodyText')}</Label>
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className="text-[11px] text-muted-foreground font-medium mr-0.5 flex items-center gap-1">
+                    <Sparkles className="size-3 text-primary" />
+                    {t('insertVariable')}:
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => insertVariableIntoBody('name')}
+                    className="h-6 text-[11px] px-2 py-0 border-primary/40 bg-primary/5 text-primary hover:bg-primary/15"
+                  >
+                    + {t('varCustomerName')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => insertVariableIntoBody('first_name')}
+                    className="h-6 text-[11px] px-2 py-0 border-border text-muted-foreground hover:text-foreground"
+                  >
+                    + {t('varFirstName')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => insertVariableIntoBody('date')}
+                    className="h-6 text-[11px] px-2 py-0 border-border text-muted-foreground hover:text-foreground"
+                  >
+                    + {t('varTodayDate')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => insertVariableIntoBody('phone')}
+                    className="h-6 text-[11px] px-2 py-0 border-border text-muted-foreground hover:text-foreground"
+                  >
+                    + {t('varPhoneNumber')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => insertVariableIntoBody('custom')}
+                    className="h-6 text-[11px] px-2 py-0 text-muted-foreground hover:text-foreground"
+                  >
+                    + {t('varCustom')}
+                  </Button>
+                </div>
+              </div>
               <Textarea
+                ref={bodyTextareaRef}
                 placeholder={t.raw('bodyPlaceholder')}
                 value={form.body_text}
                 onChange={(e) =>
@@ -908,33 +1141,169 @@ export function TemplateManager() {
                 }
                 rows={4}
                 maxLength={TEMPLATE_LIMITS.bodyMaxLength}
-                className="bg-muted border-border text-foreground placeholder:text-muted-foreground resize-none"
+                className="bg-muted border-border text-foreground placeholder:text-muted-foreground resize-none font-mono text-xs"
               />
               <p className="text-[11px] text-muted-foreground">
                 {t.raw('bodyHint')}
               </p>
 
               {bodyVarCount > 0 && (
-                <div className="space-y-1.5 pt-1">
-                  <Label className="text-[11px] text-muted-foreground">
-                    {t('sampleValues')}
-                  </Label>
+                <div className="space-y-2 pt-2 border-t border-border/50">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                      <Sparkles className="size-3.5 text-primary" />
+                      {t('sampleValues')} & {t('defaultMapping')}
+                    </Label>
+                    <span className="text-[10px] text-muted-foreground">
+                      Sample for Meta review & CRM default
+                    </span>
+                  </div>
                   {form.body_samples.map((val, i) => {
-                    const inputId = `template-body-sample-${i}`;
+                    const varNum = i + 1;
+                    const key = String(varNum);
+                    const mapping = form.variable_mapping[key] ?? {
+                      type: 'field',
+                      value: 'name',
+                    };
                     return (
-                      <Input
+                      <div
                         key={i}
-                        id={inputId}
-                        aria-label={t('sampleAria', { var: `{{${i + 1}}}` })}
-                        placeholder={t('samplePlaceholder', { var: `{{${i + 1}}}` })}
-                        value={val}
-                        onChange={(e) => {
-                          const next = [...form.body_samples];
-                          next[i] = e.target.value;
-                          setForm({ ...form, body_samples: next });
-                        }}
-                        className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
-                      />
+                        className="rounded-lg border border-border bg-card/40 p-2.5 space-y-2"
+                      >
+                        <div className="flex items-center justify-between">
+                          <Badge className="bg-primary/10 text-primary border-primary/20 text-[11px] font-mono">
+                            {`{{${varNum}}}`}
+                          </Badge>
+                          <span className="text-[10px] text-muted-foreground">
+                            Variable #{varNum}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div>
+                            <Label className="text-[10px] text-muted-foreground mb-1 block">
+                              Meta Sample Value (Required)
+                            </Label>
+                            <Input
+                              id={`template-body-sample-${i}`}
+                              aria-label={t('sampleAria', { var: `{{${varNum}}}` })}
+                              placeholder={t('samplePlaceholder', { var: `{{${varNum}}}` })}
+                              value={val}
+                              onChange={(e) => {
+                                const next = [...form.body_samples];
+                                next[i] = e.target.value;
+                                setForm({ ...form, body_samples: next });
+                              }}
+                              className="bg-muted border-border text-foreground h-8 text-xs placeholder:text-muted-foreground"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-[10px] text-muted-foreground mb-1 block">
+                              CRM Field Default Mapping
+                            </Label>
+                            <Select
+                              value={
+                                mapping.type === 'field'
+                                  ? `field:${mapping.value}`
+                                  : mapping.type === 'date'
+                                    ? `date:${mapping.value}`
+                                    : mapping.type === 'custom_field'
+                                      ? `custom:${mapping.value}`
+                                      : 'static'
+                              }
+                              onValueChange={(raw) => {
+                                if (raw.startsWith('field:')) {
+                                  const val = raw.replace('field:', '');
+                                  setForm((prev) => ({
+                                    ...prev,
+                                    variable_mapping: {
+                                      ...prev.variable_mapping,
+                                      [key]: {
+                                        type: 'field',
+                                        value: val,
+                                        fallback:
+                                          val === 'name' || val === 'first_name'
+                                            ? 'Customer'
+                                            : '',
+                                      },
+                                    },
+                                  }));
+                                } else if (raw.startsWith('date:')) {
+                                  const val = raw.replace('date:', '');
+                                  setForm((prev) => ({
+                                    ...prev,
+                                    variable_mapping: {
+                                      ...prev.variable_mapping,
+                                      [key]: {
+                                        type: 'date',
+                                        value: val,
+                                        dateFormat: 'DD/MM/YYYY',
+                                      },
+                                    },
+                                  }));
+                                } else if (raw.startsWith('custom:')) {
+                                  const val = raw.replace('custom:', '');
+                                  setForm((prev) => ({
+                                    ...prev,
+                                    variable_mapping: {
+                                      ...prev.variable_mapping,
+                                      [key]: {
+                                        type: 'custom_field',
+                                        value: val,
+                                      },
+                                    },
+                                  }));
+                                } else {
+                                  setForm((prev) => ({
+                                    ...prev,
+                                    variable_mapping: {
+                                      ...prev.variable_mapping,
+                                      [key]: {
+                                        type: 'static',
+                                        value: '',
+                                      },
+                                    },
+                                  }));
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="bg-muted border-border text-foreground h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="bg-popover border-border">
+                                <SelectItem value="field:name">
+                                  {t('fieldFullName')}
+                                </SelectItem>
+                                <SelectItem value="field:first_name">
+                                  {t('fieldFirstName')}
+                                </SelectItem>
+                                <SelectItem value="date:today">
+                                  {t('fieldTodayDate')}
+                                </SelectItem>
+                                <SelectItem value="field:phone">
+                                  {t('fieldPhone')}
+                                </SelectItem>
+                                <SelectItem value="field:email">
+                                  {t('fieldEmail')}
+                                </SelectItem>
+                                <SelectItem value="field:company">
+                                  {t('fieldCompany')}
+                                </SelectItem>
+                                {customFields.map((cf) => (
+                                  <SelectItem
+                                    key={cf.id}
+                                    value={`custom:${cf.id}`}
+                                  >
+                                    Custom: {cf.field_name}
+                                  </SelectItem>
+                                ))}
+                                <SelectItem value="static">
+                                  {t('fieldStaticText')}
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
@@ -1161,6 +1530,15 @@ export function TemplateManager() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Dedicated Variable Data Mapping Dialog */}
+      <TemplateDataMappingDialog
+        template={templateToMap}
+        open={mappingModalOpen}
+        onOpenChange={setMappingModalOpen}
+        customFields={customFields}
+        onSaveSuccess={handleMappingSaved}
+      />
     </section>
   );
 }

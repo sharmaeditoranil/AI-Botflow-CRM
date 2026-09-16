@@ -374,9 +374,28 @@ export interface TemplateSampleValues {
   header?: string[];
 }
 
+export type TemplateVariableSource = 'field' | 'custom_field' | 'static' | 'date';
+
+export interface TemplateVariableMappingConfig {
+  type: TemplateVariableSource;
+  /**
+   * For 'field': 'name', 'first_name', 'phone', 'email', 'company'
+   * For 'date': 'today' (formatted dynamically at send time)
+   * For 'custom_field': custom_fields.id UUID
+   * For 'static': raw literal value
+   */
+  value: string;
+  /** Fallback text if the contact field is empty or missing (e.g. 'Customer') */
+  fallback?: string;
+  label?: string;
+  /** Optional date formatting for 'date' type */
+  dateFormat?: 'DD/MM/YYYY' | 'YYYY-MM-DD' | 'MM/DD/YYYY' | 'readable';
+}
+
 export interface MessageTemplate {
   id: string;
   user_id: string;
+  account_id?: string;
   name: string;
   category: 'Marketing' | 'Utility' | 'Authentication';
   language?: string;
@@ -388,6 +407,7 @@ export interface MessageTemplate {
   footer_text?: string;
   buttons?: TemplateButton[];
   sample_values?: TemplateSampleValues;
+  variable_mapping?: Record<string, TemplateVariableMappingConfig>;
   status?: MessageTemplateStatus;
   meta_template_id?: string;
   rejection_reason?: string;

@@ -1568,7 +1568,8 @@ ALTER TABLE message_templates
   ADD COLUMN IF NOT EXISTS header_handle TEXT,
   ADD COLUMN IF NOT EXISTS header_media_url TEXT,
   ADD COLUMN IF NOT EXISTS submission_error TEXT,
-  ADD COLUMN IF NOT EXISTS last_submitted_at TIMESTAMPTZ;
+  ADD COLUMN IF NOT EXISTS last_submitted_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS variable_mapping JSONB;
 
 -- 2. quality_score CHECK — GREEN / YELLOW / RED only (or NULL).
 DO $$

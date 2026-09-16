@@ -35,9 +35,10 @@ export interface AudienceConfig {
  * in `value`.
  */
 export type VariableMapping =
-  | { type: 'static'; value: string }
-  | { type: 'field'; value: string }
-  | { type: 'custom_field'; value: string };
+  | { type: 'static'; value: string; fallback?: string }
+  | { type: 'field'; value: string; fallback?: string }
+  | { type: 'custom_field'; value: string; fallback?: string }
+  | { type: 'date'; value: string; fallback?: string; dateFormat?: string };
 
 interface BroadcastPayload {
   name: string;
@@ -90,9 +91,8 @@ interface BroadcastApiResult {
 type CustomValueIndex = Map<string, Map<string, string>>;
 
 /**
- * Per-contact resolution of custom-field placeholders. Static and
- * built-in-field mappings resolve synchronously; custom fields read
- * from a pre-built index to avoid N+1 queries during the send loop.
+ * Per-contact resolution of placeholders. Static, built-in fields,
+ * dates, and custom fields resolve with fallback support.
  */
 export function resolveVariables(
   variables: Record<string, VariableMapping>,
@@ -110,20 +110,46 @@ export function resolveVariables(
 
   return keys.map((key) => {
     const v = variables[key];
-    if (v.type === 'static') return v.value;
+    if (!v) return '';
+
+    if (v.type === 'static') {
+      const val = v.value?.trim();
+      return val ? val : (v.fallback ?? '');
+    }
+
+    if (v.type === 'date') {
+      const now = new Date();
+      if (v.value === 'today_iso' || v.dateFormat === 'YYYY-MM-DD') {
+        return now.toISOString().split('T')[0];
+      }
+      if (v.dateFormat === 'MM/DD/YYYY') {
+        const d = String(now.getDate()).padStart(2, '0');
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        return `${m}/${d}/${now.getFullYear()}`;
+      }
+      // Default: DD/MM/YYYY
+      const d = String(now.getDate()).padStart(2, '0');
+      const m = String(now.getMonth() + 1).padStart(2, '0');
+      return `${d}/${m}/${now.getFullYear()}`;
+    }
 
     if (v.type === 'field') {
+      const rawName = contact.name ? contact.name.trim() : '';
+      const firstName = rawName ? rawName.split(/\s+/)[0] : '';
       const fieldMap: Record<string, string | undefined> = {
-        name: contact.name,
+        name: rawName,
+        first_name: firstName,
         phone: contact.phone,
         email: contact.email,
         company: contact.company,
       };
-      return fieldMap[v.value] ?? '';
+      const resolved = fieldMap[v.value]?.trim();
+      return resolved ? resolved : (v.fallback ?? '');
     }
 
     // custom_field
-    return customValues?.get(v.value) ?? '';
+    const customVal = customValues?.get(v.value)?.trim();
+    return customVal ? customVal : (v.fallback ?? '');
   });
 }
 
