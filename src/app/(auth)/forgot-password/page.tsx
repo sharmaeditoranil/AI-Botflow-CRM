@@ -107,7 +107,7 @@ export default function ForgotPasswordPage() {
 
     const cleanOtp = otp.trim();
     if (!cleanOtp || cleanOtp.length < 6) {
-      setError("Please enter the 6-digit verification code sent to your email.");
+      setError("Please enter the verification code sent to your email.");
       return;
     }
 
@@ -269,7 +269,7 @@ export default function ForgotPasswordPage() {
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="otp" className="text-xs font-semibold text-foreground/90">
-                    6-Digit Email Code (OTP)
+                    Email Verification Code (OTP)
                   </Label>
                   <button
                     type="button"
@@ -285,12 +285,12 @@ export default function ForgotPasswordPage() {
                 <Input
                   id="otp"
                   type="text"
-                  maxLength={6}
-                  placeholder="e.g. 123456"
+                  maxLength={8}
+                  placeholder="Enter OTP Code"
                   value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, ""))}
+                  onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, "").slice(0, 8))}
                   required
-                  className="h-12 text-center text-xl tracking-[0.35em] font-mono font-bold rounded-xl border-border/80 bg-background/60 text-foreground focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                  className="h-12 text-center text-xl tracking-[0.25em] font-mono font-bold rounded-xl border-border/80 bg-background/60 text-foreground focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
                 />
               </div>
 

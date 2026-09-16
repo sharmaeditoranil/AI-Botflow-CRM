@@ -304,7 +304,7 @@ function LoginPageInner() {
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="otp" className="text-xs font-semibold text-foreground/90">
-                    6-Digit Email Code (OTP)
+                    Email Verification Code (OTP)
                   </Label>
                   <button
                     type="button"
@@ -320,19 +320,19 @@ function LoginPageInner() {
                 <Input
                   id="otp"
                   type="text"
-                  maxLength={6}
-                  placeholder="e.g. 123456"
+                  maxLength={8}
+                  placeholder="Enter OTP Code"
                   value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, ""))}
+                  onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, "").slice(0, 8))}
                   required
                   autoFocus
-                  className="h-12 text-center text-xl tracking-[0.35em] font-mono font-bold rounded-xl border-border/80 bg-background/60 text-foreground focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                  className="h-12 text-center text-xl tracking-[0.25em] font-mono font-bold rounded-xl border-border/80 bg-background/60 text-foreground focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
                 />
               </div>
 
               <Button
                 type="submit"
-                disabled={loading || otp.length < 6}
+                disabled={loading || otp.trim().length < 6}
                 className="mt-1 h-11 w-full rounded-xl bg-gradient-to-r from-primary via-primary/95 to-purple-600 text-primary-foreground font-semibold shadow-md shadow-primary/25 hover:shadow-lg hover:shadow-primary/35 transition-all hover:brightness-105 active:scale-[0.99] disabled:opacity-50"
               >
                 {loading ? (
