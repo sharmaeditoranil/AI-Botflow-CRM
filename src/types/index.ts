@@ -126,7 +126,7 @@ export interface Contact {
   is_opted_out?: boolean;
   opted_out_at?: string | null;
   opt_out_reason?: string | null;
-  lead_status?: 'new' | 'contacted' | 'warm' | 'hot' | 'qualified' | 'unqualified' | 'opted_out';
+  lead_status?: 'new' | 'contacted' | 'interested' | 'warm' | 'hot' | 'qualified' | 'unqualified' | 'opted_out' | string;
   lead_score?: number;
   ai_memory?: string | null;
   qualification_data?: Record<string, unknown> | null;

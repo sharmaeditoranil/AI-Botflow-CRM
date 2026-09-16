@@ -36,18 +36,18 @@ export interface AiConfig {
    *  null, retrieval falls back to lexical full-text search. */
   embeddingsApiKey: string | null
   /** Conversation Memory: remembers customer past inquiries, preferences, and context */
-  memoryEnabled: boolean
+  memoryEnabled?: boolean
   /** Lead Qualification: automatically detects buying intent, scores leads, and updates status */
-  leadQualificationEnabled: boolean
-  qualificationCriteria: QualificationCriteria
+  leadQualificationEnabled?: boolean
+  qualificationCriteria?: QualificationCriteria
   /** Follow-up Intelligence: automatic tagging and opt-out / unsubscribe management */
-  followupIntelligenceEnabled: boolean
-  autoTaggingEnabled: boolean
-  autoUnsubscribeEnabled: boolean
-  unsubscribeKeywords: string[]
-  unsubscribeReplyText: string
-  unsubscribeTagName: string
-  qualifiedTagName: string
+  followupIntelligenceEnabled?: boolean
+  autoTaggingEnabled?: boolean
+  autoUnsubscribeEnabled?: boolean
+  unsubscribeKeywords?: string[]
+  unsubscribeReplyText?: string
+  unsubscribeTagName?: string
+  qualifiedTagName?: string
 }
 
 /** A single conversation turn in the shape both providers accept. */
