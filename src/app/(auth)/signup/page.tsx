@@ -116,7 +116,18 @@ function SignupPageInner() {
     });
 
     if (error) {
-      setError(error.message);
+      if (error.message?.toLowerCase().includes("rate limit")) {
+        setError("Email sending limit exceeded by Supabase. Please wait a few minutes or sign in if you already have an account.");
+      } else {
+        setError(error.message);
+      }
+      setLoading(false);
+      return;
+    }
+
+    // Check if user already exists (Supabase returns empty identities array without throwing an error)
+    if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      setError("An account with this email already exists. Please sign in or use forgot password to reset it.");
       setLoading(false);
       return;
     }
