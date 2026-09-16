@@ -60,6 +60,7 @@ import {
   InstagramIcon,
 } from "@/components/icons/social-icons";
 import { toast } from "sonner";
+import { ContactTagBar } from "./contact-tag-bar";
 
 interface ReplyDraft {
   id: string;
@@ -1126,6 +1127,13 @@ export function MessageThread({
           </DropdownMenu>
         </div>
       </div>
+
+      {/* Customer Tags Bar: Directly accessible in Inbox (Desktop & Mobile) */}
+      {contact && (
+        <div className="border-b border-border/60 bg-card/60 px-3 py-1.5 sm:px-4">
+          <ContactTagBar contactId={contact.id} />
+        </div>
+      )}
 
       {/* Messages Area */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
