@@ -12,25 +12,33 @@ import {
 import { executeAutomation } from '@/lib/automations/engine';
 import { resolveConversationByPhone } from '@/lib/whatsapp/resolve-conversation';
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-webhook-secret',
+};
+
 /**
  * Universal request body parser for incoming webhooks.
- * Supports application/json, application/x-www-form-urlencoded, multipart/form-data, and raw text.
+ * Supports n8n, Pabbly, Zapier, Make, Shopify, WooCommerce, Elementor, PHP, and custom forms.
+ * Accepts application/json, application/x-www-form-urlencoded, multipart/form-data, raw text, and Arrays.
  */
 async function parseIncomingRequestBody(request: Request): Promise<Record<string, unknown>> {
   const contentType = (request.headers.get('content-type') || '').toLowerCase();
+  let rawParsed: unknown = null;
 
   // 1. JSON
-  if (contentType.includes('application/json')) {
+  if (contentType.includes('application/json') || !contentType) {
     try {
-      const json = await request.json();
-      if (json && typeof json === 'object') return json as Record<string, unknown>;
+      rawParsed = await request.json();
     } catch {}
   }
 
   // 2. Form-data or x-www-form-urlencoded
   if (
-    contentType.includes('application/x-www-form-urlencoded') ||
-    contentType.includes('multipart/form-data')
+    !rawParsed &&
+    (contentType.includes('application/x-www-form-urlencoded') ||
+      contentType.includes('multipart/form-data'))
   ) {
     try {
       const formData = await request.formData();
@@ -50,47 +58,99 @@ async function parseIncomingRequestBody(request: Request): Promise<Record<string
           obj[key] = value;
         }
       });
-      if (Object.keys(obj).length > 0) return obj;
+      if (Object.keys(obj).length > 0) rawParsed = obj;
     } catch {}
   }
 
   // 3. Fallback: text body
-  try {
-    const text = await request.text();
-    const trimmed = (text || '').trim();
-    if (trimmed) {
-      if (
-        (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-        (trimmed.startsWith('[') && trimmed.endsWith(']'))
-      ) {
-        try {
-          const parsed = JSON.parse(trimmed);
-          if (parsed && typeof parsed === 'object') return parsed as Record<string, unknown>;
-        } catch {}
+  if (!rawParsed) {
+    try {
+      const text = await request.text();
+      const trimmed = (text || '').trim();
+      if (trimmed) {
+        if (
+          (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+          (trimmed.startsWith('[') && trimmed.endsWith(']'))
+        ) {
+          try {
+            rawParsed = JSON.parse(trimmed);
+          } catch {}
+        } else if (trimmed.includes('=')) {
+          const params = new URLSearchParams(trimmed);
+          const obj: Record<string, unknown> = {};
+          params.forEach((value, key) => {
+            const vTrim = value.trim();
+            if (
+              (vTrim.startsWith('{') && vTrim.endsWith('}')) ||
+              (vTrim.startsWith('[') && vTrim.endsWith(']'))
+            ) {
+              try {
+                obj[key] = JSON.parse(vTrim);
+                return;
+              } catch {}
+            }
+            obj[key] = value;
+          });
+          if (Object.keys(obj).length > 0) rawParsed = obj;
+        }
       }
+    } catch {}
+  }
 
-      if (trimmed.includes('=')) {
-        const params = new URLSearchParams(trimmed);
-        const obj: Record<string, unknown> = {};
-        params.forEach((value, key) => {
-          const vTrim = value.trim();
-          if (
-            (vTrim.startsWith('{') && vTrim.endsWith('}')) ||
-            (vTrim.startsWith('[') && vTrim.endsWith(']'))
-          ) {
-            try {
-              obj[key] = JSON.parse(vTrim);
-              return;
-            } catch {}
-          }
-          obj[key] = value;
-        });
-        if (Object.keys(obj).length > 0) return obj;
+  // Handle Array (common n8n pattern: [ { ... } ] or [ { json: { ... } } ])
+  if (Array.isArray(rawParsed)) {
+    rawParsed = rawParsed[0] || {};
+  }
+
+  if (!rawParsed || typeof rawParsed !== 'object') {
+    return {};
+  }
+
+  const payload = rawParsed as Record<string, unknown>;
+
+  // Unpack platform wrappers:
+  // n8n: "json", WooCommerce: "billing", Shopify: "customer", Elementor: "form_fields"
+  const wrapperKeys = [
+    'json',
+    'payload',
+    'data',
+    'lead',
+    'fields',
+    'form_fields',
+    'body',
+    'form_data',
+    'customer',
+    'billing',
+    'item',
+  ];
+
+  for (const wrapperKey of wrapperKeys) {
+    if (
+      payload[wrapperKey] &&
+      typeof payload[wrapperKey] === 'object' &&
+      !Array.isArray(payload[wrapperKey])
+    ) {
+      const inner = payload[wrapperKey] as Record<string, unknown>;
+      for (const [k, v] of Object.entries(inner)) {
+        if (!(k in payload)) {
+          payload[k] = v;
+        }
       }
     }
-  } catch {}
+  }
 
-  return {};
+  return payload;
+}
+
+/**
+ * OPTIONS /api/webhooks/incoming/[id]
+ * CORS preflight support for browser-based fetch, frontend forms, and API testers.
+ */
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: CORS_HEADERS,
+  });
 }
 
 /**
