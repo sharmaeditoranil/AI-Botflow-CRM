@@ -5,9 +5,9 @@ import {
   IncomingWebhookError,
   extractValueByPath,
   safeCompareSecrets,
-  normalizePhone,
 } from '@/lib/webhooks/incoming-trigger';
 import { executeAutomation } from '@/lib/automations/engine';
+import { resolveConversationByPhone } from '@/lib/whatsapp/resolve-conversation';
 
 /**
  * GET /api/webhooks/incoming/[id]
@@ -206,52 +206,37 @@ export async function POST(
       );
     }
 
-    let phone = '';
-    try {
-      phone = normalizePhone(String(rawPhone));
-    } catch (e: any) {
-      return NextResponse.json(
-        {
-          error: e.message || 'Invalid phone number format.',
-          code: 'invalid_phone',
-        },
-        { status: 400 }
-      );
-    }
-
     const namePath = cfg.name_path || 'name';
     const rawName = extractValueByPath(payload, namePath);
     const contactName = rawName ? String(rawName).trim() : 'Webhook Lead';
 
-    // Find or create contact
-    let { data: contact } = await admin
-      .from('contacts')
-      .select('id, name')
-      .eq('account_id', automation.account_id)
-      .eq('phone', phone)
-      .maybeSingle();
-
-    if (!contact) {
-      const { data: newContact } = await admin
-        .from('contacts')
-        .insert({
-          account_id: automation.account_id,
-          phone,
-          name: contactName,
-          source: 'incoming_webhook',
-        })
-        .select('id, name')
-        .single();
-      contact = newContact;
+    // Resolve or create contact and conversation
+    let resolved;
+    try {
+      resolved = await resolveConversationByPhone(
+        admin,
+        automation.account_id,
+        String(rawPhone),
+        contactName
+      );
+    } catch (e: any) {
+      return NextResponse.json(
+        {
+          error: e.message || 'Failed to resolve contact with provided phone number.',
+          code: 'phone_error',
+        },
+        { status: e.status || 400 }
+      );
     }
 
     // Execute automation workflow
     await executeAutomation(automation as any, {
       accountId: automation.account_id,
       triggerType: 'incoming_webhook',
-      contactId: contact?.id ?? null,
+      contactId: resolved.contactId,
       context: {
         vars: payload as Record<string, unknown>,
+        conversation_id: resolved.conversationId,
       },
     });
 
@@ -261,8 +246,9 @@ export async function POST(
         message: 'Automation workflow executed successfully via webhook.',
         data: {
           automation_id: automation.id,
-          contact_id: contact?.id,
-          phone,
+          contact_id: resolved.contactId,
+          conversation_id: resolved.conversationId,
+          phone: String(rawPhone),
         },
       },
       { status: 200 }
