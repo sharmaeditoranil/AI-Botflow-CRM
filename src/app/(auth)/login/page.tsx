@@ -46,7 +46,7 @@ function LoginPageInner() {
   const queryError = searchParams.get("error");
   const t = useTranslations("LoginPage");
 
-  const [authMethod, setAuthMethod] = useState<"otp" | "password">("otp");
+  const [authMethod, setAuthMethod] = useState<"password" | "otp">("password");
   const [otpStep, setOtpStep] = useState<"input" | "verify">("input");
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
@@ -211,24 +211,9 @@ function LoginPageInner() {
               : "Sign in to manage your WhatsApp CRM, AI agents & broadcasts"}
           </CardDescription>
 
-          {/* Auth Method Selector Tabs (Email OTP vs Password) */}
+          {/* Auth Method Selector Tabs (Password vs Email OTP) */}
           {otpStep === "input" && (
             <div className="mt-4 flex w-full rounded-xl bg-muted/60 p-1 border border-border/60">
-              <button
-                type="button"
-                onClick={() => {
-                  setAuthMethod("otp");
-                  setError(null);
-                }}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-all ${
-                  authMethod === "otp"
-                    ? "bg-card text-foreground shadow-xs border border-border/50"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <Mail className="h-3.5 w-3.5 text-primary" />
-                Email OTP
-              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -241,8 +226,23 @@ function LoginPageInner() {
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <Lock className="h-3.5 w-3.5 text-purple-500" />
+                <Lock className="h-3.5 w-3.5 text-primary" />
                 Password
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMethod("otp");
+                  setError(null);
+                }}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-all ${
+                  authMethod === "otp"
+                    ? "bg-card text-foreground shadow-xs border border-border/50"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Mail className="h-3.5 w-3.5 text-purple-500" />
+                Email OTP
               </button>
             </div>
           )}
