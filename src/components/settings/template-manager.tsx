@@ -176,7 +176,6 @@ export function TemplateManager() {
     () => extractVariableIndices(form.body_text).length,
     [form.body_text],
   );
-  );
   const headerVarCount = useMemo(
     () =>
       form.header_format === 'text'
