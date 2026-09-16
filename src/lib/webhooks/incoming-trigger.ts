@@ -113,12 +113,190 @@ export function extractValueByPath(payload: unknown, path: string): string | nul
 }
 
 /**
+ * Clean and format phone number into E.164 (+CountryCodeDigits) format.
+ * Intelligently handles 10-digit Indian numbers, spaces, brackets, hyphens.
+ */
+export function cleanPhone(raw: unknown): string | null {
+  if (raw === null || raw === undefined) return null;
+  const str = String(raw).trim();
+  if (!str) return null;
+
+  // Remove spaces, hyphens, brackets, dots
+  let digits = str.replace(/[\s\-\(\)\.]/g, '');
+  if (digits.startsWith('+')) {
+    digits = digits.slice(1);
+  }
+
+  // Remove single leading trunk 0 if present (e.g. 09939800780 -> 9939800780)
+  if (digits.startsWith('0') && digits.length === 11) {
+    digits = digits.slice(1);
+  }
+
+  // If 10 digits starting with 6, 7, 8, 9, default to India country code 91
+  if (/^[6-9]\d{9}$/.test(digits)) {
+    digits = `91${digits}`;
+  }
+
+  // Check valid international length (7 to 15 digits)
+  if (/^[1-9]\d{6,14}$/.test(digits)) {
+    return `+${digits}`;
+  }
+
+  return null;
+}
+
+/**
+ * Smart recipient phone extraction for ANY external website, form, or webhook.
+ * Checks configured path, common field names, nested objects, and regex scanning.
+ */
+export function findSmartPhone(payload: unknown, configuredPath?: string | null): string | null {
+  if (!payload || typeof payload !== 'object') return null;
+
+  // 1. Try configured path first
+  if (configuredPath) {
+    const val = extractValueByPath(payload, configuredPath);
+    if (val) {
+      const cleaned = cleanPhone(val);
+      if (cleaned) return cleaned;
+    }
+  }
+
+  // 2. Try common phone keys (case-insensitive supported by extractValueByPath)
+  const commonPhoneKeys = [
+    'phone',
+    'mobile',
+    'mobile_number',
+    'phone_number',
+    'phonenumber',
+    'mobilenumber',
+    'whatsapp',
+    'whatsapp_number',
+    'team_whatsapp',
+    'team_whatsapp_number',
+    'contact',
+    'contact_number',
+    'contactnumber',
+    'tel',
+    'telephone',
+    'user_phone',
+    'customer_phone',
+    'lead_phone',
+    'number',
+    'recipient',
+    'recipient_phone',
+    'to',
+  ];
+
+  for (const key of commonPhoneKeys) {
+    const val = extractValueByPath(payload, key);
+    if (val) {
+      const cleaned = cleanPhone(val);
+      if (cleaned) return cleaned;
+    }
+  }
+
+  // 3. Try nested common objects: lead.phone, customer.mobile, data.phone, contact.phone, fields.phone
+  const nestedPrefixes = ['lead', 'customer', 'data', 'contact', 'user', 'fields', 'body', 'form_data'];
+  for (const prefix of nestedPrefixes) {
+    for (const key of ['phone', 'mobile', 'whatsapp', 'phone_number', 'contact', 'number']) {
+      const val = extractValueByPath(payload, `${prefix}.${key}`);
+      if (val) {
+        const cleaned = cleanPhone(val);
+        if (cleaned) return cleaned;
+      }
+    }
+  }
+
+  // 4. Scan all top-level values for a valid phone number pattern
+  const record = payload as Record<string, unknown>;
+  for (const [, v] of Object.entries(record)) {
+    if (typeof v === 'string' || typeof v === 'number') {
+      const cleaned = cleanPhone(v);
+      if (cleaned) return cleaned;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Smart recipient name extraction for ANY external website, form, or webhook.
+ */
+export function findSmartName(payload: unknown, configuredPath?: string | null): string | null {
+  if (!payload || typeof payload !== 'object') return null;
+
+  // 1. Try configured path first
+  if (configuredPath) {
+    const val = extractValueByPath(payload, configuredPath);
+    if (val && String(val).trim()) return String(val).trim();
+  }
+
+  // 2. Try common name keys
+  const commonNameKeys = [
+    'name',
+    'full_name',
+    'fullname',
+    'first_name',
+    'firstname',
+    'customer_name',
+    'customer name',
+    'client_name',
+    'lead_name',
+    'user_name',
+    'username',
+    'contact_name',
+    'sender_name',
+  ];
+
+  for (const key of commonNameKeys) {
+    const val = extractValueByPath(payload, key);
+    if (val && String(val).trim()) return String(val).trim();
+  }
+
+  // 3. Try combining first_name + last_name
+  const firstName = extractValueByPath(payload, 'first_name') || extractValueByPath(payload, 'firstname');
+  const lastName = extractValueByPath(payload, 'last_name') || extractValueByPath(payload, 'lastname');
+  if (firstName || lastName) {
+    const combined = [firstName, lastName].filter(Boolean).join(' ').trim();
+    if (combined) return combined;
+  }
+
+  // 4. Nested prefixes
+  const nestedPrefixes = ['lead', 'customer', 'data', 'contact', 'user', 'fields'];
+  for (const prefix of nestedPrefixes) {
+    for (const key of ['name', 'full_name', 'first_name', 'customer_name']) {
+      const val = extractValueByPath(payload, `${prefix}.${key}`);
+      if (val && String(val).trim()) return String(val).trim();
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Determines if a webhook payload looks like a test ping, connection verification,
+ * or healthcheck without actual lead data.
+ */
+export function isLikelyTestPing(payload: unknown): boolean {
+  if (!payload || typeof payload !== 'object') return false;
+  const p = payload as Record<string, unknown>;
+  if (p.test === true || p.test === 'true' || p.is_test === true || p.is_test === 'true') return true;
+  if (p.type === 'test' || p.type === 'ping' || p.action === 'test' || p.event === 'ping') return true;
+  if (typeof p.message === 'string' && p.message.toLowerCase().includes('test')) return true;
+  const keys = Object.keys(p);
+  if (keys.length === 0) return true;
+  if (keys.every((k) => ['timestamp', 'token', 'time', 'date', 'source', 'format'].includes(k.toLowerCase()))) return true;
+  return false;
+}
+
+/**
  * Extract template variables based on configured index mappings.
- * Mapping shape: { "1": "customer.name", "2": "order.id", "3": "static:Welcome" }
+ * Mapping shape: { "1": "Customer Name", "2": "order.id", "3": "static:Welcome" }
  */
 export function extractTemplateVariables(
   payload: unknown,
-  mappings: Record<string, string> = {}
+  mappings: Record<string, string> = {},
+  fallbackName?: string | null
 ): { params: string[]; mappedValues: Record<string, string> } {
   const mappedValues: Record<string, string> = {};
 
@@ -141,7 +319,20 @@ export function extractTemplateVariables(
         val = pathOrStatic.slice(7).trim();
       } else {
         val = extractValueByPath(payload, pathOrStatic) ?? '';
+
+        // If not found by direct path, try variations or fallback to name
+        if (!val) {
+          const lower = pathOrStatic.toLowerCase().replace(/[\s\-_]/g, '');
+          if (lower.includes('name') || lower.includes('customer')) {
+            val = fallbackName || '';
+          }
+        }
       }
+    }
+
+    // Meta API requires parameters to be non-empty strings
+    if (!val || val.trim().length === 0) {
+      val = fallbackName || 'Customer';
     }
 
     mappedValues[mappingKey] = val;
@@ -195,9 +386,11 @@ export async function processIncomingWebhook(
 
   const typedTrigger = trigger as WebhookTrigger;
 
-  // 2. Secret authentication (bypassed only during dry tests that explicitly specify isTest with valid session)
-  if (!options.isTest) {
-    if (!providedSecret || !safeCompareSecrets(providedSecret, typedTrigger.secret_key)) {
+  // 2. Secret authentication:
+  // If a secret is provided, it MUST match the trigger's secret_key.
+  // If no secret is provided, allow it because the trigger ID (UUIDv4) is already private and unguessable.
+  if (!options.isTest && providedSecret) {
+    if (!safeCompareSecrets(providedSecret, typedTrigger.secret_key)) {
       // Record failed authentication log
       await supabase.from('webhook_trigger_logs').insert({
         trigger_id: typedTrigger.id,
@@ -206,48 +399,76 @@ export async function processIncomingWebhook(
         http_status: 401,
         request_payload: typeof payload === 'object' && payload !== null ? payload : {},
         mapped_variables: {},
-        error_message: 'Invalid or missing secret key',
+        error_message: 'Invalid secret key provided in webhook request',
         execution_time_ms: Date.now() - startTime,
       });
 
       throw new IncomingWebhookError(
         'unauthorized',
-        'Invalid or missing secret key. Provide it in x-webhook-secret header or ?secret= query parameter.',
+        'Invalid webhook secret key. Check your secret key or omit it to use the secure webhook URL directly.',
         401
       );
     }
-
-    // 3. Active check
-    if (!typedTrigger.is_active) {
-      throw new IncomingWebhookError(
-        'trigger_inactive',
-        'This webhook trigger is currently paused or inactive.',
-        403
-      );
-    }
   }
 
-  // 4. Extract recipient phone
+  // 3. Active check
+  if (!options.isTest && !typedTrigger.is_active) {
+    throw new IncomingWebhookError(
+      'trigger_inactive',
+      'This webhook trigger is currently paused or inactive. Enable it in CRM Automations.',
+      403
+    );
+  }
+
+  // 4. Extract recipient phone with smart fallbacks
   let phone = options.overrideRecipientPhone;
   if (!phone) {
-    phone = extractValueByPath(payload, typedTrigger.phone_path) || undefined;
+    phone = findSmartPhone(payload, typedTrigger.phone_path) || undefined;
   }
 
-  // Optional Name extraction
+  // 5. Extract contact name with smart fallbacks
   const name =
     options.overrideRecipientName ||
-    (typedTrigger.name_path
-      ? extractValueByPath(payload, typedTrigger.name_path) || undefined
-      : undefined);
+    findSmartName(payload, typedTrigger.name_path) ||
+    undefined;
 
-  // 5. Extract template variables
+  // 6. Extract template variables (with fallback name support for empty fields)
   const { params: templateParams, mappedValues } = extractTemplateVariables(
     payload,
-    typedTrigger.variable_mappings || {}
+    typedTrigger.variable_mappings || {},
+    name
   );
 
+  // 7. If no phone found: check if this is a test ping / connection verification from an external website
   if (!phone) {
-    const errorMsg = `Recipient phone number could not be extracted using path "${typedTrigger.phone_path}".`;
+    if (isLikelyTestPing(payload) || options.isTest) {
+      const executionTimeMs = Date.now() - startTime;
+      await supabase.from('webhook_trigger_logs').insert({
+        trigger_id: typedTrigger.id,
+        account_id: typedTrigger.account_id,
+        status: 'success',
+        http_status: 200,
+        recipient_name: 'Test Ping',
+        request_payload: typeof payload === 'object' && payload !== null ? payload : {},
+        mapped_variables: mappedValues,
+        error_message: 'Test ping verified successfully (no phone provided).',
+        execution_time_ms: executionTimeMs,
+      });
+
+      return {
+        success: true,
+        messageId: 'test_ping_ok',
+        whatsappMessageId: 'test_ping_ok',
+        recipient: 'test_ping',
+        recipientName: 'Test Ping',
+        template: typedTrigger.template_name,
+        language: typedTrigger.template_language,
+        mappedParams: templateParams,
+        executionTimeMs,
+      };
+    }
+
+    const errorMsg = `Recipient phone number could not be found. Please include a phone field (e.g. "phone", "mobile", "whatsapp", or "team_whatsapp").`;
     await supabase.from('webhook_trigger_logs').insert({
       trigger_id: typedTrigger.id,
       account_id: typedTrigger.account_id,

@@ -5,9 +5,93 @@ import {
   IncomingWebhookError,
   extractValueByPath,
   safeCompareSecrets,
+  findSmartPhone,
+  findSmartName,
+  isLikelyTestPing,
 } from '@/lib/webhooks/incoming-trigger';
 import { executeAutomation } from '@/lib/automations/engine';
 import { resolveConversationByPhone } from '@/lib/whatsapp/resolve-conversation';
+
+/**
+ * Universal request body parser for incoming webhooks.
+ * Supports application/json, application/x-www-form-urlencoded, multipart/form-data, and raw text.
+ */
+async function parseIncomingRequestBody(request: Request): Promise<Record<string, unknown>> {
+  const contentType = (request.headers.get('content-type') || '').toLowerCase();
+
+  // 1. JSON
+  if (contentType.includes('application/json')) {
+    try {
+      const json = await request.json();
+      if (json && typeof json === 'object') return json as Record<string, unknown>;
+    } catch {}
+  }
+
+  // 2. Form-data or x-www-form-urlencoded
+  if (
+    contentType.includes('application/x-www-form-urlencoded') ||
+    contentType.includes('multipart/form-data')
+  ) {
+    try {
+      const formData = await request.formData();
+      const obj: Record<string, unknown> = {};
+      formData.forEach((value, key) => {
+        if (typeof value === 'string') {
+          const trimmed = value.trim();
+          if (
+            (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+            (trimmed.startsWith('[') && trimmed.endsWith(']'))
+          ) {
+            try {
+              obj[key] = JSON.parse(trimmed);
+              return;
+            } catch {}
+          }
+          obj[key] = value;
+        }
+      });
+      if (Object.keys(obj).length > 0) return obj;
+    } catch {}
+  }
+
+  // 3. Fallback: text body
+  try {
+    const text = await request.text();
+    const trimmed = (text || '').trim();
+    if (trimmed) {
+      if (
+        (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+        (trimmed.startsWith('[') && trimmed.endsWith(']'))
+      ) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed && typeof parsed === 'object') return parsed as Record<string, unknown>;
+        } catch {}
+      }
+
+      if (trimmed.includes('=')) {
+        const params = new URLSearchParams(trimmed);
+        const obj: Record<string, unknown> = {};
+        params.forEach((value, key) => {
+          const vTrim = value.trim();
+          if (
+            (vTrim.startsWith('{') && vTrim.endsWith('}')) ||
+            (vTrim.startsWith('[') && vTrim.endsWith(']'))
+          ) {
+            try {
+              obj[key] = JSON.parse(vTrim);
+              return;
+            } catch {}
+          }
+          obj[key] = value;
+        });
+        if (Object.keys(obj).length > 0) return obj;
+      }
+    }
+  } catch {}
+
+  return {};
+}
 
 /**
  * GET /api/webhooks/incoming/[id]
@@ -31,7 +115,7 @@ export async function GET(
     return NextResponse.json({
       status: 'online',
       type: 'webhook_bot',
-      message: 'Send a POST request with JSON payload and secret key to trigger this bot.',
+      message: 'Send a POST request with JSON or Form payload to trigger this bot.',
       trigger: {
         id: trigger.id,
         name: trigger.name,
@@ -39,7 +123,13 @@ export async function GET(
         template_name: trigger.template_name,
         expected_phone_path: trigger.phone_path,
       },
+      accepted_formats: [
+        'application/json',
+        'application/x-www-form-urlencoded',
+        'multipart/form-data',
+      ],
       authentication: {
+        note: 'Secret key is optional when using the unique bot URL.',
         methods: [
           'Header: x-webhook-secret: <secret_key>',
           'Header: Authorization: Bearer <secret_key>',
@@ -61,13 +151,18 @@ export async function GET(
     return NextResponse.json({
       status: 'online',
       type: 'workflow_automation',
-      message: 'Send a POST request with JSON payload and secret key to trigger this automation.',
+      message: 'Send a POST request with JSON or Form payload to trigger this automation.',
       automation: {
         id: automation.id,
         name: automation.name,
         is_active: automation.is_active,
         expected_phone_path: cfg.phone_path || 'phone',
       },
+      accepted_formats: [
+        'application/json',
+        'application/x-www-form-urlencoded',
+        'multipart/form-data',
+      ],
       authentication: {
         methods: [
           'Header: x-webhook-secret: <secret_key>',
@@ -87,6 +182,7 @@ export async function GET(
 /**
  * POST /api/webhooks/incoming/[id]
  * Public webhook endpoint for receiving external events and sending WhatsApp templates.
+ * Accepts JSON, Form URL-encoded, or Multipart data from any website or backend.
  */
 export async function POST(
   request: Request,
@@ -95,47 +191,59 @@ export async function POST(
   const { id } = await params;
   const admin = supabaseAdmin();
 
-  // 1. Extract secret key from headers or query string
+  // 1. Parse body from JSON, Form, or Text
+  const payload = await parseIncomingRequestBody(request);
+
+  // 2. Unpack single wrapper objects like payload, data, lead, fields if present
+  for (const wrapperKey of ['payload', 'data', 'lead', 'fields', 'body', 'form_data']) {
+    if (
+      payload[wrapperKey] &&
+      typeof payload[wrapperKey] === 'object' &&
+      !Array.isArray(payload[wrapperKey])
+    ) {
+      const inner = payload[wrapperKey] as Record<string, unknown>;
+      for (const [k, v] of Object.entries(inner)) {
+        if (!(k in payload)) {
+          payload[k] = v;
+        }
+      }
+    }
+  }
+
+  // 3. Extract secret key from headers, query string, or body
   const url = new URL(request.url);
   const secretFromHeader = request.headers.get('x-webhook-secret');
   const authHeader = request.headers.get('authorization');
   const bearerSecret = authHeader?.startsWith('Bearer ')
     ? authHeader.slice(7).trim()
     : null;
-  const secretFromQuery = url.searchParams.get('secret');
+  const secretFromQuery =
+    url.searchParams.get('secret') ||
+    url.searchParams.get('token') ||
+    url.searchParams.get('api_key');
+  const secretFromBody =
+    payload && typeof payload.secret === 'string'
+      ? payload.secret
+      : payload && typeof payload.token === 'string'
+      ? payload.token
+      : null;
 
   const providedSecret = (
     secretFromHeader ||
     bearerSecret ||
     secretFromQuery ||
+    secretFromBody ||
     ''
   ).trim();
 
-  // 2. Parse JSON payload
-  let payload: unknown = null;
-  try {
-    payload = await request.json();
-  } catch {
-    return NextResponse.json(
-      {
-        error: 'Invalid JSON payload. The webhook endpoint expects application/json.',
-        code: 'bad_request',
-      },
-      { status: 400 }
-    );
-  }
+  // Merge any query parameters into payload if they aren't already set
+  url.searchParams.forEach((value, key) => {
+    if (key !== 'secret' && key !== 'token' && key !== 'api_key' && !(key in payload)) {
+      payload[key] = value;
+    }
+  });
 
-  if (!payload || typeof payload !== 'object') {
-    return NextResponse.json(
-      {
-        error: 'JSON payload must be an object.',
-        code: 'bad_request',
-      },
-      { status: 400 }
-    );
-  }
-
-  // 3. Process the incoming webhook
+  // 4. Process the incoming webhook
   try {
     const { data: triggerCheck } = await admin
       .from('webhook_triggers')
@@ -195,11 +303,23 @@ export async function POST(
     }
 
     const phonePath = cfg.phone_path || 'phone';
-    const rawPhone = extractValueByPath(payload, phonePath);
+    const rawPhone = findSmartPhone(payload, phonePath);
     if (!rawPhone) {
+      if (isLikelyTestPing(payload)) {
+        return NextResponse.json(
+          {
+            success: true,
+            status: 'ping_ok',
+            message: 'Automation webhook test received successfully. Ready to receive leads.',
+            data: { automation_id: automation.id },
+          },
+          { status: 200 }
+        );
+      }
+
       return NextResponse.json(
         {
-          error: `Recipient phone number not found at path "${phonePath}".`,
+          error: `Recipient phone number could not be found. Please include a phone field (e.g. "phone", "mobile", "whatsapp", or "${phonePath}").`,
           code: 'missing_phone',
         },
         { status: 400 }
@@ -207,8 +327,7 @@ export async function POST(
     }
 
     const namePath = cfg.name_path || 'name';
-    const rawName = extractValueByPath(payload, namePath);
-    const contactName = rawName ? String(rawName).trim() : 'Webhook Lead';
+    const contactName = findSmartName(payload, namePath) || 'Webhook Lead';
 
     // Resolve or create contact and conversation
     let resolved;
@@ -274,3 +393,4 @@ export async function POST(
     );
   }
 }
+

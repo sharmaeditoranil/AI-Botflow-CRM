@@ -62,6 +62,7 @@ export function WebhookBotDialog({
   const [revealSecret, setRevealSecret] = useState(false);
   const [regeneratingSecret, setRegeneratingSecret] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
+  const [copiedSecretUrl, setCopiedSecretUrl] = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
   const [copiedCurl, setCopiedCurl] = useState(false);
 
@@ -179,11 +180,14 @@ export function WebhookBotDialog({
     }
   }
 
-  function handleCopy(text: string, type: 'url' | 'secret' | 'curl') {
+  function handleCopy(text: string, type: 'url' | 'secretUrl' | 'secret' | 'curl') {
     navigator.clipboard.writeText(text);
     if (type === 'url') {
       setCopiedUrl(true);
       setTimeout(() => setCopiedUrl(false), 2000);
+    } else if (type === 'secretUrl') {
+      setCopiedSecretUrl(true);
+      setTimeout(() => setCopiedSecretUrl(false), 2000);
     } else if (type === 'secret') {
       setCopiedSecret(true);
       setTimeout(() => setCopiedSecret(false), 2000);
@@ -469,7 +473,12 @@ export function WebhookBotDialog({
 
               {/* URL */}
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Your Unique Webhook URL</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-medium">Your Unique Webhook URL</Label>
+                  <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-500 border-emerald-500/20 font-normal">
+                    ✓ Works with Any Website (Form-data & JSON)
+                  </Badge>
+                </div>
                 <div className="flex items-center gap-2">
                   <Input
                     readOnly
@@ -491,7 +500,40 @@ export function WebhookBotDialog({
                     Copy URL
                   </Button>
                 </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Paste this URL directly into your website lead form, WordPress, Elementor, PHP script, Make, or Zapier. Automatically handles form submissions and JSON.
+                </p>
               </div>
+
+              {/* URL with Secret Parameter (Optional) */}
+              {secretKey && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-muted-foreground flex items-center justify-between">
+                    <span>Optional: Webhook URL with Secret Query Parameter</span>
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      readOnly
+                      value={`${webhookUrl}?secret=${secretKey}`}
+                      className="font-mono text-xs bg-muted/30 select-all text-muted-foreground"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleCopy(`${webhookUrl}?secret=${secretKey}`, 'secretUrl')}
+                      className="shrink-0 gap-1.5 h-9 text-xs"
+                    >
+                      {copiedSecretUrl ? (
+                        <Check className="h-3.5 w-3.5 text-emerald-500" />
+                      ) : (
+                        <Copy className="h-3.5 w-3.5" />
+                      )}
+                      Copy URL with Secret
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {/* Secret Key */}
               <div className="space-y-1.5">
