@@ -2,8 +2,16 @@ import { Metadata } from "next";
 import { LegalLayout } from "@/components/legal/legal-layout";
 
 export const metadata: Metadata = {
-  title: "Terms of Service - AI Botflow CRM",
-  description: "Terms and Conditions of Service for AI Botflow WhatsApp & Social Multi-channel CRM.",
+  title: "Terms of Service",
+  description: "Terms and Conditions of Service for Aibotflow WhatsApp & Social Multi-channel CRM.",
+  alternates: {
+    canonical: "/terms",
+  },
+  openGraph: {
+    title: "Terms of Service | Aibotflow",
+    description: "Terms and Conditions of Service for Aibotflow WhatsApp CRM.",
+    url: "/terms",
+  },
 };
 
 export default function TermsPage() {

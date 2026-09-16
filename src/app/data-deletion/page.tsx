@@ -2,8 +2,16 @@ import { Metadata } from "next";
 import { LegalLayout } from "@/components/legal/legal-layout";
 
 export const metadata: Metadata = {
-  title: "Data Deletion Instructions - AI Botflow CRM",
-  description: "User data deletion instructions for Meta, Facebook, and Instagram integration with AI Botflow CRM.",
+  title: "Data Deletion Instructions",
+  description: "User data deletion instructions for Meta, Facebook, and WhatsApp integration with Aibotflow CRM.",
+  alternates: {
+    canonical: "/data-deletion",
+  },
+  openGraph: {
+    title: "User Data Deletion Instructions | Aibotflow",
+    description: "Instructions and compliance policy for requesting personal data deletion on Aibotflow.",
+    url: "/data-deletion",
+  },
 };
 
 export default function DataDeletionPage() {

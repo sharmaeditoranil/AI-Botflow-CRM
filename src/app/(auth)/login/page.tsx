@@ -95,14 +95,18 @@ function LoginPageInner() {
           </div>
 
           {inviteToken ? (
-            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary shadow-xs">
-              <UsersRound className="h-3.5 w-3.5" />
-              Team Invitation Pending
+            <div className="flex justify-center w-full">
+              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary shadow-xs">
+                <UsersRound className="h-3.5 w-3.5" />
+                <span>Team Invitation Pending</span>
+              </div>
             </div>
           ) : (
-            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
-              <Sparkles className="h-3 w-3" />
-              AI-Powered WhatsApp CRM
+            <div className="flex justify-center w-full">
+              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-semibold text-primary shadow-xs">
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>AI-Powered WhatsApp CRM</span>
+              </div>
             </div>
           )}
 

@@ -5,13 +5,11 @@ import { AuthShowcase } from "@/components/auth/auth-showcase";
 // Shared metadata for auth pages (login / signup / forgot-password).
 export const metadata: Metadata = {
   robots: {
-    index: false,
-    follow: false,
-    nocache: true,
+    index: true,
+    follow: true,
     googleBot: {
-      index: false,
-      follow: false,
-      noimageindex: true,
+      index: true,
+      follow: true,
     },
   },
 };

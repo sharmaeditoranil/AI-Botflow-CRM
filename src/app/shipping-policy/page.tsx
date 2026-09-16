@@ -2,8 +2,16 @@ import { Metadata } from "next";
 import { LegalLayout } from "@/components/legal/legal-layout";
 
 export const metadata: Metadata = {
-  title: "Shipping & Delivery Policy - AI Botflow CRM",
-  description: "Digital service fulfillment and delivery policy for AI Botflow SaaS software.",
+  title: "Shipping & Delivery Policy",
+  description: "Digital service fulfillment and delivery policy for Aibotflow SaaS software.",
+  alternates: {
+    canonical: "/shipping-policy",
+  },
+  openGraph: {
+    title: "Shipping & Delivery Policy | Aibotflow",
+    description: "Digital service fulfillment details for Aibotflow cloud software.",
+    url: "/shipping-policy",
+  },
 };
 
 export default function ShippingPolicyPage() {

@@ -4,8 +4,16 @@ import { Mail, Phone, MapPin, Clock } from "lucide-react";
 import { BrandLogo } from "@/components/brand/brand-logo";
 
 export const metadata: Metadata = {
-  title: "Contact Us - AI Botflow CRM",
-  description: "Contact the support and billing team at AI Botflow CRM.",
+  title: "Contact Us — Technical Support & Onboarding",
+  description: "Contact the Aibotflow WhatsApp CRM team for onboarding, billing inquiries, enterprise WhatsApp API setup, or technical assistance.",
+  alternates: {
+    canonical: "/contact",
+  },
+  openGraph: {
+    title: "Contact Us | Aibotflow WhatsApp CRM",
+    description: "Reach our onboarding and support desk via WhatsApp, Phone (+91 92949 89812), or Email (support@aibotflow.in).",
+    url: "/contact",
+  },
 };
 
 export default function ContactUsPage() {

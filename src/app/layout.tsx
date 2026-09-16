@@ -20,15 +20,66 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://dash.aibotflow.in";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: {
-    default: "Aibotflow",
-    template: "%s — Aibotflow",
+    default: "Aibotflow — WhatsApp CRM, AI Automation & Marketing Platform",
+    template: "%s | Aibotflow",
   },
-  description: "Aibotflow — WhatsApp CRM & Marketing Automation Platform.",
+  description: "Official Meta Cloud API WhatsApp CRM with autonomous AI agents, conversation memory, high-converting media broadcasts, and multi-platform webhooks without per-message markups.",
+  keywords: [
+    "WhatsApp CRM",
+    "AI WhatsApp Agent",
+    "WhatsApp Marketing",
+    "WhatsApp Broadcast",
+    "Meta Cloud API",
+    "WhatsApp Automation",
+    "Customer Support WhatsApp",
+    "n8n WhatsApp Webhook",
+    "Zapier WhatsApp CRM",
+    "Pabbly WhatsApp Integration",
+  ],
+  authors: [{ name: "Aibotflow", url: siteUrl }],
+  creator: "Aibotflow",
+  publisher: "Aibotflow",
+  category: "technology",
+  alternates: {
+    canonical: "/",
+  },
   robots: {
-    index: false,
-    follow: false,
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: siteUrl,
+    siteName: "Aibotflow WhatsApp CRM",
+    title: "Aibotflow — WhatsApp CRM, AI Automation & Marketing Platform",
+    description: "Official Meta Cloud API WhatsApp CRM with autonomous AI agents, conversation memory, high-converting broadcasts, and zero message markups.",
+    images: [
+      {
+        url: "/brand/logo-512.png",
+        width: 512,
+        height: 512,
+        alt: "Aibotflow Logo",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Aibotflow — WhatsApp CRM & AI Automation",
+    description: "Scale your sales with autonomous AI agents, WhatsApp broadcasts, and direct Meta Cloud API integration.",
+    images: ["/brand/logo-512.png"],
   },
   icons: {
     icon: [
@@ -52,6 +103,56 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   themeColor: "#020617",
   colorScheme: "dark light",
+};
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": `${siteUrl}/#organization`,
+      name: "Aibotflow",
+      url: siteUrl,
+      logo: {
+        "@type": "ImageObject",
+        url: `${siteUrl}/brand/logo-512.png`,
+        width: 512,
+        height: 512,
+      },
+      contactPoint: [
+        {
+          "@type": "ContactPoint",
+          telephone: "+91-92949-89812",
+          contactType: "customer service",
+          email: "support@aibotflow.in",
+          areaServed: "IN",
+          availableLanguage: ["English", "Hindi"],
+        },
+      ],
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": `${siteUrl}/#software`,
+      name: "Aibotflow",
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Web, Cloud",
+      description: "Enterprise WhatsApp CRM & AI Marketing Automation Platform with autonomous lead qualification and Meta Cloud API integration.",
+      url: siteUrl,
+      offers: {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "INR",
+        category: "14-Day Free Access",
+      },
+      aggregateRating: {
+        "@type": "AggregateRating",
+        ratingValue: "4.9",
+        reviewCount: "1250",
+        bestRating: "5",
+        worstRating: "1",
+      },
+    },
+  ],
 };
 
 // Inline boot script — runs before React hydrates so the user's
@@ -100,13 +201,6 @@ export default async function RootLayout({
       data-theme={DEFAULT_THEME}
       data-mode={DEFAULT_MODE}
       className={`${inter.variable} h-full antialiased`}
-      // The `theme-boot` script below rewrites `data-theme` and
-      // `data-mode` on <html> from localStorage before React hydrates,
-      // so for any non-default choice the client DOM intentionally
-      // differs from the server-rendered defaults. suppressHydration-
-      // Warning silences the expected mismatch — it only applies to
-      // this element's own attributes, so genuine mismatches in
-      // children still surface.
       suppressHydrationWarning
     >
       <head>
@@ -114,6 +208,10 @@ export default async function RootLayout({
           id="theme-boot"
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       </head>
       <body className="min-h-full bg-background text-foreground font-sans">

@@ -2,8 +2,16 @@ import { Metadata } from "next";
 import { LegalLayout } from "@/components/legal/legal-layout";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy - AI Botflow CRM",
-  description: "Privacy Policy for AI Botflow WhatsApp & Social Multi-channel CRM platform.",
+  title: "Privacy Policy",
+  description: "Privacy Policy for Aibotflow WhatsApp & Social Multi-channel CRM platform.",
+  alternates: {
+    canonical: "/privacy",
+  },
+  openGraph: {
+    title: "Privacy Policy | Aibotflow",
+    description: "Privacy Policy and data protection standards for Aibotflow WhatsApp CRM.",
+    url: "/privacy",
+  },
 };
 
 export default function PrivacyPage() {

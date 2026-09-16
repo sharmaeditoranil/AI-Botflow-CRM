@@ -2,8 +2,16 @@ import { Metadata } from "next";
 import { LegalLayout } from "@/components/legal/legal-layout";
 
 export const metadata: Metadata = {
-  title: "Cancellation & Refund Policy - AI Botflow CRM",
-  description: "Cancellation and Refund Policy for AI Botflow subscriptions and services.",
+  title: "Cancellation & Refund Policy",
+  description: "Cancellation and Refund Policy for Aibotflow subscriptions and services.",
+  alternates: {
+    canonical: "/refund-policy",
+  },
+  openGraph: {
+    title: "Cancellation & Refund Policy | Aibotflow",
+    description: "Cancellation and Refund terms for Aibotflow subscriptions.",
+    url: "/refund-policy",
+  },
 };
 
 export default function RefundPolicyPage() {

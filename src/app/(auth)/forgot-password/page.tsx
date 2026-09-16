@@ -122,9 +122,11 @@ export default function ForgotPasswordPage() {
             <BrandLogo size={42} showText variant="glow" priority textClassName="text-xl font-bold tracking-tight" />
           </div>
 
-          <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
-            <KeyRound className="h-3 w-3" />
-            Account Security
+          <div className="flex justify-center w-full">
+            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary/5 px-2.5 py-0.5 text-[11px] font-semibold text-primary shadow-xs">
+              <KeyRound className="h-3 w-3" />
+              <span>Account Security</span>
+            </div>
           </div>
 
           <CardTitle className="text-2xl font-extrabold tracking-tight text-foreground sm:text-3xl">

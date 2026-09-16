@@ -195,14 +195,18 @@ function SignupPageInner() {
           </div>
 
           {inviteToken ? (
-            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary shadow-xs">
-              <UsersRound className="h-3.5 w-3.5" />
-              Accept Team Invitation
+            <div className="flex justify-center w-full">
+              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary shadow-xs">
+                <UsersRound className="h-3.5 w-3.5" />
+                <span>Accept Team Invitation</span>
+              </div>
             </div>
           ) : (
-            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-              <Sparkles className="h-3 w-3" />
-              Start 14-Day Free Access
+            <div className="flex justify-center w-full">
+              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 shadow-xs">
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>Start 14-Day Free Access</span>
+              </div>
             </div>
           )}
 
