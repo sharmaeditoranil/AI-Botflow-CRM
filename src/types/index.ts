@@ -729,3 +729,67 @@ export interface QuickReply {
   created_at: string;
   updated_at: string;
 }
+
+// ============================================================
+// Incoming Webhook Triggers for Bots (migration 046)
+// ============================================================
+
+export interface WebhookTrigger {
+  id: string;
+  account_id: string;
+  user_id: string;
+  name: string;
+  description?: string | null;
+  secret_key: string;
+  is_active: boolean;
+  template_name: string;
+  template_language: string;
+  phone_path: string;
+  name_path?: string | null;
+  /** Maps template variable index (e.g. "1", "2") to payload path or "static:value" */
+  variable_mappings: Record<string, string>;
+  execution_count: number;
+  last_triggered_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type WebhookTriggerLogStatus = 'success' | 'failed';
+
+export interface WebhookTriggerLog {
+  id: string;
+  trigger_id: string;
+  account_id: string;
+  status: WebhookTriggerLogStatus;
+  http_status: number;
+  recipient_phone?: string | null;
+  recipient_name?: string | null;
+  request_payload: Record<string, unknown>;
+  mapped_variables: Record<string, string>;
+  whatsapp_message_id?: string | null;
+  error_message?: string | null;
+  execution_time_ms?: number | null;
+  created_at: string;
+}
+
+export interface CreateWebhookTriggerInput {
+  name: string;
+  description?: string;
+  template_name: string;
+  template_language?: string;
+  phone_path: string;
+  name_path?: string;
+  variable_mappings?: Record<string, string>;
+  is_active?: boolean;
+}
+
+export interface UpdateWebhookTriggerInput {
+  name?: string;
+  description?: string;
+  template_name?: string;
+  template_language?: string;
+  phone_path?: string;
+  name_path?: string;
+  variable_mappings?: Record<string, string>;
+  is_active?: boolean;
+}
