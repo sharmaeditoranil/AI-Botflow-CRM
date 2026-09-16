@@ -49,10 +49,10 @@ export default function DashboardPage() {
   const [metricsLoading, setMetricsLoading] = useState(true)
   const [daysRemaining, setDaysRemaining] = useState<number | null>(null)
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     if (account?.trial_ends_at) {
       const remaining = Math.max(0, Math.ceil((new Date(account.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setDaysRemaining(remaining);
     }
   }, [account?.trial_ends_at]);
