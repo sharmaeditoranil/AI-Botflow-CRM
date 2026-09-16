@@ -1210,6 +1210,7 @@ export function TemplateManager() {
                                       : 'static'
                               }
                               onValueChange={(raw) => {
+                                if (!raw) return;
                                 if (raw.startsWith('field:')) {
                                   const val = raw.replace('field:', '');
                                   setForm((prev) => ({

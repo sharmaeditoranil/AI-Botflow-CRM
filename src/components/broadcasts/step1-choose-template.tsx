@@ -214,12 +214,12 @@ export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack
                   </div>
 
                   {/* Header Type Badge */}
-                  {template.header_type && template.header_type !== 'TEXT' && (
+                  {template.header_type && template.header_type !== 'text' && (
                     <div className="mb-2 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-secondary text-secondary-foreground border border-border">
-                      {template.header_type === 'IMAGE' && <ImageIcon className="h-3 w-3 text-emerald-400" />}
-                      {template.header_type === 'VIDEO' && <Video className="h-3 w-3 text-blue-400" />}
-                      {template.header_type === 'DOCUMENT' && <FileDown className="h-3 w-3 text-amber-400" />}
-                      <span>{template.header_type} Header</span>
+                      {template.header_type === 'image' && <ImageIcon className="h-3 w-3 text-emerald-400" />}
+                      {template.header_type === 'video' && <Video className="h-3 w-3 text-blue-400" />}
+                      {template.header_type === 'document' && <FileDown className="h-3 w-3 text-amber-400" />}
+                      <span className="capitalize">{template.header_type} Header</span>
                     </div>
                   )}
 

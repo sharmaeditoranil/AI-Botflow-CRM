@@ -256,7 +256,7 @@ export function TemplateDataMappingDialog({
                 <Select
                   value={mapping['header']?.value ?? 'name'}
                   onValueChange={(val) =>
-                    updateVariable('header', { type: 'field', value: val })
+                    updateVariable('header', { type: 'field', value: val ?? '' })
                   }
                 >
                   <SelectTrigger className="bg-muted border-border text-foreground h-9">
@@ -373,7 +373,7 @@ export function TemplateDataMappingDialog({
                             <Select
                               value={conf.value || 'name'}
                               onValueChange={(val) =>
-                                updateVariable(key, { value: val })
+                                updateVariable(key, { value: val ?? '' })
                               }
                             >
                               <SelectTrigger className="bg-muted border-border text-foreground h-9 text-xs">
@@ -404,7 +404,7 @@ export function TemplateDataMappingDialog({
                               value={conf.value || 'today'}
                               onValueChange={(val) =>
                                 updateVariable(key, {
-                                  value: val,
+                                  value: val ?? 'today',
                                   dateFormat:
                                     val === 'today_iso'
                                       ? 'YYYY-MM-DD'
@@ -430,7 +430,7 @@ export function TemplateDataMappingDialog({
                             <Select
                               value={conf.value || undefined}
                               onValueChange={(val) =>
-                                updateVariable(key, { value: val })
+                                updateVariable(key, { value: val ?? '' })
                               }
                             >
                               <SelectTrigger className="bg-muted border-border text-foreground h-9 text-xs">

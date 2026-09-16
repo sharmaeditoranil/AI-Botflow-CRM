@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { Contact, CustomField, MessageTemplate } from '@/types';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -717,7 +718,7 @@ export function Step3Personalize({
                         value={mapping.value || 'today'}
                         onValueChange={(val) =>
                           updateVariable(key, {
-                            value: val,
+                            value: val ?? 'today',
                             dateFormat:
                               val === 'today_iso' ? 'YYYY-MM-DD' : 'DD/MM/YYYY',
                           })

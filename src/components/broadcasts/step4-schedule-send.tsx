@@ -197,18 +197,18 @@ export function Step4ScheduleSend({
           </div>
 
           {/* Header Media info */}
-          {template.header_type && template.header_type !== 'TEXT' && (
+          {template.header_type && template.header_type !== 'text' && (
             <div className="p-3 rounded-lg bg-muted/30 border border-border/50 sm:col-span-2 lg:col-span-1">
               <p className="text-xs text-muted-foreground mb-1">Header Media</p>
               <div className="flex items-center gap-2">
-                {template.header_type === 'IMAGE' && <ImageIcon className="h-4 w-4 text-emerald-400 shrink-0" />}
-                {template.header_type === 'VIDEO' && <Video className="h-4 w-4 text-blue-400 shrink-0" />}
-                {template.header_type === 'DOCUMENT' && <FileText className="h-4 w-4 text-amber-400 shrink-0" />}
+                {template.header_type === 'image' && <ImageIcon className="h-4 w-4 text-emerald-400 shrink-0" />}
+                {template.header_type === 'video' && <Video className="h-4 w-4 text-blue-400 shrink-0" />}
+                {template.header_type === 'document' && <FileText className="h-4 w-4 text-amber-400 shrink-0" />}
                 <span className="text-xs font-medium text-foreground truncate">
                   {headerMediaUrl ? 'Media Attached' : 'No Media Uploaded'}
                 </span>
               </div>
-              {headerMediaUrl && template.header_type === 'IMAGE' && (
+              {headerMediaUrl && template.header_type === 'image' && (
                 <div className="mt-2 h-14 w-24 rounded overflow-hidden border border-border bg-black/40">
                   <img src={headerMediaUrl} alt="Header Preview" className="h-full w-full object-cover" />
                 </div>
