@@ -12,10 +12,20 @@ interface AiConfigRow {
   auto_reply_max_per_conversation: number
   handoff_agent_id: string | null
   embeddings_api_key: string | null
+  memory_enabled?: boolean | null
+  lead_qualification_enabled?: boolean | null
+  qualification_criteria?: Record<string, boolean> | null
+  followup_intelligence_enabled?: boolean | null
+  auto_tagging_enabled?: boolean | null
+  auto_unsubscribe_enabled?: boolean | null
+  unsubscribe_keywords?: string[] | null
+  unsubscribe_reply_text?: string | null
+  unsubscribe_tag_name?: string | null
+  qualified_tag_name?: string | null
 }
 
 const CONFIG_COLUMNS =
-  'provider, model, api_key, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, embeddings_api_key'
+  'provider, model, api_key, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, embeddings_api_key, memory_enabled, lead_qualification_enabled, qualification_criteria, followup_intelligence_enabled, auto_tagging_enabled, auto_unsubscribe_enabled, unsubscribe_keywords, unsubscribe_reply_text, unsubscribe_tag_name, qualified_tag_name'
 
 /**
  * Load and decrypt the account's AI config for *use* (draft or
@@ -79,6 +89,32 @@ export async function loadAiConfig(
     autoReplyMaxPerConversation: row.auto_reply_max_per_conversation,
     handoffAgentId: row.handoff_agent_id,
     embeddingsApiKey,
+    memoryEnabled: row.memory_enabled !== false,
+    leadQualificationEnabled: row.lead_qualification_enabled !== false,
+    qualificationCriteria: row.qualification_criteria ?? {
+      track_budget: true,
+      track_timeline: true,
+      track_interest: true,
+    },
+    followupIntelligenceEnabled: row.followup_intelligence_enabled !== false,
+    autoTaggingEnabled: row.auto_tagging_enabled !== false,
+    autoUnsubscribeEnabled: row.auto_unsubscribe_enabled !== false,
+    unsubscribeKeywords: row.unsubscribe_keywords ?? [
+      'nahi chahiye',
+      'stop',
+      'unsubscribe',
+      'dont message',
+      'mat bhejo',
+      'not interested',
+      'cancel',
+      'no thanks',
+      'nahi lena hai',
+    ],
+    unsubscribeReplyText:
+      row.unsubscribe_reply_text ??
+      'Aapka request note kar liya gaya hai. Aage se aapko hamari taraf se koi automated WhatsApp message nahi aayega. Dhanyawad.',
+    unsubscribeTagName: row.unsubscribe_tag_name ?? 'Unsubscribed',
+    qualifiedTagName: row.qualified_tag_name ?? 'Qualified Lead',
   }
 }
 

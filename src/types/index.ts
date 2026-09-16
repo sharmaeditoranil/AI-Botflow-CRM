@@ -123,6 +123,13 @@ export interface Contact {
   email?: string;
   company?: string;
   avatar_url?: string;
+  is_opted_out?: boolean;
+  opted_out_at?: string | null;
+  opt_out_reason?: string | null;
+  lead_status?: 'new' | 'contacted' | 'warm' | 'hot' | 'qualified' | 'unqualified' | 'opted_out';
+  lead_score?: number;
+  ai_memory?: string | null;
+  qualification_data?: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
   /** Hydrated by queries that embed `contact_tags(tags(*))` (e.g. the

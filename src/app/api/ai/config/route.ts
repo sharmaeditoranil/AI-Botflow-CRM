@@ -30,7 +30,7 @@ export async function GET() {
       // `api_key` is selected only to derive `has_key` — it is stripped
       // out below and never returned to the client.
       .select(
-        'provider, model, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, api_key, embeddings_api_key',
+        'provider, model, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, api_key, embeddings_api_key, memory_enabled, lead_qualification_enabled, qualification_criteria, followup_intelligence_enabled, auto_tagging_enabled, auto_unsubscribe_enabled, unsubscribe_keywords, unsubscribe_reply_text, unsubscribe_tag_name, qualified_tag_name',
       )
       .eq('account_id', accountId)
       .maybeSingle()
@@ -167,6 +167,16 @@ export async function POST(request: Request) {
           autoReplyMaxPerConversation: maxPer,
           handoffAgentId: null,
           embeddingsApiKey: null,
+          memoryEnabled: true,
+          leadQualificationEnabled: true,
+          qualificationCriteria: {},
+          followupIntelligenceEnabled: true,
+          autoTaggingEnabled: true,
+          autoUnsubscribeEnabled: true,
+          unsubscribeKeywords: [],
+          unsubscribeReplyText: '',
+          unsubscribeTagName: 'Unsubscribed',
+          qualifiedTagName: 'Qualified Lead',
         })
       } catch (err) {
         if (err instanceof AiError) {
@@ -213,6 +223,39 @@ export async function POST(request: Request) {
       shared.embeddings_api_key = encrypt(rawEmbeddingsKey)
     } else if (clearEmbeddingsKey) {
       shared.embeddings_api_key = null
+    }
+
+    // Superpowers: Conversation Memory, Lead Qualification & Follow-up Intelligence
+    if ('memory_enabled' in body) shared.memory_enabled = body.memory_enabled === true
+    if ('lead_qualification_enabled' in body) shared.lead_qualification_enabled = body.lead_qualification_enabled === true
+    if ('qualification_criteria' in body && body.qualification_criteria && typeof body.qualification_criteria === 'object') {
+      shared.qualification_criteria = body.qualification_criteria
+    }
+    if ('followup_intelligence_enabled' in body) shared.followup_intelligence_enabled = body.followup_intelligence_enabled === true
+    if ('auto_tagging_enabled' in body) shared.auto_tagging_enabled = body.auto_tagging_enabled === true
+    if ('auto_unsubscribe_enabled' in body) shared.auto_unsubscribe_enabled = body.auto_unsubscribe_enabled === true
+    if ('unsubscribe_keywords' in body && Array.isArray(body.unsubscribe_keywords)) {
+      shared.unsubscribe_keywords = body.unsubscribe_keywords
+        .map((k: unknown) => String(k).trim())
+        .filter(Boolean)
+    }
+    if ('unsubscribe_reply_text' in body) {
+      shared.unsubscribe_reply_text =
+        typeof body.unsubscribe_reply_text === 'string' && body.unsubscribe_reply_text.trim()
+          ? body.unsubscribe_reply_text.trim()
+          : null
+    }
+    if ('unsubscribe_tag_name' in body) {
+      shared.unsubscribe_tag_name =
+        typeof body.unsubscribe_tag_name === 'string' && body.unsubscribe_tag_name.trim()
+          ? body.unsubscribe_tag_name.trim()
+          : 'Unsubscribed'
+    }
+    if ('qualified_tag_name' in body) {
+      shared.qualified_tag_name =
+        typeof body.qualified_tag_name === 'string' && body.qualified_tag_name.trim()
+          ? body.qualified_tag_name.trim()
+          : 'Qualified Lead'
     }
 
     if (existing) {

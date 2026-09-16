@@ -13,6 +13,12 @@ export type AiProvider = 'openai' | 'anthropic'
  * `loadAiConfig` — `apiKey` is the plaintext BYO provider key
  * (stored AES-256-GCM-encrypted at rest).
  */
+export interface QualificationCriteria {
+  track_budget?: boolean
+  track_timeline?: boolean
+  track_interest?: boolean
+}
+
 export interface AiConfig {
   provider: AiProvider
   model: string
@@ -29,6 +35,19 @@ export interface AiConfig {
    *  knowledge base is embedded and semantic retrieval turns on; when
    *  null, retrieval falls back to lexical full-text search. */
   embeddingsApiKey: string | null
+  /** Conversation Memory: remembers customer past inquiries, preferences, and context */
+  memoryEnabled: boolean
+  /** Lead Qualification: automatically detects buying intent, scores leads, and updates status */
+  leadQualificationEnabled: boolean
+  qualificationCriteria: QualificationCriteria
+  /** Follow-up Intelligence: automatic tagging and opt-out / unsubscribe management */
+  followupIntelligenceEnabled: boolean
+  autoTaggingEnabled: boolean
+  autoUnsubscribeEnabled: boolean
+  unsubscribeKeywords: string[]
+  unsubscribeReplyText: string
+  unsubscribeTagName: string
+  qualifiedTagName: string
 }
 
 /** A single conversation turn in the shape both providers accept. */

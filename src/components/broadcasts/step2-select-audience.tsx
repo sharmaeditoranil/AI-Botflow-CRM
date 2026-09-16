@@ -188,28 +188,36 @@ export function Step2SelectAudience({
         return;
       }
 
-      // Apply exclude tags
-      let excludeSet: Set<string> | null = null;
+      // Apply exclude tags & opted-out contacts
+      const excludeSet = new Set<string>();
       if (audience.excludeTagIds && audience.excludeTagIds.length > 0) {
         const { data: excludeRows } = await supabase
           .from('contact_tags')
           .select('contact_id')
           .in('tag_id', audience.excludeTagIds);
-        excludeSet = new Set((excludeRows ?? []).map((r) => r.contact_id));
+        (excludeRows ?? []).forEach((r) => excludeSet.add(r.contact_id));
       }
+
+      // Fetch opted-out contacts to automatically exclude from audience
+      const { data: optedOutRows } = await supabase
+        .from('contacts')
+        .select('id')
+        .eq('is_opted_out', true);
+      (optedOutRows ?? []).forEach((r) => excludeSet.add(r.id));
 
       if (baseIds) {
         const effective = [...baseIds].filter(
-          (id) => !excludeSet?.has(id),
+          (id) => !excludeSet.has(id),
         );
         setEstimatedCount(effective.length);
       } else {
-        // "All" — fetch the total, then subtract exclude set if any.
+        // "All" — fetch non-opted-out contacts count
         const { count } = await supabase
           .from('contacts')
-          .select('*', { count: 'exact', head: true });
+          .select('*', { count: 'exact', head: true })
+          .neq('is_opted_out', true);
         const total = count ?? 0;
-        setEstimatedCount(excludeSet ? Math.max(0, total - excludeSet.size) : total);
+        setEstimatedCount(excludeSet.size > 0 ? Math.max(0, total - excludeSet.size) : total);
       }
     } finally {
       setLoadingCount(false);

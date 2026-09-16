@@ -2,7 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { Loader2, Sparkles, CheckCircle2, Trash2, Eye, EyeOff } from 'lucide-react';
+import {
+  Loader2,
+  Sparkles,
+  CheckCircle2,
+  Trash2,
+  Eye,
+  EyeOff,
+  Brain,
+  Target,
+  RotateCw,
+  Tag,
+  UserX,
+} from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { canEditSettings } from '@/lib/auth/roles';
 import { Button } from '@/components/ui/button';
@@ -10,6 +22,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
 import {
   Card,
   CardContent,
@@ -76,6 +89,21 @@ export function AiConfig() {
   const [handoffAgentId, setHandoffAgentId] = useState('');
   const [members, setMembers] = useState<AccountMember[]>([]);
 
+  // Superpowers: Conversation Memory, Lead Qualification & Follow-up Intelligence
+  const [memoryEnabled, setMemoryEnabled] = useState(true);
+  const [leadQualificationEnabled, setLeadQualificationEnabled] = useState(true);
+  const [qualifiedTagName, setQualifiedTagName] = useState('Qualified Lead');
+  const [followupIntelligenceEnabled, setFollowupIntelligenceEnabled] = useState(true);
+  const [autoTaggingEnabled, setAutoTaggingEnabled] = useState(true);
+  const [autoUnsubscribeEnabled, setAutoUnsubscribeEnabled] = useState(true);
+  const [unsubscribeKeywordsInput, setUnsubscribeKeywordsInput] = useState(
+    'stop, nahi chahiye, mat bhejo, cancel, unsubscribe, not interested',
+  );
+  const [unsubscribeReplyText, setUnsubscribeReplyText] = useState(
+    'Aapka request note kar liya gaya hai. Aage se aapko hamari taraf se koi automated WhatsApp message nahi aayega. Dhanyawad.',
+  );
+  const [unsubscribeTagName, setUnsubscribeTagName] = useState('Unsubscribed');
+
   // Guard keyed on the account (not a bare boolean) so an in-place
   // account switch — ownership transfer, multi-account membership —
   // refetches instead of showing the previous account's config. Mirrors
@@ -106,6 +134,23 @@ export function AiConfig() {
         setHasStoredEmbeddingsKey(Boolean(data.has_embeddings_key));
         setEmbeddingsKey(data.has_embeddings_key ? MASKED_KEY : '');
         setEmbeddingsKeyEdited(false);
+
+        // Superpowers
+        setMemoryEnabled(data.memory_enabled !== false);
+        setLeadQualificationEnabled(data.lead_qualification_enabled !== false);
+        setQualifiedTagName(data.qualified_tag_name || 'Qualified Lead');
+        setFollowupIntelligenceEnabled(data.followup_intelligence_enabled !== false);
+        setAutoTaggingEnabled(data.auto_tagging_enabled !== false);
+        setAutoUnsubscribeEnabled(data.auto_unsubscribe_enabled !== false);
+        if (Array.isArray(data.unsubscribe_keywords) && data.unsubscribe_keywords.length > 0) {
+          setUnsubscribeKeywordsInput(data.unsubscribe_keywords.join(', '));
+        }
+        if (data.unsubscribe_reply_text) {
+          setUnsubscribeReplyText(data.unsubscribe_reply_text);
+        }
+        if (data.unsubscribe_tag_name) {
+          setUnsubscribeTagName(data.unsubscribe_tag_name);
+        }
       }
     } catch {
       toast.error(t('loadFailed'));
@@ -151,6 +196,18 @@ export function AiConfig() {
     auto_reply_enabled: autoReplyEnabled,
     auto_reply_max_per_conversation: maxPerConversation,
     handoff_agent_id: handoffAgentId || null,
+    memory_enabled: memoryEnabled,
+    lead_qualification_enabled: leadQualificationEnabled,
+    qualified_tag_name: qualifiedTagName.trim() || 'Qualified Lead',
+    followup_intelligence_enabled: followupIntelligenceEnabled,
+    auto_tagging_enabled: autoTaggingEnabled,
+    auto_unsubscribe_enabled: autoUnsubscribeEnabled,
+    unsubscribe_keywords: unsubscribeKeywordsInput
+      .split(',')
+      .map((k) => k.trim())
+      .filter(Boolean),
+    unsubscribe_reply_text: unsubscribeReplyText.trim(),
+    unsubscribe_tag_name: unsubscribeTagName.trim() || 'Unsubscribed',
   });
 
   const handleTest = async () => {
@@ -483,6 +540,258 @@ export function AiConfig() {
                 </SelectContent>
               </Select>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* 🧠 Conversation Memory Card */}
+        <Card className="border-border shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                  <Brain className="h-4 w-4" />
+                </span>
+                {t('memoryTitle')}
+              </CardTitle>
+              <Badge variant="outline" className="border-purple-200 bg-purple-50 text-xs font-medium text-purple-700 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-300">
+                {t('memoryBadge')}
+              </Badge>
+            </div>
+            <CardDescription className="text-xs text-muted-foreground pt-1">
+              {t('memoryDesc')}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-0">
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-border/80 bg-card p-3 shadow-xs">
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium text-foreground">
+                  {t('enableMemory')}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {t('enableMemoryDesc')}
+                </p>
+              </div>
+              <Switch
+                checked={memoryEnabled}
+                onCheckedChange={setMemoryEnabled}
+                disabled={disabled}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 🧩 Lead Qualification Card */}
+        <Card className="border-border shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                  <Target className="h-4 w-4" />
+                </span>
+                {t('qualificationTitle')}
+              </CardTitle>
+              <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-xs font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+                {t('qualificationBadge')}
+              </Badge>
+            </div>
+            <CardDescription className="text-xs text-muted-foreground pt-1">
+              {t('qualificationDesc')}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-0">
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-border/80 bg-card p-3 shadow-xs">
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium text-foreground">
+                  {t('enableQualification')}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {t('enableQualificationDesc')}
+                </p>
+              </div>
+              <Switch
+                checked={leadQualificationEnabled}
+                onCheckedChange={setLeadQualificationEnabled}
+                disabled={disabled}
+              />
+            </div>
+
+            {leadQualificationEnabled && (
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="ai-qualified-tag" className="text-xs font-medium">
+                    {t('qualifiedTagName')}
+                  </Label>
+                  <Input
+                    id="ai-qualified-tag"
+                    value={qualifiedTagName}
+                    onChange={(e) => setQualifiedTagName(e.target.value)}
+                    placeholder="Qualified Lead"
+                    disabled={disabled}
+                    className="max-w-md h-9 text-sm"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    {t('qualifiedTagNameDesc')}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                  <div className="rounded-md border border-border/70 bg-background/50 p-2 text-center">
+                    <span className="inline-block px-1.5 py-0.5 text-[10px] font-semibold rounded bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300 mb-1">
+                      🔥 Hot Lead (85+)
+                    </span>
+                    <p className="text-[11px] text-muted-foreground">Fees, pricing & payment intent</p>
+                  </div>
+                  <div className="rounded-md border border-border/70 bg-background/50 p-2 text-center">
+                    <span className="inline-block px-1.5 py-0.5 text-[10px] font-semibold rounded bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 mb-1">
+                      ⚡ Warm (75+)
+                    </span>
+                    <p className="text-[11px] text-muted-foreground">Callback requested</p>
+                  </div>
+                  <div className="rounded-md border border-border/70 bg-background/50 p-2 text-center">
+                    <span className="inline-block px-1.5 py-0.5 text-[10px] font-semibold rounded bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 mb-1">
+                      👍 Interested (55+)
+                    </span>
+                    <p className="text-[11px] text-muted-foreground">Course / catalog inquiry</p>
+                  </div>
+                  <div className="rounded-md border border-border/70 bg-background/50 p-2 text-center">
+                    <span className="inline-block px-1.5 py-0.5 text-[10px] font-semibold rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 mb-1">
+                      🎯 Qualified (95+)
+                    </span>
+                    <p className="text-[11px] text-muted-foreground">Enrollment / payment sent</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* 🔄 Follow-up Intelligence & Auto-Unsubscribe Card */}
+        <Card className="border-border shadow-sm">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-orange-500/10 text-orange-600 dark:text-orange-400">
+                  <RotateCw className="h-4 w-4" />
+                </span>
+                {t('followupTitle')}
+              </CardTitle>
+              <Badge variant="outline" className="border-orange-200 bg-orange-50 text-xs font-medium text-orange-700 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-300">
+                {t('followupBadge')}
+              </Badge>
+            </div>
+            <CardDescription className="text-xs text-muted-foreground pt-1">
+              {t('followupDesc')}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-0">
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-border/80 bg-card p-3 shadow-xs">
+              <div className="space-y-0.5">
+                <p className="text-sm font-medium text-foreground">
+                  {t('enableFollowup')}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {t('enableFollowupDesc')}
+                </p>
+              </div>
+              <Switch
+                checked={followupIntelligenceEnabled}
+                onCheckedChange={setFollowupIntelligenceEnabled}
+                disabled={disabled}
+              />
+            </div>
+
+            {followupIntelligenceEnabled && (
+              <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 p-4">
+                {/* Auto-tagging switch */}
+                <div className="flex items-center justify-between gap-4 pb-3 border-b border-border/60">
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                      <Tag className="h-3.5 w-3.5 text-primary" />
+                      {t('autoTagging')}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {t('autoTaggingDesc')}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={autoTaggingEnabled}
+                    onCheckedChange={setAutoTaggingEnabled}
+                    disabled={disabled}
+                  />
+                </div>
+
+                {/* Auto-unsubscribe switch */}
+                <div className="flex items-center justify-between gap-4 pb-2">
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-medium text-foreground flex items-center gap-1.5 text-destructive dark:text-red-400">
+                      <UserX className="h-3.5 w-3.5" />
+                      {t('autoUnsubscribe')}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {t('autoUnsubscribeDesc')}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={autoUnsubscribeEnabled}
+                    onCheckedChange={setAutoUnsubscribeEnabled}
+                    disabled={disabled}
+                  />
+                </div>
+
+                {autoUnsubscribeEnabled && (
+                  <div className="space-y-3 pt-2 pl-2 border-l-2 border-destructive/40">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ai-unsub-tag" className="text-xs font-medium">
+                        {t('unsubscribeTagName')}
+                      </Label>
+                      <Input
+                        id="ai-unsub-tag"
+                        value={unsubscribeTagName}
+                        onChange={(e) => setUnsubscribeTagName(e.target.value)}
+                        placeholder="Unsubscribed"
+                        disabled={disabled}
+                        className="max-w-md h-9 text-sm"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ai-unsub-keywords" className="text-xs font-medium">
+                        {t('unsubscribeKeywords')}
+                      </Label>
+                      <Input
+                        id="ai-unsub-keywords"
+                        value={unsubscribeKeywordsInput}
+                        onChange={(e) => setUnsubscribeKeywordsInput(e.target.value)}
+                        placeholder={t('unsubscribeKeywordsPlaceholder')}
+                        disabled={disabled}
+                        className="text-sm"
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        {t('unsubscribeKeywordsDesc')}
+                      </p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor="ai-unsub-reply" className="text-xs font-medium">
+                        {t('unsubscribeReplyText')}
+                      </Label>
+                      <Textarea
+                        id="ai-unsub-reply"
+                        value={unsubscribeReplyText}
+                        onChange={(e) => setUnsubscribeReplyText(e.target.value)}
+                        placeholder={t('unsubscribeReplyPlaceholder')}
+                        rows={2}
+                        disabled={disabled}
+                        className="text-sm"
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        {t('unsubscribeReplyDesc')}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
 

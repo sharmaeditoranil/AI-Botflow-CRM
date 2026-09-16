@@ -238,6 +238,9 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       contacts = contacts.filter((c) => !excludedIds.has(c.id));
     }
 
+    // Always exclude customers who opted out / unsubscribed
+    contacts = contacts.filter((c) => !c.is_opted_out);
+
     return contacts;
   }
 

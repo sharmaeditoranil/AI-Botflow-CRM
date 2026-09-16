@@ -15,6 +15,12 @@ import {
   DollarSign,
   StickyNote,
   Plus,
+  Brain,
+  ShieldAlert,
+  Flame,
+  Zap,
+  Target,
+  ThumbsUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -38,14 +44,20 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
   const [tags, setTags] = useState<(Tag & { contact_tag_id: string })[]>([]);
   const [newNote, setNewNote] = useState("");
   const [addingNote, setAddingNote] = useState(false);
+  const [liveContact, setLiveContact] = useState<Partial<Contact> | null>(null);
 
   const fetchContactData = useCallback(async () => {
     if (!contact) return;
 
     const supabase = createClient();
 
-    // Fetch deals, notes, and tags in parallel
-    const [dealsRes, notesRes, tagsRes] = await Promise.all([
+    // Fetch contact details (status, memory), deals, notes, and tags in parallel
+    const [contactRes, dealsRes, notesRes, tagsRes] = await Promise.all([
+      supabase
+        .from("contacts")
+        .select("is_opted_out, lead_status, lead_score, ai_memory")
+        .eq("id", contact.id)
+        .maybeSingle(),
       supabase
         .from("deals")
         .select("*, stage:pipeline_stages(*)")
@@ -62,6 +74,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
         .eq("contact_id", contact.id),
     ]);
 
+    if (contactRes.data) setLiveContact(contactRes.data);
     if (dealsRes.data) setDeals(dealsRes.data);
     if (notesRes.data) setNotes(notesRes.data);
     if (tagsRes.data) {
@@ -135,6 +148,11 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
   const displayName = contact.name || contactHandle(contact);
   const initials = displayName.charAt(0).toUpperCase();
 
+  const isOptedOut = liveContact?.is_opted_out ?? contact.is_opted_out;
+  const leadStatus = liveContact?.lead_status ?? contact.lead_status ?? 'new';
+  const leadScore = liveContact?.lead_score ?? contact.lead_score ?? 0;
+  const aiMemory = liveContact?.ai_memory ?? contact.ai_memory;
+
   return (
     <div className="flex h-full w-70 flex-col border-l border-border bg-card">
       <ScrollArea className="flex-1">
@@ -158,6 +176,34 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
             {contact.company && (
               <p className="text-xs text-muted-foreground">{contact.company}</p>
             )}
+
+            {/* Lead Status / Opt-Out Badge */}
+            {isOptedOut ? (
+              <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-red-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-destructive dark:text-red-400 border border-red-200 dark:border-red-900/50">
+                <ShieldAlert className="h-3 w-3" />
+                Opted Out
+              </div>
+            ) : leadStatus === 'qualified' ? (
+              <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50">
+                <Target className="h-3 w-3" />
+                Qualified ({leadScore})
+              </div>
+            ) : leadStatus === 'hot' ? (
+              <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-orange-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-orange-600 dark:text-orange-400 border border-orange-200 dark:border-orange-900/50">
+                <Flame className="h-3 w-3" />
+                Hot Lead ({leadScore})
+              </div>
+            ) : leadStatus === 'warm' ? (
+              <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50">
+                <Zap className="h-3 w-3" />
+                Warm Lead ({leadScore})
+              </div>
+            ) : leadStatus === 'interested' ? (
+              <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2.5 py-0.5 text-[11px] font-semibold text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900/50">
+                <ThumbsUp className="h-3 w-3" />
+                Interested ({leadScore})
+              </div>
+            ) : null}
           </div>
 
           {/* Phone */}
@@ -187,6 +233,24 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
 
           {/* Divider */}
           <div className="my-4 border-t border-border" />
+
+          {/* AI Memory & Context */}
+          {aiMemory && (
+            <>
+              <div>
+                <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-purple-600 dark:text-purple-400">
+                  <Brain className="h-3.5 w-3.5" />
+                  AI Memory & Context
+                </div>
+                <div className="mt-2 rounded-lg border border-purple-200/70 bg-purple-500/5 p-2.5 dark:border-purple-900/50">
+                  <p className="text-xs text-foreground/90 leading-relaxed whitespace-pre-wrap">
+                    {aiMemory}
+                  </p>
+                </div>
+              </div>
+              <div className="my-4 border-t border-border" />
+            </>
+          )}
 
           {/* Tags */}
           <div>

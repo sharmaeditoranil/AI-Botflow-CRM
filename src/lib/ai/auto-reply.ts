@@ -1,12 +1,17 @@
 import { supabaseAdmin } from './admin-client'
 import { loadAiConfig } from './config'
-import { buildConversationContext } from './context'
+import { buildConversationContext, loadContactMemory } from './context'
 import { retrieveKnowledge } from './knowledge'
 import { generateReply } from './generate'
 import { buildSystemPrompt } from './defaults'
 import { buildHandoffSummary } from './handoff'
 import { logAiUsage } from './usage'
 import { latestUserMessage } from './query'
+import {
+  checkAndExecuteOptOut,
+  formatContactMemoryForPrompt,
+  processFollowupIntelligence,
+} from './intelligence'
 import {
   engineSendText,
   loadAccountMetaCredentials,
@@ -81,6 +86,17 @@ export async function dispatchInboundToAiReply(
       .limit(1)
     if (autoResponders && autoResponders.length > 0) return
 
+    // Check if the contact has already opted out
+    const { data: contactRow } = await db
+      .from('contacts')
+      .select('is_opted_out')
+      .eq('id', contactId)
+      .maybeSingle()
+    if (contactRow?.is_opted_out) {
+      console.log(`[ai auto-reply] Contact ${contactId} is opted out — skipping AI auto-reply.`)
+      return
+    }
+
     const { data: conv, error: convErr } = await db
       .from('conversations')
       .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count')
@@ -95,6 +111,24 @@ export async function dispatchInboundToAiReply(
 
     const messages = await buildConversationContext(db, conversationId)
     if (messages.length === 0) return
+
+    const latestMsg = latestUserMessage(messages)
+
+    // Check for customer opt-out / unsubscribe refusal (e.g. "stop", "nahi chahiye", "cancel")
+    if (latestMsg && config.followupIntelligenceEnabled && config.autoUnsubscribeEnabled) {
+      const optOutResult = await checkAndExecuteOptOut({
+        db,
+        accountId,
+        contactId,
+        conversationId,
+        customerMessage: latestMsg,
+        config,
+        configOwnerUserId,
+      })
+      if (optOutResult.optedOut) {
+        return // Opt-out processed; polite confirmation sent and thread closed
+      }
+    }
 
     // Account-wide throttle on the shared BYO key. The per-conversation
     // cap bounds one thread; this bounds a burst across many threads (a
@@ -122,18 +156,28 @@ export async function dispatchInboundToAiReply(
       await showTypingIndicator(db, accountId, inboundMessageId)
     }
 
+    // Load contact memory & profile for long-term customer awareness
+    let contactMemoryPrompt: string | undefined = undefined
+    if (config.memoryEnabled) {
+      const contactMem = await loadContactMemory(db, contactId)
+      if (contactMem) {
+        contactMemoryPrompt = formatContactMemoryForPrompt(contactMem)
+      }
+    }
+
     // Ground the reply in the account's knowledge base (best-effort).
     const knowledge = await retrieveKnowledge(
       db,
       accountId,
       config,
-      latestUserMessage(messages),
+      latestMsg,
     )
 
     const systemPrompt = buildSystemPrompt({
       userPrompt: config.systemPrompt,
       mode: 'auto_reply',
       knowledge,
+      contactMemory: contactMemoryPrompt,
     })
 
     const { text, handoff, usage } = await generateReply({
@@ -178,6 +222,19 @@ export async function dispatchInboundToAiReply(
         update.assigned_agent_id = config.handoffAgentId
       }
       await db.from('conversations').update(update).eq('id', conversationId)
+
+      // Still evaluate intent (lead qualification & auto-tagging) so human agents have full context
+      if (latestMsg && config.followupIntelligenceEnabled) {
+        void processFollowupIntelligence({
+          db,
+          accountId,
+          contactId,
+          conversationId,
+          customerMessage: latestMsg,
+          config,
+          configOwnerUserId,
+        })
+      }
       return
     }
 
@@ -211,6 +268,19 @@ export async function dispatchInboundToAiReply(
       text,
       aiGenerated: true,
     })
+
+    // Asynchronously process follow-up intelligence (scoring, status, auto-tags, learned memory)
+    if (latestMsg && config.followupIntelligenceEnabled) {
+      void processFollowupIntelligence({
+        db,
+        accountId,
+        contactId,
+        conversationId,
+        customerMessage: latestMsg,
+        config,
+        configOwnerUserId,
+      })
+    }
   } catch (err) {
     console.error('[ai auto-reply] dispatch failed:', err)
   }

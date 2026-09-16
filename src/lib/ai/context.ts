@@ -39,3 +39,69 @@ export async function buildConversationContext(
       content: m.content_text!.trim(),
     }))
 }
+
+export interface ContactMemoryContext {
+  contactName?: string | null
+  contactPhone?: string | null
+  company?: string | null
+  leadStatus?: string | null
+  leadScore?: number | null
+  tags?: string[]
+  notes?: string[]
+  aiMemory?: string | null
+}
+
+/**
+ * Load contact profile, tags, notes, and past memory for cross-session context.
+ */
+export async function loadContactMemory(
+  db: SupabaseClient,
+  contactId?: string | null,
+): Promise<ContactMemoryContext | null> {
+  if (!contactId) return null
+
+  try {
+    const [contactRes, tagsRes, notesRes] = await Promise.all([
+      db
+        .from('contacts')
+        .select('name, phone, company, lead_status, lead_score, ai_memory')
+        .eq('id', contactId)
+        .maybeSingle(),
+      db
+        .from('contact_tags')
+        .select('tags(name)')
+        .eq('contact_id', contactId),
+      db
+        .from('contact_notes')
+        .select('content')
+        .eq('contact_id', contactId)
+        .order('created_at', { ascending: false })
+        .limit(3),
+    ])
+
+    if (!contactRes.data) return null
+
+    const tags = (tagsRes.data || [])
+      .map((t: any) => t.tags?.name)
+      .filter(Boolean)
+
+    const notes = (notesRes.data || [])
+      .map((n: any) => n.content)
+      .filter(Boolean)
+
+    return {
+      contactName: contactRes.data.name,
+      contactPhone: contactRes.data.phone,
+      company: contactRes.data.company,
+      leadStatus: contactRes.data.lead_status,
+      leadScore: contactRes.data.lead_score,
+      tags,
+      notes,
+      aiMemory: contactRes.data.ai_memory,
+    }
+  } catch (err) {
+    console.warn('[ai-context] Failed to load contact memory:', err)
+    return null
+  }
+}
+
