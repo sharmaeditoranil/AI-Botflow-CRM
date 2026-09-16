@@ -26,7 +26,6 @@ import type { Automation } from "@/types"
 import { Button } from "@/components/ui/button"
 import { GatedButton } from "@/components/ui/gated-button"
 import { Switch } from "@/components/ui/switch"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { WebhookBotsManager } from "@/components/automations/webhook-bots-manager"
 import {
   DropdownMenu,
@@ -48,6 +47,7 @@ import { triggerMeta, formatRelative, isKnownTrigger } from "@/lib/automations/t
 import { cn } from "@/lib/utils"
 
 const TEMPLATE_ORDER: TemplateSlug[] = [
+  "webhook_lead_capture",
   "welcome_message",
   "out_of_office",
   "lead_qualifier",
@@ -55,6 +55,7 @@ const TEMPLATE_ORDER: TemplateSlug[] = [
 ]
 
 const TEMPLATE_ICON: Record<TemplateSlug, typeof Zap> = {
+  webhook_lead_capture: Webhook,
   welcome_message: MessageCircle,
   out_of_office: Clock,
   lead_qualifier: Users,
@@ -69,6 +70,8 @@ export default function AutomationsPage() {
   const [error, setError] = useState<string | null>(null)
   const [pendingDelete, setPendingDelete] = useState<Automation | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [createWebhookOpen, setCreateWebhookOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<"workflows" | "webhooks">("workflows")
 
   async function load() {
     try {
@@ -84,8 +87,6 @@ export default function AutomationsPage() {
     }
   }
 
-  const [activeTab, setActiveTab] = useState<"workflows" | "webhooks">("workflows")
-
   useEffect(() => {
     load()
     if (typeof window !== "undefined") {
@@ -98,21 +99,18 @@ export default function AutomationsPage() {
 
   async function toggleActive(a: Automation, next: boolean) {
     // Optimistic flip so the switch feels instant.
-    setAutomations((prev) =>
-      prev?.map((x) => (x.id === a.id ? { ...x, is_active: next } : x)) ?? prev,
+    setAutomations(
+      (prev) => prev?.map((item) => (item.id === a.id ? { ...item, is_active: next } : item)) ?? null
     )
     const res = await fetch(`/api/automations/${a.id}`, {
       method: "PATCH",
-      headers: { "content-type": "application/json" },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ is_active: next }),
     })
     if (!res.ok) {
-      // Roll back on error.
-      setAutomations((prev) =>
-        prev?.map((x) => (x.id === a.id ? { ...x, is_active: !next } : x)) ?? prev,
-      )
       const body = await res.json().catch(() => ({}))
       toast.error(body?.error ?? t("toasts.updateError"))
+      load()
       return
     }
     toast.success(next ? t("toasts.activated") : t("toasts.paused"))
@@ -125,8 +123,9 @@ export default function AutomationsPage() {
       toast.error(body?.error ?? t("toasts.duplicateError"))
       return
     }
+    const created = await res.json()
     toast.success(t("toasts.duplicated"))
-    load()
+    router.push(`/automations/${created.id}/edit`)
   }
 
   async function confirmDelete() {
@@ -144,43 +143,99 @@ export default function AutomationsPage() {
     load()
   }
 
-  async function startFromTemplate(slug: TemplateSlug) {
-    router.push(`/automations/new?template=${slug}`)
+  function handleStartTemplate(slug: TemplateSlug) {
+    if (slug === "webhook_lead_capture") {
+      setActiveTab("webhooks")
+      setCreateWebhookOpen(true)
+    } else {
+      router.push(`/automations/new?template=${slug}`)
+    }
   }
 
   const showTemplates = (automations?.length ?? 0) < 3
 
   return (
     <div className="space-y-6">
-      <Tabs
-        value={activeTab}
-        onValueChange={(v) => setActiveTab(v as "workflows" | "webhooks")}
-        className="w-full space-y-6"
-      >
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
-              <Zap className="h-6 w-6 text-primary" />
-              {t("title")}
-            </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {t("subtitle")}
-            </p>
-          </div>
-
-          <TabsList className="bg-muted p-1">
-            <TabsTrigger value="workflows" className="gap-1.5 text-xs font-medium">
-              <Zap className="h-3.5 w-3.5" />
-              Workflows
-            </TabsTrigger>
-            <TabsTrigger value="webhooks" className="gap-1.5 text-xs font-medium">
-              <Webhook className="h-3.5 w-3.5 text-emerald-500" />
-              Webhook Bots
-            </TabsTrigger>
-          </TabsList>
+      {/* Header with Title and Quick Action Buttons */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-5">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
+            <Zap className="h-6 w-6 text-primary" />
+            {t("title")}
+          </h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {t("subtitle")}
+          </p>
         </div>
 
-        <TabsContent value="workflows" className="space-y-6 mt-0">
+        <div className="flex items-center gap-2">
+          {/* Quick Webhook Bot Button */}
+          <Button
+            onClick={() => {
+              setActiveTab("webhooks")
+              setCreateWebhookOpen(true)
+            }}
+            className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs sm:text-sm shadow-sm flex items-center gap-1.5"
+          >
+            <Webhook className="h-4 w-4" />
+            + New Webhook Bot
+          </Button>
+
+          {/* Create Workflow Button */}
+          <GatedButton
+            canAct={canCreate}
+            gateReason="create automations"
+            onClick={() => router.push("/automations/new")}
+            className="bg-primary text-primary-foreground hover:bg-primary/90 text-xs sm:text-sm flex items-center gap-1.5"
+          >
+            <Plus className="h-4 w-4" />
+            {t("create")}
+          </GatedButton>
+        </div>
+      </div>
+
+      {/* View Segmented Switcher */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setActiveTab("workflows")}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all border",
+            activeTab === "workflows"
+              ? "bg-card text-foreground border-primary/50 shadow-sm ring-1 ring-primary/20"
+              : "bg-muted/40 text-muted-foreground border-transparent hover:bg-muted/70 hover:text-foreground"
+          )}
+        >
+          <Zap className={cn("h-4 w-4", activeTab === "workflows" ? "text-primary" : "text-muted-foreground")} />
+          WhatsApp Workflows
+          {automations && automations.length > 0 && (
+            <span className="rounded-full bg-primary/20 text-primary px-2 py-0.5 text-xs font-semibold">
+              {automations.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab("webhooks")}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all border",
+            activeTab === "webhooks"
+              ? "bg-emerald-950/40 text-emerald-300 border-emerald-500/50 shadow-sm ring-1 ring-emerald-500/20"
+              : "bg-muted/40 text-muted-foreground border-transparent hover:bg-emerald-500/10 hover:text-emerald-400"
+          )}
+        >
+          <Webhook className="h-4 w-4 text-emerald-400" />
+          Webhook Bots (Lead Capture)
+          <span className="rounded-full bg-emerald-500/20 text-emerald-300 px-2 py-0.5 text-[11px] font-medium hidden sm:inline-block">
+            Unique URLs
+          </span>
+        </button>
+      </div>
+
+      {/* Tab 1: Workflows Content */}
+      {activeTab === "workflows" && (
+        <div className="space-y-6">
           {error ? (
             <div className="flex h-64 flex-col items-center justify-center gap-2">
               <p className="text-sm text-red-400">{error}</p>
@@ -194,40 +249,71 @@ export default function AutomationsPage() {
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-base font-semibold text-foreground">Active Workflows</h2>
-                  <p className="text-xs text-muted-foreground">Internal event-driven automations for WhatsApp.</p>
+              {/* Promotional Callout for Webhook Bots */}
+              <div className="rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400">
+                    <Webhook className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-foreground">
+                      Capture Leads via External Webhooks
+                    </h4>
+                    <p className="text-xs text-muted-foreground">
+                      Generate unique Webhook URLs & secret keys for your website, Shopify, or Zapier to auto-send WhatsApp templates.
+                    </p>
+                  </div>
                 </div>
-                <GatedButton
-                  canAct={canCreate}
-                  gateReason="create automations"
-                  onClick={() => router.push("/automations/new")}
-                  className="bg-primary text-primary-foreground hover:bg-primary/90"
+                <Button
+                  onClick={() => {
+                    setActiveTab("webhooks")
+                    setCreateWebhookOpen(true)
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs shrink-0 font-medium"
                 >
-                  <Plus className="h-4 w-4" />
-                  {t("create")}
-                </GatedButton>
+                  <Webhook className="h-3.5 w-3.5 mr-1.5" />
+                  Setup Webhook Bot
+                </Button>
               </div>
 
               {showTemplates && (
                 <section>
                   <h2 className="mb-3 text-sm font-semibold text-muted-foreground">{t("templatesTitle")}</h2>
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
                     {TEMPLATE_ORDER.map((slug) => {
-                      const t = AUTOMATION_TEMPLATES[slug]
+                      const tDef = AUTOMATION_TEMPLATES[slug]
                       const Icon = TEMPLATE_ICON[slug]
+                      const isWeb = slug === "webhook_lead_capture"
                       return (
                         <button
                           key={slug}
-                          onClick={() => startFromTemplate(slug)}
-                          className="group flex flex-col items-start rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/50 hover:bg-card/80"
+                          onClick={() => handleStartTemplate(slug)}
+                          className={cn(
+                            "group flex flex-col items-start rounded-xl border bg-card p-4 text-left transition-colors",
+                            isWeb
+                              ? "border-emerald-500/40 hover:border-emerald-500 hover:bg-emerald-500/5"
+                              : "border-border hover:border-primary/50 hover:bg-card/80"
+                          )}
                         >
-                          <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary group-hover:bg-primary/15">
+                          <div
+                            className={cn(
+                              "mb-3 flex h-9 w-9 items-center justify-center rounded-lg group-hover:scale-105 transition-transform",
+                              isWeb
+                                ? "bg-emerald-500/20 text-emerald-400"
+                                : "bg-primary/10 text-primary group-hover:bg-primary/15"
+                            )}
+                          >
                             <Icon className="h-5 w-5" />
                           </div>
-                          <div className="text-sm font-semibold text-foreground">{t.name}</div>
-                          <p className="mt-1 text-xs text-muted-foreground">{t.description}</p>
+                          <div className="flex items-center gap-1.5 w-full">
+                            <span className="text-sm font-semibold text-foreground">{tDef.name}</span>
+                            {isWeb && (
+                              <span className="ml-auto text-[10px] font-bold text-emerald-400 uppercase bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                                New
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">{tDef.description}</p>
                         </button>
                       )
                     })}
@@ -291,12 +377,18 @@ export default function AutomationsPage() {
               </Dialog>
             </>
           )}
-        </TabsContent>
+        </div>
+      )}
 
-        <TabsContent value="webhooks" className="mt-0">
-          <WebhookBotsManager />
-        </TabsContent>
-      </Tabs>
+      {/* Tab 2: Webhook Bots Content */}
+      {activeTab === "webhooks" && (
+        <div>
+          <WebhookBotsManager
+            defaultCreateOpen={createWebhookOpen}
+            onResetCreateOpen={() => setCreateWebhookOpen(false)}
+          />
+        </div>
+      )}
     </div>
   )
 }

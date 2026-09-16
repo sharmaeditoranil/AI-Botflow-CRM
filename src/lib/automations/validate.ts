@@ -203,6 +203,10 @@ export function validateTriggerForActivation(
         message: 'reply ids cannot be empty strings',
       })
     }
+  } else if (triggerType === 'incoming_webhook') {
+    if (cfg.phone_path != null && typeof cfg.phone_path !== 'string') {
+      issues.push({ path: 'trigger.phone_path', message: 'phone_path must be a string' })
+    }
   }
 
   return issues

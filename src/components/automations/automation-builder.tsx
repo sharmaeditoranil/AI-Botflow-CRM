@@ -33,6 +33,11 @@ import {
   ArrowUp,
   MousePointerClick,
   List,
+  Copy,
+  Check,
+  Eye,
+  EyeOff,
+  RefreshCw,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -147,6 +152,7 @@ const TRIGGER_OPTIONS: { value: AutomationTriggerType }[] = [
   { value: "conversation_assigned" },
   { value: "tag_added" },
   { value: "time_based" },
+  { value: "incoming_webhook" },
 ]
 
 function cid(): string {
@@ -767,6 +773,7 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
               onTypeChange={(tVal) => patchTop("trigger_type", tVal)}
               onConfigChange={(c) => patchTop("trigger_config", c)}
               t={t}
+              automationId={initial?.id}
             />
             <StepList
               steps={state.steps}
@@ -796,35 +803,65 @@ function TriggerCard({
   onTypeChange,
   onConfigChange,
   t,
+  automationId,
 }: {
   type: AutomationTriggerType
   config: Record<string, unknown>
   onTypeChange: (t: AutomationTriggerType) => void
   onConfigChange: (c: Record<string, unknown>) => void
   t: ReturnType<typeof useTranslations>
+  automationId?: string
 }) {
   const [open, setOpen] = useState(false)
+  const isWebhook = type === "incoming_webhook"
+
   return (
     // Card width: full on mobile, fixed 320px on sm+. The canvas wrapper
     // (max-w-2xl + px-4) keeps this tidy on tablet/desktop.
     <div className="z-10 w-full max-w-[320px] sm:w-80">
-      <div className="rounded-lg border border-border border-l-4 border-l-blue-500 bg-card shadow-lg">
+      <div
+        className={cn(
+          "rounded-lg border border-border border-l-4 bg-card shadow-lg transition-colors",
+          isWebhook ? "border-l-emerald-500" : "border-l-blue-500"
+        )}
+      >
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
           className="flex w-full items-center gap-3 px-4 py-3 text-left"
         >
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-blue-500/10 text-blue-400">
-            <Zap className="h-4 w-4" />
+          <div
+            className={cn(
+              "flex h-8 w-8 items-center justify-center rounded-md",
+              isWebhook
+                ? "bg-emerald-500/10 text-emerald-400"
+                : "bg-blue-500/10 text-blue-400"
+            )}
+          >
+            {isWebhook ? (
+              <Webhook className="h-4 w-4" />
+            ) : (
+              <Zap className="h-4 w-4" />
+            )}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-[11px] uppercase tracking-wide text-blue-300">{t("trigger")}</div>
+            <div
+              className={cn(
+                "text-[11px] uppercase tracking-wide",
+                isWebhook ? "text-emerald-400" : "text-blue-300"
+              )}
+            >
+              {t("trigger")}
+            </div>
             <div className="truncate text-sm font-medium text-foreground">
               {t(`triggers.${type}.label`)}
             </div>
           </div>
           <ChevronDown
-            className={cn("h-4 w-4 text-muted-foreground transition-transform", open && "rotate-180")}
+            className={cn(
+              "h-4 w-4 text-muted-foreground transition-transform",
+              open && "rotate-180"
+            )}
           />
         </button>
         {open && (
@@ -888,8 +925,213 @@ function TriggerCard({
                 </p>
               </div>
             )}
+            {type === "incoming_webhook" && (
+              <IncomingWebhookConfig
+                config={config}
+                onChange={onConfigChange}
+                automationId={automationId}
+              />
+            )}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+function generateWebhookSecret(): string {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+  let rand = ""
+  for (let i = 0; i < 32; i++) {
+    rand += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return `whsec_${rand}`
+}
+
+function IncomingWebhookConfig({
+  config,
+  onChange,
+  automationId,
+}: {
+  config: Record<string, unknown>
+  onChange: (c: Record<string, unknown>) => void
+  automationId?: string
+}) {
+  const [copiedUrl, setCopiedUrl] = useState(false)
+  const [copiedSecret, setCopiedSecret] = useState(false)
+  const [revealed, setRevealed] = useState(false)
+
+  const origin = typeof window !== "undefined" ? window.location.origin : ""
+  const webhookUrl = automationId
+    ? `${origin}/api/webhooks/incoming/${automationId}`
+    : ""
+
+  const secret = (config.secret as string) || ""
+  const phonePath = (config.phone_path as string) ?? "phone"
+  const namePath = (config.name_path as string) ?? "name"
+
+  useEffect(() => {
+    if (!config.secret) {
+      onChange({
+        ...config,
+        secret: generateWebhookSecret(),
+        phone_path: config.phone_path ?? "phone",
+        name_path: config.name_path ?? "name",
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function copyText(text: string, isUrl: boolean) {
+    if (!text) return
+    navigator.clipboard.writeText(text)
+    if (isUrl) {
+      setCopiedUrl(true)
+      setTimeout(() => setCopiedUrl(false), 2000)
+      toast.success("Webhook URL copied to clipboard")
+    } else {
+      setCopiedSecret(true)
+      setTimeout(() => setCopiedSecret(false), 2000)
+      toast.success("Secret key copied to clipboard")
+    }
+  }
+
+  function handleRegenerateSecret() {
+    const newSec = generateWebhookSecret()
+    onChange({ ...config, secret: newSec })
+    toast.success("New secret generated. Remember to save this workflow!")
+  }
+
+  return (
+    <div className="space-y-3 pt-1 text-xs">
+      {/* Webhook URL */}
+      <div>
+        <label className="mb-1 block font-medium text-muted-foreground">
+          Webhook URL
+        </label>
+        {webhookUrl ? (
+          <div className="flex items-center gap-1.5">
+            <Input
+              readOnly
+              value={webhookUrl}
+              className="bg-muted font-mono text-[11px] select-all"
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => copyText(webhookUrl, true)}
+              className="h-8 px-2 shrink-0"
+              title="Copy URL"
+            >
+              {copiedUrl ? (
+                <Check className="h-3.5 w-3.5 text-emerald-400" />
+              ) : (
+                <Copy className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          </div>
+        ) : (
+          <div className="rounded border border-dashed border-emerald-500/40 bg-emerald-500/5 p-2 text-muted-foreground text-[11px]">
+            Save this workflow to generate your live unique Webhook URL.
+          </div>
+        )}
+      </div>
+
+      {/* Secret Key */}
+      <div>
+        <div className="mb-1 flex items-center justify-between">
+          <label className="font-medium text-muted-foreground">
+            Secret Key (Header: x-webhook-secret)
+          </label>
+          <button
+            type="button"
+            onClick={handleRegenerateSecret}
+            className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1"
+          >
+            <RefreshCw className="h-2.5 w-2.5" /> Regenerate
+          </button>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Input
+            readOnly
+            type={revealed ? "text" : "password"}
+            value={secret}
+            className="bg-muted font-mono text-[11px]"
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setRevealed((v) => !v)}
+            className="h-8 px-2 shrink-0"
+            title={revealed ? "Hide" : "Reveal"}
+          >
+            {revealed ? (
+              <EyeOff className="h-3.5 w-3.5" />
+            ) : (
+              <Eye className="h-3.5 w-3.5" />
+            )}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => copyText(secret, false)}
+            className="h-8 px-2 shrink-0"
+            title="Copy Secret"
+          >
+            {copiedSecret ? (
+              <Check className="h-3.5 w-3.5 text-emerald-400" />
+            ) : (
+              <Copy className="h-3.5 w-3.5" />
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {/* Field Mapping */}
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="mb-1 block font-medium text-muted-foreground">
+            Phone Key Path *
+          </label>
+          <Input
+            placeholder="phone"
+            value={phonePath}
+            onChange={(e) =>
+              onChange({ ...config, phone_path: e.target.value })
+            }
+            className="bg-muted font-mono text-[11px]"
+          />
+          <p className="mt-0.5 text-[10px] text-muted-foreground">
+            e.g. phone, customer.phone
+          </p>
+        </div>
+        <div>
+          <label className="mb-1 block font-medium text-muted-foreground">
+            Name Key Path
+          </label>
+          <Input
+            placeholder="name"
+            value={namePath}
+            onChange={(e) =>
+              onChange({ ...config, name_path: e.target.value })
+            }
+            className="bg-muted font-mono text-[11px]"
+          />
+          <p className="mt-0.5 text-[10px] text-muted-foreground">
+            e.g. name, customer.name
+          </p>
+        </div>
+      </div>
+
+      <div className="rounded-md border border-emerald-500/20 bg-emerald-500/10 p-2 text-[11px] text-emerald-300">
+        POST JSON payload to the Webhook URL with header{' '}
+        <code className="bg-background/40 px-1 py-0.5 rounded font-mono text-[10px]">
+          x-webhook-secret
+        </code>
+        . When received, this workflow runs automatically for the contact!
       </div>
     </div>
   )

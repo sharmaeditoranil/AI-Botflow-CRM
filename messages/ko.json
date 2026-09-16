@@ -957,6 +957,10 @@
         "time_based": {
           "label": "시간 기반",
           "hint": "반복 일정에 따라"
+        },
+        "incoming_webhook": {
+          "label": "수신 웹훅 (리드 캡처)",
+          "hint": "외부 웹사이트 폼, Shopify, Zapier 또는 웹훅 POST 요청으로 트리거"
         }
       },
       "trigger": "트리거",

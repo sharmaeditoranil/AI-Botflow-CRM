@@ -957,6 +957,10 @@
         "time_based": {
           "label": "Por horário",
           "hint": "Em um agendamento recorrente"
+        },
+        "incoming_webhook": {
+          "label": "Webhook de Entrada (Captura de Leads)",
+          "hint": "Disparar via webhook POST externo (site, formulário, Shopify, Zapier)"
         }
       },
       "trigger": "Gatilho",

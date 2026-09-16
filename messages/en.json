@@ -957,6 +957,10 @@
         "time_based": {
           "label": "Time-Based",
           "hint": "On a recurring schedule"
+        },
+        "incoming_webhook": {
+          "label": "Incoming Webhook (Lead Capture)",
+          "hint": "Trigger via external website form, Shopify, Zapier, or webhook POST request"
         }
       },
       "trigger": "Trigger",

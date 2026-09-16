@@ -10,6 +10,7 @@ export type TemplateSlug =
   | 'out_of_office'
   | 'lead_qualifier'
   | 'follow_up_reminder'
+  | 'webhook_lead_capture'
 
 export interface TemplateStepSeed {
   step_type: AutomationStepType
@@ -122,6 +123,28 @@ export const AUTOMATION_TEMPLATES: Record<TemplateSlug, AutomationTemplateDefini
           text:
             "Just circling back — did you have any other questions for us? Happy to help!",
         },
+      },
+    ],
+  },
+  webhook_lead_capture: {
+    slug: 'webhook_lead_capture',
+    name: 'Webhook Lead Capture',
+    description: 'Capture external leads via incoming webhook and auto-send WhatsApp template.',
+    trigger_type: 'incoming_webhook',
+    trigger_config: {
+      phone_path: 'phone',
+      name_path: 'name',
+    },
+    steps: [
+      {
+        step_type: 'send_message',
+        step_config: {
+          text: 'Thank you for submitting! We have received your inquiry and will contact you shortly.',
+        },
+      },
+      {
+        step_type: 'add_tag',
+        step_config: { tag_id: '' },
       },
     ],
   },

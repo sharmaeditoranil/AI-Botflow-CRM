@@ -514,7 +514,9 @@ export type AutomationTriggerType =
   | 'time_based'
   /** Customer tapped a reply button / list row whose id matches; lets
    *  multi-step menus be chained across automations. */
-  | 'interactive_reply';
+  | 'interactive_reply'
+  /** Triggered via incoming webhook POST from external website, Shopify, Zapier, etc. */
+  | 'incoming_webhook';
 
 export type AutomationStepType =
   | 'send_message'
@@ -562,12 +564,19 @@ export interface InteractiveReplyTriggerConfig {
   reply_ids: string[];
 }
 
+export interface IncomingWebhookTriggerConfig {
+  secret?: string;
+  phone_path?: string;
+  name_path?: string;
+}
+
 export type AutomationTriggerConfig =
   | Record<string, never>
   | KeywordMatchTriggerConfig
   | TagTriggerConfig
   | TimeBasedTriggerConfig
   | InteractiveReplyTriggerConfig
+  | IncomingWebhookTriggerConfig
   | Record<string, unknown>;
 
 export interface SendMessageStepConfig {

@@ -36,7 +36,15 @@ import { WebhookTestDialog } from './webhook-test-dialog';
 import { WebhookLogsDialog } from './webhook-logs-dialog';
 import type { WebhookTrigger } from '@/types';
 
-export function WebhookBotsManager() {
+interface WebhookBotsManagerProps {
+  defaultCreateOpen?: boolean;
+  onResetCreateOpen?: () => void;
+}
+
+export function WebhookBotsManager({
+  defaultCreateOpen,
+  onResetCreateOpen,
+}: WebhookBotsManagerProps = {}) {
   const [triggers, setTriggers] = useState<WebhookTrigger[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -44,6 +52,14 @@ export function WebhookBotsManager() {
   // Dialog states
   const [botDialogOpen, setBotDialogOpen] = useState(false);
   const [selectedBot, setSelectedBot] = useState<WebhookTrigger | null>(null);
+
+  useEffect(() => {
+    if (defaultCreateOpen) {
+      setSelectedBot(null);
+      setBotDialogOpen(true);
+      onResetCreateOpen?.();
+    }
+  }, [defaultCreateOpen, onResetCreateOpen]);
 
   const [testDialogOpen, setTestDialogOpen] = useState(false);
   const [testBot, setTestBot] = useState<WebhookTrigger | null>(null);

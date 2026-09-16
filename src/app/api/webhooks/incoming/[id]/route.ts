@@ -3,7 +3,11 @@ import { supabaseAdmin } from '@/lib/automations/admin-client';
 import {
   processIncomingWebhook,
   IncomingWebhookError,
+  extractValueByPath,
+  safeCompareSecrets,
+  normalizePhone,
 } from '@/lib/webhooks/incoming-trigger';
+import { executeAutomation } from '@/lib/automations/engine';
 
 /**
  * GET /api/webhooks/incoming/[id]
@@ -16,37 +20,68 @@ export async function GET(
   const { id } = await params;
   const admin = supabaseAdmin();
 
+  // Check webhook_triggers table first
   const { data: trigger } = await admin
     .from('webhook_triggers')
     .select('id, name, is_active, template_name, phone_path, created_at')
     .eq('id', id)
     .maybeSingle();
 
-  if (!trigger) {
-    return NextResponse.json(
-      { error: 'Webhook trigger not found' },
-      { status: 404 }
-    );
+  if (trigger) {
+    return NextResponse.json({
+      status: 'online',
+      type: 'webhook_bot',
+      message: 'Send a POST request with JSON payload and secret key to trigger this bot.',
+      trigger: {
+        id: trigger.id,
+        name: trigger.name,
+        is_active: trigger.is_active,
+        template_name: trigger.template_name,
+        expected_phone_path: trigger.phone_path,
+      },
+      authentication: {
+        methods: [
+          'Header: x-webhook-secret: <secret_key>',
+          'Header: Authorization: Bearer <secret_key>',
+          'Query param: ?secret=<secret_key>',
+        ],
+      },
+    });
   }
 
-  return NextResponse.json({
-    status: 'online',
-    message: 'Send a POST request with JSON payload and secret key to trigger this bot.',
-    trigger: {
-      id: trigger.id,
-      name: trigger.name,
-      is_active: trigger.is_active,
-      template_name: trigger.template_name,
-      expected_phone_path: trigger.phone_path,
-    },
-    authentication: {
-      methods: [
-        'Header: x-webhook-secret: <secret_key>',
-        'Header: Authorization: Bearer <secret_key>',
-        'Query param: ?secret=<secret_key>',
-      ],
-    },
-  });
+  // Check automations table
+  const { data: automation } = await admin
+    .from('automations')
+    .select('id, name, is_active, trigger_type, trigger_config, created_at')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (automation && automation.trigger_type === 'incoming_webhook') {
+    const cfg = (automation.trigger_config || {}) as Record<string, any>;
+    return NextResponse.json({
+      status: 'online',
+      type: 'workflow_automation',
+      message: 'Send a POST request with JSON payload and secret key to trigger this automation.',
+      automation: {
+        id: automation.id,
+        name: automation.name,
+        is_active: automation.is_active,
+        expected_phone_path: cfg.phone_path || 'phone',
+      },
+      authentication: {
+        methods: [
+          'Header: x-webhook-secret: <secret_key>',
+          'Header: Authorization: Bearer <secret_key>',
+          'Query param: ?secret=<secret_key>',
+        ],
+      },
+    });
+  }
+
+  return NextResponse.json(
+    { error: 'Webhook trigger not found' },
+    { status: 404 }
+  );
 }
 
 /**
@@ -102,12 +137,133 @@ export async function POST(
 
   // 3. Process the incoming webhook
   try {
-    const result = await processIncomingWebhook(admin, id, payload, providedSecret);
+    const { data: triggerCheck } = await admin
+      .from('webhook_triggers')
+      .select('id')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (triggerCheck) {
+      const result = await processIncomingWebhook(admin, id, payload, providedSecret);
+      return NextResponse.json(
+        {
+          success: true,
+          message: 'WhatsApp template message triggered successfully.',
+          data: result,
+        },
+        { status: 200 }
+      );
+    }
+
+    // Check automations table
+    const { data: automation } = await admin
+      .from('automations')
+      .select('*')
+      .eq('id', id)
+      .eq('trigger_type', 'incoming_webhook')
+      .maybeSingle();
+
+    if (!automation) {
+      return NextResponse.json(
+        {
+          error: 'Webhook trigger or automation not found.',
+          code: 'not_found',
+        },
+        { status: 404 }
+      );
+    }
+
+    if (!automation.is_active) {
+      return NextResponse.json(
+        {
+          error: 'Automation workflow is inactive/paused.',
+          code: 'inactive',
+        },
+        { status: 400 }
+      );
+    }
+
+    const cfg = (automation.trigger_config || {}) as Record<string, any>;
+    if (cfg.secret && !safeCompareSecrets(providedSecret, cfg.secret)) {
+      return NextResponse.json(
+        {
+          error: 'Invalid or missing webhook secret key.',
+          code: 'unauthorized',
+        },
+        { status: 401 }
+      );
+    }
+
+    const phonePath = cfg.phone_path || 'phone';
+    const rawPhone = extractValueByPath(payload, phonePath);
+    if (!rawPhone) {
+      return NextResponse.json(
+        {
+          error: `Recipient phone number not found at path "${phonePath}".`,
+          code: 'missing_phone',
+        },
+        { status: 400 }
+      );
+    }
+
+    let phone = '';
+    try {
+      phone = normalizePhone(String(rawPhone));
+    } catch (e: any) {
+      return NextResponse.json(
+        {
+          error: e.message || 'Invalid phone number format.',
+          code: 'invalid_phone',
+        },
+        { status: 400 }
+      );
+    }
+
+    const namePath = cfg.name_path || 'name';
+    const rawName = extractValueByPath(payload, namePath);
+    const contactName = rawName ? String(rawName).trim() : 'Webhook Lead';
+
+    // Find or create contact
+    let { data: contact } = await admin
+      .from('contacts')
+      .select('id, name')
+      .eq('account_id', automation.account_id)
+      .eq('phone', phone)
+      .maybeSingle();
+
+    if (!contact) {
+      const { data: newContact } = await admin
+        .from('contacts')
+        .insert({
+          account_id: automation.account_id,
+          phone,
+          name: contactName,
+          source: 'incoming_webhook',
+        })
+        .select('id, name')
+        .single();
+      contact = newContact;
+    }
+
+    // Execute automation workflow
+    await executeAutomation(automation as any, {
+      accountId: automation.account_id,
+      triggerType: 'incoming_webhook',
+      contactId: contact?.id ?? null,
+      context: {
+        vars: payload as Record<string, unknown>,
+      },
+    });
+
     return NextResponse.json(
       {
         success: true,
-        message: 'WhatsApp template message triggered successfully.',
-        data: result,
+        message: 'Automation workflow executed successfully via webhook.',
+        data: {
+          automation_id: automation.id,
+          contact_id: contact?.id,
+          phone,
+        },
       },
       { status: 200 }
     );
