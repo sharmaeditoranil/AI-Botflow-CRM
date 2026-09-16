@@ -9,7 +9,6 @@ import { Tag as TagIcon, Plus, X, Check, Loader2, Search } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -268,7 +267,7 @@ export function ContactTagBar({
                 ) : (
                   <Plus className="h-3 w-3" />
                 )}
-                <span className="truncate">Create "{search.trim()}"</span>
+                <span className="truncate">Create &quot;{search.trim()}&quot;</span>
               </button>
             )}
           </div>

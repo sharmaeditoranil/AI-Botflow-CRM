@@ -27,7 +27,6 @@ import {
   ShieldCheck,
   AlertCircle,
   Sparkles,
-  KeyRound,
   RotateCcw,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand/brand-logo";

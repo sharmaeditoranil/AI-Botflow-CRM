@@ -352,7 +352,7 @@ export function TemplateDataMappingDialog({
                                 Contact Field
                               </SelectItem>
                               <SelectItem value="date">
-                                Today's Date
+                                Today&apos;s Date
                               </SelectItem>
                               <SelectItem value="custom_field">
                                 Custom Field

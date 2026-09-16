@@ -29,9 +29,7 @@ import {
   Sparkles,
   AlertCircle,
   Check,
-  Inbox,
   RotateCcw,
-  KeyRound,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand/brand-logo";
 
@@ -154,7 +152,7 @@ function SignupPageInner() {
     setError(null);
     setOtpLoading(true);
 
-    const { data, error } = await supabase.auth.verifyOtp({
+    const { error } = await supabase.auth.verifyOtp({
       email: email.trim(),
       token: otp.trim(),
       type: "signup",

@@ -413,7 +413,7 @@ export function WebhookBotDialog({
                   className="font-mono text-xs"
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  Stores recipient's name in CRM contact record.
+                  Stores recipient&apos;s name in CRM contact record.
                 </p>
               </div>
             </div>

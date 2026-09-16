@@ -10,7 +10,6 @@ import {
   UserPlus,
   DollarSign,
   Send,
-  Sparkles,
   ArrowRight,
 } from 'lucide-react'
 import { BrandLogo } from '@/components/brand/brand-logo'
@@ -48,6 +47,14 @@ export default function DashboardPage() {
   const { defaultCurrency, account } = useAuth()
   const [metrics, setMetrics] = useState<MetricsBundle | null>(null)
   const [metricsLoading, setMetricsLoading] = useState(true)
+  const [daysRemaining, setDaysRemaining] = useState<number | null>(null)
+
+  useEffect(() => {
+    if (account?.trial_ends_at) {
+      const remaining = Math.max(0, Math.ceil((new Date(account.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+      setDaysRemaining(remaining);
+    }
+  }, [account?.trial_ends_at]);
 
   const [range, setRange] = useState<RangeDays>(30)
   // Keep a cache per range so switching tabs doesn't re-fetch what we
@@ -144,9 +151,11 @@ export default function DashboardPage() {
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-sm text-foreground">Free Trial Active</span>
-                <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[11px] font-semibold text-amber-300">
-                  {Math.max(0, Math.ceil((new Date(account.trial_ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))} days remaining
-                </span>
+                {daysRemaining !== null && (
+                  <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[11px] font-semibold text-amber-300">
+                    {daysRemaining} days remaining
+                  </span>
+                )}
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
                 Upgrade your plan to unlock unlimited broadcasts, team seats, and automated AI agents.

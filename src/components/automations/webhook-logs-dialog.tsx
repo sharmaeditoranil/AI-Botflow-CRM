@@ -115,7 +115,7 @@ export function WebhookLogsDialog({
               <div>
                 <p className="text-sm font-medium text-foreground">No webhook hits recorded yet</p>
                 <p className="text-xs text-muted-foreground max-w-sm mt-0.5">
-                  When your website, Shopify, or automation tool POSTs data to this bot's webhook URL, execution records will show up here.
+                  When your website, Shopify, or automation tool POSTs data to this bot&apos;s webhook URL, execution records will show up here.
                 </p>
               </div>
             </div>
