@@ -321,18 +321,18 @@ export function extractTemplateVariables(
         val = extractValueByPath(payload, pathOrStatic) ?? '';
 
         // If not found by direct path, try variations or fallback to name
-        if (!val) {
+        if (!val && fallbackName) {
           const lower = pathOrStatic.toLowerCase().replace(/[\s\-_]/g, '');
           if (lower.includes('name') || lower.includes('customer')) {
-            val = fallbackName || '';
+            val = fallbackName;
           }
         }
       }
     }
 
-    // Meta API requires parameters to be non-empty strings
-    if (!val || val.trim().length === 0) {
-      val = fallbackName || 'Customer';
+    // If fallback name is provided and val is empty, apply it
+    if (fallbackName && (!val || val.trim().length === 0)) {
+      val = fallbackName;
     }
 
     mappedValues[mappingKey] = val;

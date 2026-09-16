@@ -475,7 +475,7 @@ export function useAuth(): AuthContextValue {
       signOut: async () => {
         window.location.href = "/login";
       },
-      refreshProfile: async () => {},
+      refreshProfile: async () => { },
       account: null,
       defaultCurrency: DEFAULT_CURRENCY,
       // Outside the provider there is nothing to resolve yet — 'loading'
