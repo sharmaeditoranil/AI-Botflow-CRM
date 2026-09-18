@@ -22,14 +22,14 @@ export function MobileBottomNav({ onOpenMenu, hideOnActiveChat = false }: Mobile
   const isContacts = pathname?.startsWith("/contacts");
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 flex h-16 items-center justify-around border-t border-border/40 bg-background/95 backdrop-blur-md px-2 lg:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 flex h-16 items-center justify-around border-t border-white/10 bg-[#0c1317]/95 backdrop-blur-md px-2 lg:hidden">
       <Link
         href="/dashboard"
         className={cn(
           "flex flex-1 flex-col items-center justify-center gap-1 py-1 transition-colors",
           isHome
-            ? "text-[#00a884] dark:text-emerald-400 font-semibold"
-            : "text-muted-foreground hover:text-foreground"
+            ? "text-[#00a884] font-semibold"
+            : "text-neutral-400 hover:text-white"
         )}
       >
         <LayoutGrid className={cn("h-5 w-5", isHome && "stroke-[2.5]")} />
@@ -41,8 +41,8 @@ export function MobileBottomNav({ onOpenMenu, hideOnActiveChat = false }: Mobile
         className={cn(
           "flex flex-1 flex-col items-center justify-center gap-1 py-1 transition-colors",
           isInbox
-            ? "text-[#00a884] dark:text-emerald-400 font-semibold"
-            : "text-muted-foreground hover:text-foreground"
+            ? "text-[#00a884] font-semibold"
+            : "text-neutral-400 hover:text-white"
         )}
       >
         <MessageSquare className={cn("h-5 w-5", isInbox && "stroke-[2.5]")} />
@@ -54,8 +54,8 @@ export function MobileBottomNav({ onOpenMenu, hideOnActiveChat = false }: Mobile
         className={cn(
           "flex flex-1 flex-col items-center justify-center gap-1 py-1 transition-colors",
           isContacts
-            ? "text-[#00a884] dark:text-emerald-400 font-semibold"
-            : "text-muted-foreground hover:text-foreground"
+            ? "text-[#00a884] font-semibold"
+            : "text-neutral-400 hover:text-white"
         )}
       >
         <Users className={cn("h-5 w-5", isContacts && "stroke-[2.5]")} />
@@ -65,7 +65,7 @@ export function MobileBottomNav({ onOpenMenu, hideOnActiveChat = false }: Mobile
       <button
         type="button"
         onClick={onOpenMenu}
-        className="flex flex-1 flex-col items-center justify-center gap-1 py-1 text-muted-foreground transition-colors hover:text-foreground"
+        className="flex flex-1 flex-col items-center justify-center gap-1 py-1 text-neutral-400 transition-colors hover:text-white"
       >
         <MoreHorizontal className="h-5 w-5" />
         <span className="text-[11px]">Menu</span>

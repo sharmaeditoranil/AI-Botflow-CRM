@@ -10,8 +10,8 @@ import {
 } from "@/lib/inbox/conversations";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
-import type { Conversation, ConversationStatus, Tag } from "@/types";
-import { Search, ChevronDown, X, ListFilter, UserPlus } from "lucide-react";
+import type { Conversation, ConversationStatus, Tag, Contact } from "@/types";
+import { Search, ChevronDown, X, SlidersHorizontal, ListFilter, UserPlus } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
@@ -42,13 +42,13 @@ type InboxFilter = ConversationStatus | "all" | "unread";
 type TabFilter = "all" | "unread" | "mine";
 
 const AVATAR_COLORS = [
-  "bg-emerald-700 text-emerald-100",
-  "bg-teal-700 text-teal-100",
-  "bg-blue-700 text-blue-100",
-  "bg-indigo-700 text-indigo-100",
-  "bg-amber-700 text-amber-100",
-  "bg-rose-700 text-rose-100",
-  "bg-purple-700 text-purple-100",
+  "bg-[#0e3b33] text-[#2dd4bf]", // PN: Dark teal
+  "bg-[#451a03] text-[#f59e0b]", // KT: Dark amber
+  "bg-[#172554] text-[#60a5fa]", // RS: Dark blue
+  "bg-[#4c0519] text-[#fb7185]", // MI: Dark rose
+  "bg-[#1e293b] text-[#94a3b8]", // VG: Dark slate
+  "bg-[#3b0764] text-[#c084fc]", // Dark purple
+  "bg-[#14532d] text-[#4ade80]", // Dark emerald
 ];
 
 function getAvatarColor(name: string) {
@@ -275,10 +275,10 @@ export function ConversationList({
   );
 
   return (
-    <div className="relative flex h-full w-full flex-col bg-card lg:w-80 lg:border-r lg:border-border overflow-hidden">
+    <div className="relative flex h-full w-full flex-col bg-[#0b141a] bg-[url('/inbox-doodle.svg')] bg-repeat text-white lg:bg-card lg:text-foreground lg:bg-none lg:w-80 lg:border-r lg:border-border overflow-hidden">
       {/* Top Header - Sticky so it never scrolls away */}
-      <div className="sticky top-0 z-10 bg-card flex items-center justify-between px-4 pt-4 pb-2 shrink-0">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Inbox</h1>
+      <div className="sticky top-0 z-10 bg-[#0b141a]/95 backdrop-blur-md lg:bg-card flex items-center justify-between px-4 pt-4 pb-2 shrink-0">
+        <h1 className="text-2xl font-bold tracking-tight text-white lg:text-foreground">Inbox</h1>
         <div className="flex items-center gap-2">
           {/* Search Button */}
           <button
@@ -292,29 +292,29 @@ export function ConversationList({
             }}
             aria-label="Search"
             className={cn(
-              "flex h-10 w-10 items-center justify-center rounded-xl border border-border/40 bg-muted/60 hover:bg-muted text-foreground transition-colors shadow-xs",
+              "flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-[#1c2327] hover:bg-[#252f36] text-neutral-200 lg:border-border/40 lg:bg-muted/60 lg:hover:bg-muted lg:text-foreground transition-colors shadow-xs",
               showSearch || search
-                ? "border-emerald-500/60 bg-emerald-950/20 text-[#00a884] dark:text-emerald-400"
-                : "text-foreground"
+                ? "border-emerald-500/60 bg-emerald-950/40 text-[#00a884] dark:text-emerald-400"
+                : ""
             )}
           >
-            <Search className="h-4 w-4" />
+            <Search className="h-5 w-5" />
           </button>
 
           {/* Filter Button */}
           <DropdownMenu>
             <DropdownMenuTrigger
               className={cn(
-                "relative flex h-10 w-10 items-center justify-center rounded-xl border border-border/40 bg-muted/60 hover:bg-muted text-foreground transition-colors shadow-xs",
+                "relative flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-[#1c2327] hover:bg-[#252f36] text-neutral-200 lg:border-border/40 lg:bg-muted/60 lg:hover:bg-muted lg:text-foreground transition-colors shadow-xs",
                 hasContactFilters || filter !== "all"
-                  ? "border-emerald-500/60 bg-emerald-950/20 text-[#00a884] dark:text-emerald-400"
-                  : "text-foreground"
+                  ? "border-emerald-500/60 bg-emerald-950/40 text-[#00a884] dark:text-emerald-400"
+                  : ""
               )}
               aria-label="Filter"
             >
-              <ListFilter className="h-4 w-4" />
+              <SlidersHorizontal className="h-5 w-5" />
               {(hasContactFilters || filter !== "all") && (
-                <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-[#00a884] ring-2 ring-card" />
+                <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-[#00a884] ring-2 ring-[#0b141a] lg:ring-card" />
               )}
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 border-border bg-popover shadow-lg">
@@ -425,7 +425,7 @@ export function ConversationList({
         </div>
       )}
 
-      {/* Filter Pills Row - Exact match to Screenshot 2 */}
+      {/* Filter Pills Row - Exact match to Screenshot */}
       <div className="flex items-center gap-2 overflow-x-auto px-4 py-2 no-scrollbar shrink-0">
         {/* All · 24 */}
         <button
@@ -435,10 +435,10 @@ export function ConversationList({
             setFilter("all");
           }}
           className={cn(
-            "inline-flex items-center shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all",
+            "inline-flex items-center shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition-all",
             tabFilter === "all" && filter === "all"
               ? "bg-[#00a884] text-white shadow-xs font-bold"
-              : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+              : "border border-white/10 bg-[#1c2327] text-neutral-300 hover:bg-[#252f36] lg:border-border/40 lg:bg-muted/70 lg:text-muted-foreground"
           )}
         >
           <span>All</span>
@@ -446,21 +446,21 @@ export function ConversationList({
           <span>{conversations.length}</span>
         </button>
 
-        {/* Multi-Channel Dots Dropdown: 🟢🔵🟣 ▾ */}
+        {/* Multi-Channel Dots Dropdown: 🟢🔴🔵 ▾ */}
         <DropdownMenu>
           <DropdownMenuTrigger
             className={cn(
               "inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-all border",
               platformFilter !== "all"
-                ? "border-[#00a884]/40 bg-[#00a884]/15 text-[#00a884] dark:text-emerald-400 font-bold"
-                : "border-border/40 bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+                ? "border-[#00a884]/40 bg-[#00a884]/20 text-[#00a884] dark:text-emerald-400 font-bold"
+                : "border-white/10 bg-[#1c2327] text-neutral-300 hover:bg-[#252f36] lg:border-border/40 lg:bg-muted/70 lg:text-muted-foreground"
             )}
           >
             {platformFilter === "all" ? (
               <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-[#25D366]" />
-                <span className="h-2 w-2 rounded-full bg-[#0084FF]" />
-                <span className="h-2 w-2 rounded-full bg-gradient-to-tr from-[#f09433] via-[#dc2743] to-[#bc1888]" />
+                <span className="h-2.5 w-2.5 rounded-full bg-[#25D366]" />
+                <span className="h-2.5 w-2.5 rounded-full bg-gradient-to-tr from-[#f09433] via-[#dc2743] to-[#bc1888]" />
+                <span className="h-2.5 w-2.5 rounded-full bg-[#0084FF]" />
               </span>
             ) : platformFilter === "whatsapp" ? (
               <span className="flex items-center gap-1 text-[#25D366]">
@@ -549,10 +549,10 @@ export function ConversationList({
             setTabFilter(tabFilter === "unread" ? "all" : "unread");
           }}
           className={cn(
-            "inline-flex items-center shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all",
+            "inline-flex items-center shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition-all",
             tabFilter === "unread"
               ? "bg-[#00a884] text-white shadow-xs font-bold"
-              : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+              : "border border-white/10 bg-[#1c2327] text-neutral-300 hover:bg-[#252f36] lg:border-border/40 lg:bg-muted/70 lg:text-muted-foreground"
           )}
         >
           <span>Unread</span>
@@ -567,10 +567,10 @@ export function ConversationList({
             setTabFilter(tabFilter === "mine" ? "all" : "mine");
           }}
           className={cn(
-            "inline-flex items-center shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold transition-all",
+            "inline-flex items-center shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition-all",
             tabFilter === "mine"
               ? "bg-[#00a884] text-white shadow-xs font-bold"
-              : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+              : "border border-white/10 bg-[#1c2327] text-neutral-300 hover:bg-[#252f36] lg:border-border/40 lg:bg-muted/70 lg:text-muted-foreground"
           )}
         >
           <span>Mine</span>
@@ -617,41 +617,39 @@ export function ConversationList({
       )}
 
       {/* Conversation Items List with native touch scrolling */}
-      <div className="min-h-0 flex-1 overflow-y-auto [-webkit-overflow-scrolling:touch] [overscroll-behavior-y:none] [touch-action:pan-y]">
-        <div className="pb-24 lg:pb-4">
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#00a884] border-t-transparent" />
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="px-4 py-12 text-center">
-              <p className="text-sm text-muted-foreground">{t("noConversations")}</p>
-            </div>
-          ) : (
-            <div className="flex flex-col">
-              {filtered.map((conv) => (
-                <ConversationItem
-                  key={conv.id}
-                  conversation={conv}
-                  isActive={conv.id === activeConversationId}
-                  onSelect={handleSelect}
-                  t={t}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+      <div className="min-h-0 flex-1 overflow-y-auto [-webkit-overflow-scrolling:touch] [overscroll-behavior-y:none] [touch-action:pan-y] pb-24">
+        {filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+            <p className="text-sm font-medium text-neutral-400">
+              {search ? t("noMatchingConversations") : t("noConversations")}
+            </p>
+            <p className="mt-1 text-xs text-neutral-500">
+              {search ? t("tryDifferentSearch") : t("conversationsWillAppear")}
+            </p>
+          </div>
+        ) : (
+          filtered.map((conv) => (
+            <ConversationItem
+              key={conv.id}
+              conversation={conv}
+              contact={conv.contact}
+              isActive={conv.id === activeConversationId}
+              onSelect={handleSelect}
+              t={t}
+            />
+          ))
+        )}
       </div>
 
-      {/* Floating Action Button (FAB) - Compact Subscriber Add button */}
+      {/* Floating Action Button (FAB) - WhatsApp New Chat Button */}
       <button
         type="button"
         onClick={() => router.push("/contacts")}
-        className="fixed bottom-20 right-4 z-30 flex h-11 w-11 items-center justify-center rounded-full bg-[#00a884] text-white shadow-lg hover:bg-[#008f6f] active:scale-95 transition-all lg:hidden"
-        aria-label="Add Subscriber"
-        title="Add Subscriber / New Chat"
+        className="fixed bottom-20 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[#00a884] text-white shadow-2xl hover:bg-[#02906f] active:scale-95 transition-all lg:hidden"
+        aria-label="New WhatsApp Chat"
+        title="Start New Chat"
       >
-        <UserPlus className="h-5 w-5" />
+        <WhatsAppIcon className="h-7 w-7 fill-current" />
       </button>
     </div>
   );
@@ -659,25 +657,32 @@ export function ConversationList({
 
 interface ConversationItemProps {
   conversation: Conversation;
+  contact?: Contact | null;
   isActive: boolean;
   onSelect: (conversation: Conversation) => void;
-  t: ReturnType<typeof useTranslations>;
+  t: (key: string) => string;
 }
 
 function ConversationItem({
   conversation,
+  contact,
   isActive,
   onSelect,
   t,
 }: ConversationItemProps) {
-  const contact = conversation.contact;
-  const displayName = contact?.name || contact?.phone || t("unknown");
-  const initials = (contact?.name || displayName)
-    .split(" ")
-    .map((p) => p[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase() || "WA";
+  const displayName =
+    contact?.name ||
+    contact?.phone ||
+    (conversation as unknown as { contact_phone?: string; phone_number?: string }).contact_phone ||
+    (conversation as unknown as { contact_phone?: string; phone_number?: string }).phone_number ||
+    t("unknownContact");
+  const initials =
+    displayName
+      .split(" ")
+      .map((w: string) => w[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "WA";
   const channel = conversation.channel || "whatsapp";
 
   const handleClick = useCallback(() => {
@@ -694,17 +699,17 @@ function ConversationItem({
     <button
       onClick={handleClick}
       className={cn(
-        "flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors border-b border-border/20 relative",
+        "flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors border-b border-white/[0.06] lg:border-border/20 relative group",
         isActive
-          ? "bg-muted/70 border-l-2 border-[#00a884]"
-          : "hover:bg-muted/40"
+          ? "bg-white/[0.08] lg:border-l-2 lg:border-[#00a884]"
+          : "hover:bg-white/[0.04] active:bg-white/[0.08]"
       )}
     >
       {/* Avatar with Channel Badge */}
       <div className="relative shrink-0">
         <div
           className={cn(
-            "flex h-12 w-12 items-center justify-center rounded-full font-bold text-sm shadow-xs",
+            "flex h-12 w-12 items-center justify-center rounded-full font-bold text-sm tracking-wide shadow-xs",
             contact?.avatar_url ? "bg-muted" : avatarBg
           )}
         >
@@ -721,7 +726,7 @@ function ConversationItem({
         {/* Overlapping channel badge at bottom right of avatar */}
         <span
           className={cn(
-            "absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full ring-2 ring-card shadow-xs text-white",
+            "absolute -bottom-0.5 -right-0.5 flex h-4.5 w-4.5 items-center justify-center rounded-full ring-2 ring-[#0b141a] lg:ring-card shadow-xs text-white",
             channel === "facebook"
               ? "bg-[#0084FF]"
               : channel === "instagram"
@@ -742,38 +747,44 @@ function ConversationItem({
       {/* Center text content: Name and Preview */}
       <div className="min-w-0 flex-1 overflow-hidden py-0.5">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="truncate font-bold text-[15px] text-foreground tracking-tight">
+          <span className="truncate font-bold text-[15px] text-white lg:text-foreground tracking-tight">
             {displayName}
           </span>
           <span
             className={cn(
               "inline-flex shrink-0 items-center rounded px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider",
               channel === "facebook"
-                ? "bg-blue-500/15 text-[#0084FF]"
+                ? "bg-blue-950/80 text-[#60a5fa] border border-blue-800/40"
                 : channel === "instagram"
-                ? "bg-pink-500/15 text-pink-400"
-                : "bg-emerald-500/15 text-[#00a884] dark:text-emerald-400"
+                ? "bg-pink-950/80 text-[#f472b6] border border-pink-800/40"
+                : "bg-emerald-950/80 text-[#34d399] border border-emerald-800/40"
             )}
           >
             {channel === "facebook" ? "FB" : channel === "instagram" ? "IG" : "WA"}
           </span>
         </div>
-        <p className="truncate text-xs text-muted-foreground font-normal leading-relaxed mt-1">
+        <p className="truncate text-[13px] text-neutral-400 font-normal leading-relaxed mt-0.5">
           {previewText}
         </p>
       </div>
 
-      {/* Far Right Column (last me): Time on top, Message Count / Unread Badge on bottom */}
+      {/* Far Right Column: Time on top, Unread Badge on bottom */}
       <div className="flex flex-col items-end justify-between shrink-0 self-stretch py-0.5 ml-2">
-        <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap">
+        <span className="text-xs text-neutral-400 whitespace-nowrap">
           {timeDisplay}
         </span>
         {unreadCount > 0 ? (
-          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#00a884] px-1.5 text-[11px] font-bold text-white shadow-xs" title={`${unreadCount} unread messages`}>
+          <span
+            className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#00a884] px-1.5 text-[11px] font-bold text-[#0b141a] shadow-xs"
+            title={`${unreadCount} unread messages`}
+          >
             {unreadCount}
           </span>
         ) : totalCount > 0 ? (
-          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-muted/80 border border-border/40 px-1.5 text-[11px] font-medium text-muted-foreground shadow-xs" title={`${totalCount} messages`}>
+          <span
+            className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/10 border border-white/10 px-1.5 text-[11px] font-medium text-neutral-400 shadow-xs"
+            title={`${totalCount} messages`}
+          >
             {totalCount}
           </span>
         ) : (
