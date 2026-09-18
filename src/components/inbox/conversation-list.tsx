@@ -90,7 +90,14 @@ export function ConversationList({
   ], [t]);
 
   const [search, setSearch] = useState("");
-  const [showSearch, setShowSearch] = useState(false);
+  // Persist showSearch across resync cycles so the search bar doesn't
+  // disappear when conversations are re-fetched (which remounts state).
+  const [showSearch, setShowSearch] = useState(() => {
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem("inbox:showSearch") === "true";
+    }
+    return false;
+  });
   const [tabFilter, setTabFilter] = useState<TabFilter>("all");
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>("all");
@@ -269,14 +276,20 @@ export function ConversationList({
 
   return (
     <div className="relative flex h-full w-full flex-col bg-card lg:w-80 lg:border-r lg:border-border overflow-hidden">
-      {/* Top Header - Exact match to Screenshot 2 */}
-      <div className="flex items-center justify-between px-4 pt-4 pb-2 shrink-0">
+      {/* Top Header - Sticky so it never scrolls away */}
+      <div className="sticky top-0 z-10 bg-card flex items-center justify-between px-4 pt-4 pb-2 shrink-0">
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Inbox</h1>
         <div className="flex items-center gap-2">
           {/* Search Button */}
           <button
             type="button"
-            onClick={() => setShowSearch((prev) => !prev)}
+            onClick={() => {
+              setShowSearch((prev) => {
+                const next = !prev;
+                try { sessionStorage.setItem("inbox:showSearch", String(next)); } catch {}
+                return next;
+              });
+            }}
             aria-label="Search"
             className={cn(
               "flex h-10 w-10 items-center justify-center rounded-xl border border-border/40 bg-muted/60 hover:bg-muted text-foreground transition-colors shadow-xs",
@@ -604,7 +617,7 @@ export function ConversationList({
       )}
 
       {/* Conversation Items List with native touch scrolling */}
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain [touch-action:pan-y] [-webkit-overflow-scrolling:touch]">
+      <div className="min-h-0 flex-1 overflow-y-auto [-webkit-overflow-scrolling:touch] [overscroll-behavior-y:none] [touch-action:pan-y]">
         <div className="pb-24 lg:pb-4">
           {loading ? (
             <div className="flex items-center justify-center py-12">

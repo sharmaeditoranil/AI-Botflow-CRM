@@ -18,6 +18,7 @@ import { WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDashboardShell } from "../dashboard-shell";
 import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
+import { triggerMobileNotification, playMobileNotificationSound } from "@/lib/mobile-notify";
 
 // Remembers the agent's show/hide choice for the desktop contact panel
 // across reloads and sessions (device-scoped, like the theme prefs).
@@ -237,6 +238,27 @@ function InboxPageInner() {
           });
         }
 
+        // Trigger notification sound + push notification for inbound messages
+        // Only for messages NOT sent by the agent (direction === 'inbound' or sender_type !== 'agent')
+        const isInbound =
+          (newMsg as unknown as { direction?: string }).direction === "inbound" ||
+          (newMsg as unknown as { sender_type?: string }).sender_type !== "agent";
+        if (isInbound) {
+          // Play sound immediately
+          playMobileNotificationSound();
+          // Show push notification when app is not the focused conversation
+          const isCurrentConv = activeConversation?.id === newMsg.conversation_id;
+          if (!isCurrentConv || document.visibilityState !== "visible") {
+            // Find contact name for the conversation
+            const conv = conversations.find(c => c.id === newMsg.conversation_id);
+            const contactName = conv?.contact?.name || conv?.contact?.phone || "New message";
+            triggerMobileNotification({
+              title: contactName,
+              body: newMsg.content_text || "New message received",
+            });
+          }
+        }
+
         // Update conversation list preview. We need to know *synchronously*
         // whether the conv is already in state to decide between patching
         // the preview and triggering a hydrate — see the comment on
@@ -275,7 +297,7 @@ function InboxPageInner() {
         );
       }
     },
-    [activeConversation, hydrateConversation]
+    [activeConversation, hydrateConversation, conversations]
   );
 
   // Handle realtime conversation events

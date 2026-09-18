@@ -3,18 +3,28 @@ package `in`.aibotflow.crm
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.DownloadManager
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.MediaPlayer
+import android.media.RingtoneManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
+import android.view.MotionEvent
 import android.view.View
 import android.webkit.CookieManager
 import android.webkit.DownloadListener
+import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -27,6 +37,7 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import `in`.aibotflow.crm.R
 import `in`.aibotflow.crm.databinding.ActivityMainBinding
@@ -39,6 +50,103 @@ class MainActivity : AppCompatActivity() {
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private var pendingPermissionRequest: PermissionRequest? = null
 
+    // Notification channel ID
+    private val NOTIF_CHANNEL_ID = "aibotflow_messages"
+    private val NOTIF_CHANNEL_NAME = "Message Notifications"
+    private var notifIdCounter = 1000
+
+    // Pull-to-refresh prevention: track touch start Y
+    private var touchStartY = 0f
+    private var isPullToRefreshGesture = false
+
+    // JavaScript bridge exposed to web app for native notifications & sound
+    inner class AndroidBridge {
+        @JavascriptInterface
+        fun showNotification(title: String, body: String) {
+            Handler(Looper.getMainLooper()).post {
+                showNativeNotification(title, body)
+            }
+        }
+
+        @JavascriptInterface
+        fun playNotificationSound() {
+            Handler(Looper.getMainLooper()).post {
+                playMsgSound()
+            }
+        }
+
+        @JavascriptInterface
+        fun isAndroid(): Boolean = true
+    }
+
+    private fun playMsgSound() {
+        try {
+            val notification = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            val mp = MediaPlayer()
+            mp.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+            )
+            mp.setDataSource(applicationContext, notification)
+            mp.prepare()
+            mp.setOnCompletionListener { it.release() }
+            mp.start()
+        } catch (e: Exception) {
+            // fallback: ringtone
+            try {
+                val ringtone = RingtoneManager.getRingtone(
+                    applicationContext,
+                    RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                )
+                ringtone?.play()
+            } catch (ex: Exception) {
+                // ignore
+            }
+        }
+    }
+
+    private fun showNativeNotification(title: String, body: String) {
+        val notifManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                NOTIF_CHANNEL_ID,
+                NOTIF_CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "New message notifications from AI Botflow CRM"
+                enableLights(true)
+                enableVibration(true)
+            }
+            notifManager.createNotificationChannel(channel)
+        }
+
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notif = NotificationCompat.Builder(this, NOTIF_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_email)
+            .setContentTitle(title)
+            .setContentText(body)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .setDefaults(NotificationCompat.DEFAULT_SOUND or NotificationCompat.DEFAULT_VIBRATE)
+            .build()
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+            == PackageManager.PERMISSION_GRANTED) {
+            notifManager.notify(notifIdCounter++, notif)
+        }
+    }
     // Activity result launcher for file picker (images, audio, docs)
     private val filePickerLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -92,14 +200,29 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Create notification channel early
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val notifManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            val channel = NotificationChannel(
+                NOTIF_CHANNEL_ID,
+                NOTIF_CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "New message notifications from AI Botflow CRM"
+                enableVibration(true)
+            }
+            notifManager.createNotificationChannel(channel)
+        }
+
         setupWebView()
+        setupTouchScrollFix()
         setupBackNavigation()
         setupRetryButton()
 
         loadUrl(appUrl)
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
+    @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     private fun setupWebView() {
         val settings = binding.webView.settings
         settings.javaScriptEnabled = true
@@ -127,6 +250,9 @@ class MainActivity : AppCompatActivity() {
         binding.webView.isHorizontalScrollBarEnabled = false
         binding.webView.overScrollMode = View.OVER_SCROLL_NEVER
         binding.webView.isNestedScrollingEnabled = true
+
+        // Expose native bridge to JavaScript
+        binding.webView.addJavascriptInterface(AndroidBridge(), "AndroidBridge")
 
         binding.webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
@@ -247,6 +373,49 @@ class MainActivity : AppCompatActivity() {
                 startActivity(intent)
             }
         })
+    }
+
+    /**
+     * Intercepts touch events on the WebView to prevent the Android
+     * pull-to-refresh / overscroll gesture from firing a page reload.
+     *
+     * Strategy:
+     *  - On ACTION_DOWN, record the Y position.
+     *  - On ACTION_MOVE, if the finger moved DOWN (positive dy) AND the
+     *    web page's scroll position is already at the top (scrollY == 0),
+     *    cancel the touch sequence by returning true (consumed). This is
+     *    the exact gesture that triggers Android's pull-to-refresh.
+     *  - For all other gestures (scroll down, scroll up from below top)
+     *    we return false so the WebView handles them normally.
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupTouchScrollFix() {
+        binding.webView.setOnTouchListener { v, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    touchStartY = event.rawY
+                    isPullToRefreshGesture = false
+                    false  // don't consume — let WebView see the down event
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dy = event.rawY - touchStartY
+                    // Check if page is at the very top via JS evaluation would be async,
+                    // so we instead rely on WebView.getScrollY() which is synchronous
+                    val atTop = v.scrollY == 0
+                    if (dy > 8f && atTop && !isPullToRefreshGesture) {
+                        // Finger moving DOWN at scroll-top = pull-to-refresh gesture
+                        // Cancel it by returning true (consume the event)
+                        isPullToRefreshGesture = true
+                    }
+                    if (isPullToRefreshGesture) true else false
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    isPullToRefreshGesture = false
+                    false
+                }
+                else -> false
+            }
+        }
     }
 
 

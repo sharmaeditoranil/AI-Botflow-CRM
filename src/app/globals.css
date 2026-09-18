@@ -224,12 +224,28 @@ html[data-theme="rose"] {
   html,
   body {
     @apply bg-background text-foreground;
+    /* height:100% + overflow:hidden at root level blocks WebView from
+       detecting touch-pan gestures — pages flex to fill height and
+       manage their own overflow containers instead. */
     height: 100%;
+    width: 100%;
     overflow: hidden;
+    /* Prevent pull-to-refresh / bounce scroll at the document level.
+       Individual scroll containers below use overscroll-y-contain. */
     overscroll-behavior: none;
+    overscroll-behavior-y: none;
     -webkit-overflow-scrolling: touch;
+    /* Disable system pull-to-refresh gesture on Android WebView */
+    touch-action: pan-x pan-y;
   }
   html {
     @apply font-sans;
+  }
+  /* Utility: smoothly scrollable containers inside WebView */
+  .mobile-scroll {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y;
   }
 }
