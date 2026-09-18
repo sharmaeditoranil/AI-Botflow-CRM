@@ -62,17 +62,17 @@ function StatusIcon({
 }) {
   switch (status) {
     case "sending":
-      return <Clock className="h-3 w-3 text-muted-foreground" />;
+      return <Clock className="h-3 w-3 text-emerald-200/70" />;
     case "sent":
-      return <Check className="h-3 w-3 text-muted-foreground" />;
+      return <Check className="h-3.5 w-3.5 text-emerald-200/70" />;
     case "delivered":
-      return <CheckCheck className="h-3 w-3 text-muted-foreground" />;
+      return <CheckCheck className="h-3.5 w-3.5 text-emerald-200/70" />;
     case "read":
-      return <CheckCheck className="h-3 w-3 text-blue-400" />;
+      return <CheckCheck className="h-3.5 w-3.5 text-[#53bdeb]" />;
     case "failed":
       return (
         <span className="inline-flex" title={title ?? undefined}>
-          <XCircle className="h-3 w-3 text-red-400" />
+          <XCircle className="h-3.5 w-3.5 text-rose-400" />
         </span>
       );
     default:
@@ -263,10 +263,10 @@ export function MessageBubble({
     >
       <div
         className={cn(
-          "relative rounded-2xl px-3 py-2",
+          "relative rounded-2xl px-3.5 py-2 shadow-xs transition-shadow max-w-[85%] sm:max-w-[75%]",
           isAgent
-            ? "rounded-br-md bg-primary text-primary-foreground"
-            : "rounded-bl-md bg-muted text-foreground",
+            ? "rounded-tr-xs bg-[#005c4b] text-white"
+            : "rounded-tl-xs bg-[#202c33] text-white",
         )}
       >
         {reply && (
@@ -294,7 +294,7 @@ export function MessageBubble({
               glance. */}
           {message.ai_generated && (
             <span
-              className="inline-flex items-center gap-0.5 rounded-full bg-primary-foreground/20 px-1.5 py-px text-[9px] font-semibold uppercase leading-none tracking-wide text-primary-foreground"
+              className="inline-flex items-center gap-0.5 rounded-full bg-white/20 px-1.5 py-px text-[9px] font-semibold uppercase leading-none tracking-wide text-white"
               title={t("aiBadgeTitle")}
             >
               <Sparkles className="h-2.5 w-2.5" />
@@ -304,11 +304,7 @@ export function MessageBubble({
           <span
             className={cn(
               "text-[10px]",
-              // Outbound bubbles sit on the primary fill, so the
-              // timestamp must read against that (not the neutral
-              // foreground) — otherwise it goes low-contrast in light
-              // mode. Inbound bubbles use the muted surface.
-              isAgent ? "text-primary-foreground/70" : "text-muted-foreground",
+              isAgent ? "text-emerald-100/75" : "text-[#8696a0]",
             )}
           >
             {time}

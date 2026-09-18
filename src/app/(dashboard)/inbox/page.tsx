@@ -16,6 +16,8 @@ import { ContactSidebar } from "@/components/inbox/contact-sidebar";
 import { toast } from "sonner";
 import { WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useDashboardShell } from "../dashboard-shell";
+import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 
 // Remembers the agent's show/hide choice for the desktop contact panel
 // across reloads and sessions (device-scoped, like the theme prefs).
@@ -35,6 +37,7 @@ export default function InboxPage() {
 function InboxPageInner() {
   const t = useTranslations("Inbox.page");
   const router = useRouter();
+  const { openSidebar } = useDashboardShell();
   const searchParams = useSearchParams();
   /**
    * `?c=<id>` deep-link support. Used when landing here from the
@@ -674,6 +677,9 @@ function InboxPageInner() {
           </div>
         )}
       </div>
+
+      {/* Render Mobile Bottom Navigation only when viewing conversation list on mobile */}
+      {!hasActiveConv && <MobileBottomNav onOpenMenu={openSidebar} />}
     </div>
   );
 }

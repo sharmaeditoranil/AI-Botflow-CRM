@@ -631,10 +631,23 @@ export function MessageComposer({
           </Button>
         </div>
       ) : (
-        <div className="flex flex-col gap-1.5 sm:gap-2">
-          {/* Mobile action bar: sits above the input so textarea has full width on small screens */}
-          <div className="flex items-center gap-1 sm:hidden px-0.5">
-            {/* Attach menu */}
+        <div className="flex flex-col">
+          {/* AI Suggested reply pill - Screenshot 1 */}
+          <div className="flex items-center justify-start pb-2">
+            <button
+              type="button"
+              onClick={handleDraft}
+              disabled={drafting || readOnly}
+              className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-950/40 px-3.5 py-1 text-xs font-medium text-emerald-400 hover:bg-emerald-900/50 transition-colors shadow-xs"
+            >
+              <Sparkles className={cn("h-3.5 w-3.5 text-emerald-400", drafting && "animate-spin")} />
+              <span>✦ AI suggested a reply — tap to review</span>
+            </button>
+          </div>
+
+          {/* WhatsApp style composer row - Screenshot 1 */}
+          <div className="flex items-center gap-2">
+            {/* Paperclip circular button */}
             <DropdownMenu>
               <DropdownMenuTrigger
                 disabled={inputsDisabled || busy}
@@ -645,7 +658,7 @@ export function MessageComposer({
                       ? undefined
                       : t("attachMedia")
                 }
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg p-0 text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/70 hover:bg-muted text-foreground transition-colors shadow-xs disabled:opacity-50"
               >
                 {busy ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -653,7 +666,7 @@ export function MessageComposer({
                   <Paperclip className="h-4 w-4" />
                 )}
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="border-border bg-popover shadow-md">
+              <DropdownMenuContent align="start" className="w-52 border-border bg-popover shadow-md">
                 <DropdownMenuItem onClick={() => imageInputRef.current?.click()}>
                   <ImageIcon className="mr-2 h-4 w-4 text-emerald-400" />
                   {t("photo")}
@@ -670,25 +683,7 @@ export function MessageComposer({
                   <Mic className="mr-2 h-4 w-4 text-rose-400" />
                   {t("voiceNote")}
                 </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* + menu */}
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                disabled={inputsDisabled}
-                title={
-                  readOnly
-                    ? t("readOnlyTitle")
-                    : inputsDisabled
-                      ? undefined
-                      : t("moreActions")
-                }
-                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg p-0 text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Plus className="h-4 w-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="border-border bg-popover shadow-md">
+                <DropdownMenuSeparator className="bg-border" />
                 <DropdownMenuItem onClick={() => openInteractiveBuilder()}>
                   <MessageSquareDashed className="mr-2 h-4 w-4 text-primary" />
                   {t("interactiveMessage")}
@@ -697,139 +692,14 @@ export function MessageComposer({
                   <Zap className="mr-2 h-4 w-4 text-amber-400" />
                   {t("quickReplies")}
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={onOpenTemplates}>
+                  <LayoutTemplate className="mr-2 h-4 w-4 text-purple-400" />
+                  {t("sendTemplate")}
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <GatedButton
-              variant="ghost"
-              size="sm"
-              canAct={!readOnly}
-              gateReason="send messages"
-              title={readOnly ? undefined : t("sendTemplate")}
-              className="h-8 w-8 shrink-0 p-0 text-muted-foreground hover:bg-muted hover:text-foreground"
-              onClick={onOpenTemplates}
-            >
-              <LayoutTemplate className="h-4 w-4" />
-            </GatedButton>
-
-            <GatedButton
-              variant="ghost"
-              size="sm"
-              canAct={!readOnly}
-              gateReason="send messages"
-              disabled={drafting}
-              title={readOnly ? undefined : t("draftWithAI")}
-              className="h-8 w-8 shrink-0 p-0 text-muted-foreground hover:bg-primary/10 hover:text-primary"
-              onClick={handleDraft}
-            >
-              {drafting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4" />
-              )}
-            </GatedButton>
-          </div>
-
-          {/* Main Input & Send Row */}
-          <div className="flex items-end gap-2">
-            {/* Desktop action bar: inline with textarea on sm+ screens */}
-            <div className="hidden sm:flex items-center gap-1 shrink-0">
-              {/* Attach menu */}
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  disabled={inputsDisabled || busy}
-                  title={
-                    readOnly
-                      ? t("readOnlyTitle")
-                      : inputsDisabled
-                        ? undefined
-                        : t("attachMedia")
-                  }
-                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md p-0 text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {busy ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Paperclip className="h-4 w-4" />
-                  )}
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="border-border bg-popover shadow-md">
-                  <DropdownMenuItem onClick={() => imageInputRef.current?.click()}>
-                    <ImageIcon className="mr-2 h-4 w-4 text-emerald-400" />
-                    {t("photo")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => videoInputRef.current?.click()}>
-                    <Video className="mr-2 h-4 w-4 text-blue-400" />
-                    {t("video")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => documentInputRef.current?.click()}>
-                    <FileText className="mr-2 h-4 w-4 text-amber-400" />
-                    {t("document")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => void startRecording()}>
-                    <Mic className="mr-2 h-4 w-4 text-rose-400" />
-                    {t("voiceNote")}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              {/* + menu */}
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  disabled={inputsDisabled}
-                  title={
-                    readOnly
-                      ? t("readOnlyTitle")
-                      : inputsDisabled
-                        ? undefined
-                        : t("moreActions")
-                  }
-                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md p-0 text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <Plus className="h-4 w-4" />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="border-border bg-popover shadow-md">
-                  <DropdownMenuItem onClick={() => openInteractiveBuilder()}>
-                    <MessageSquareDashed className="mr-2 h-4 w-4 text-primary" />
-                    {t("interactiveMessage")}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setQuickReplyOpen(true)}>
-                    <Zap className="mr-2 h-4 w-4 text-amber-400" />
-                    {t("quickReplies")}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <GatedButton
-                variant="ghost"
-                size="sm"
-                canAct={!readOnly}
-                gateReason="send messages"
-                title={readOnly ? undefined : t("sendTemplate")}
-                className="h-9 w-9 shrink-0 p-0 text-muted-foreground hover:text-foreground"
-                onClick={onOpenTemplates}
-              >
-                <LayoutTemplate className="h-4 w-4" />
-              </GatedButton>
-
-              <GatedButton
-                variant="ghost"
-                size="sm"
-                canAct={!readOnly}
-                gateReason="send messages"
-                disabled={drafting}
-                title={readOnly ? undefined : t("draftWithAI")}
-                className="h-9 w-9 shrink-0 p-0 text-muted-foreground hover:text-primary"
-                onClick={handleDraft}
-              >
-                {drafting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Sparkles className="h-4 w-4" />
-                )}
-              </GatedButton>
-            </div>
-
+            {/* Pill Textarea */}
             <textarea
               ref={textareaRef}
               value={text}
@@ -850,28 +720,34 @@ export function MessageComposer({
               rows={1}
               title={readOnly ? t("readOnlyTitle") : undefined}
               className={cn(
-                "flex-1 min-w-0 resize-none rounded-xl border border-border bg-muted/80 px-3 py-2 sm:px-4 sm:py-2.5 text-sm text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary/50 focus:bg-muted",
+                "flex-1 min-w-0 resize-none rounded-full border border-border/40 bg-[#202c33] dark:bg-[#202c33] px-4 py-2.5 text-sm text-white placeholder:text-muted-foreground outline-none transition-colors focus:border-emerald-500/60 shadow-xs",
                 (sessionExpired || readOnly) && "cursor-not-allowed opacity-50"
               )}
             />
 
+            {/* Mic circular button */}
+            <button
+              type="button"
+              onClick={() => void startRecording()}
+              disabled={inputsDisabled || busy}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted/70 hover:bg-muted text-foreground transition-colors shadow-xs disabled:opacity-50"
+              title={t("voiceNote")}
+            >
+              <Mic className="h-4 w-4" />
+            </button>
+
+            {/* Emerald circular send button */}
             <GatedButton
               size="sm"
               canAct={!readOnly}
               gateReason="send messages"
               disabled={!text.trim() || sessionExpired || sending}
               onClick={handleSend}
-              className="h-9 w-9 shrink-0 bg-primary p-0 hover:bg-primary/90 disabled:opacity-40 shadow-xs"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#00a884] hover:bg-[#008f6f] text-white p-0 shadow-md disabled:opacity-40 transition-all active:scale-95"
             >
               <Send className="h-4 w-4" />
             </GatedButton>
           </div>
-
-          {!draft && !recording && (
-            <p className="mt-1 hidden sm:block pl-2 text-[10px] text-muted-foreground">
-              {t("draftHint")}
-            </p>
-          )}
         </div>
       )}
 

@@ -162,7 +162,7 @@ function SignupPageInner() {
 
     const destination = inviteToken
       ? `/join/${encodeURIComponent(inviteToken)}`
-      : "/dashboard";
+      : "/inbox";
 
     setTimeout(() => {
       window.location.href = destination;

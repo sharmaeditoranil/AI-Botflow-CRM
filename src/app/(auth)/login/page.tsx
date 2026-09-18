@@ -59,7 +59,7 @@ function LoginPageInner() {
 
   const destination = inviteToken
     ? `/join/${encodeURIComponent(inviteToken)}`
-    : "/dashboard";
+    : "/inbox";
 
   useEffect(() => {
     if (resendCooldown > 0) {

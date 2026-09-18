@@ -34,7 +34,7 @@ import `in`.aibotflow.crm.databinding.ActivityMainBinding
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private val appUrl = "https://dash.aibotflow.in"
+    private val appUrl = "https://dash.aibotflow.in/inbox"
 
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private var pendingPermissionRequest: PermissionRequest? = null

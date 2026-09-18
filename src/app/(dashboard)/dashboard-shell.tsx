@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { createContext, useContext, useCallback, useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
@@ -9,7 +9,22 @@ import { Header } from "@/components/layout/header";
 import { AccountAccessAlert } from "@/components/layout/account-access-alert";
 import { PresenceHeartbeat } from "@/components/presence/presence-heartbeat";
 import { BrowserNotificationsListener } from "@/components/notifications/browser-notifications-listener";
+import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { cn } from "@/lib/utils";
+
+interface DashboardShellContextValue {
+  openSidebar: () => void;
+  closeSidebar: () => void;
+  sidebarOpen: boolean;
+}
+
+const DashboardShellContext = createContext<DashboardShellContextValue>({
+  openSidebar: () => {},
+  closeSidebar: () => {},
+  sidebarOpen: false,
+});
+
+export const useDashboardShell = () => useContext(DashboardShellContext);
 
 // Auth-gated dashboard shell. Extracted from the layout so the layout
 // itself can stay a server component and export metadata (noindex) —
@@ -26,6 +41,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   // always visible and this stays at `false` (ignored by the component).
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
+  const openSidebar = useCallback(() => setSidebarOpen(true), []);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -47,30 +63,34 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   if (!user) return null;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      {/* Reports this tab's online/away presence once we know a user is
-          signed in. Headless — renders nothing. */}
-      <PresenceHeartbeat />
-      {/* Desktop alerts for new customer messages (opt-in via Settings →
-          Your profile). Headless — renders nothing. */}
-      <BrowserNotificationsListener />
-      <Sidebar open={sidebarOpen} onClose={closeSidebar} />
-      <div className="flex flex-1 flex-col overflow-hidden min-w-0">
-        <Header onOpenSidebar={() => setSidebarOpen(true)} />
-        {/* Inbox manages its own split-pane layouts; standard pages get padding & vertical scroll. */}
-        <main
-          className={cn(
-            "flex-1 min-w-0",
-            isInbox ? "overflow-hidden p-0" : "overflow-y-auto p-4 sm:p-6"
-          )}
-        >
-          {/* Above every page: writes are being rejected and here's why.
-              Renders nothing unless the account/role failed to resolve. */}
-          <AccountAccessAlert />
-          {children}
-        </main>
+    <DashboardShellContext.Provider value={{ openSidebar, closeSidebar, sidebarOpen }}>
+      <div className="flex h-screen overflow-hidden bg-background">
+        {/* Reports this tab's online/away presence once we know a user is
+            signed in. Headless — renders nothing. */}
+        <PresenceHeartbeat />
+        {/* Desktop alerts for new customer messages (opt-in via Settings →
+            Your profile). Headless — renders nothing. */}
+        <BrowserNotificationsListener />
+        <Sidebar open={sidebarOpen} onClose={closeSidebar} />
+        <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+          <Header onOpenSidebar={openSidebar} />
+          {/* Inbox manages its own split-pane layouts; standard pages get padding & vertical scroll. */}
+          <main
+            className={cn(
+              "flex-1 min-w-0",
+              isInbox ? "overflow-hidden p-0" : "overflow-y-auto p-4 sm:p-6 pb-20 lg:pb-6"
+            )}
+          >
+            {/* Above every page: writes are being rejected and here's why.
+                Renders nothing unless the account/role failed to resolve. */}
+            <AccountAccessAlert />
+            {children}
+          </main>
+          {/* Render mobile bottom nav for non-inbox pages */}
+          {!isInbox && <MobileBottomNav onOpenMenu={openSidebar} />}
+        </div>
       </div>
-    </div>
+    </DashboardShellContext.Provider>
   );
 }
 

@@ -27,6 +27,7 @@ import {
   RefreshCw,
   PanelRightOpen,
   PanelRightClose,
+  Phone,
 } from "lucide-react";
 import { format, isToday, isYesterday, differenceInHours } from "date-fns";
 import { useTranslations } from "next-intl";
@@ -911,21 +912,21 @@ export function MessageThread({
     <div className={cn("flex min-w-0 flex-1 flex-col", DOODLE_BG_CLASSES)}>
       {/* Header — solid card surface sits on top of the doodle so the
           name/avatar/dropdowns stay legible. */}
-      <div className="flex items-center justify-between gap-2 border-b border-border bg-card px-3 py-3 sm:px-4">
+      {/* Header — Screenshot 1 styling */}
+      <div className="flex items-center justify-between gap-2 border-b border-border bg-card px-3 py-2.5 sm:px-4 shrink-0">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-          {/* Back-to-list button — mobile only. Hidden on lg+ where the
-              conversation list is always visible next to the thread. */}
+          {/* Back-to-list button — mobile only. */}
           {onBack && (
             <button
               type="button"
               onClick={onBack}
               aria-label={t("backToConversations")}
-              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-foreground hover:bg-muted transition-colors lg:hidden"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
           )}
-          <div className="relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
+          <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[#128c7e] text-sm font-bold text-white shadow-xs">
             {displayName.charAt(0).toUpperCase()}
             <span
               className={cn(
@@ -948,45 +949,29 @@ export function MessageThread({
             </span>
           </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <h2 className="truncate text-sm font-semibold text-foreground">{displayName}</h2>
-              <Badge
-                variant="outline"
-                className={cn(
-                  "border-0 px-1 py-0 text-[9px] font-semibold uppercase tracking-wider",
-                  channel === "facebook"
-                    ? "bg-blue-500/10 text-[#0084FF]"
-                    : channel === "instagram"
-                    ? "bg-pink-500/10 text-pink-500"
-                    : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                )}
-              >
-                {channel === "facebook" ? "Messenger" : channel === "instagram" ? "Instagram" : "WhatsApp"}
-              </Badge>
+            <h2 className="truncate text-[15px] sm:text-base font-bold text-foreground leading-tight">
+              {displayName}
+            </h2>
+            <div className="flex items-center gap-1.5 text-xs">
+              <span className="h-2 w-2 rounded-full bg-[#25D366] shrink-0" />
+              <span className="truncate font-medium text-emerald-500">
+                {channel === "whatsapp" ? "Online on WhatsApp" : channel === "facebook" ? "Active on Facebook" : "Active on Instagram"}
+              </span>
             </div>
-            <p className="truncate text-xs text-muted-foreground">
-              {channel === "facebook"
-                ? "Facebook Messenger"
-                : channel === "instagram"
-                ? "Instagram Direct Message"
-                : contactHandle(contact)}
-            </p>
           </div>
-          {/* Session timer badge — hidden on the narrowest phones so
-              the name + back arrow keep their room. */}
-          <Badge
-            variant="outline"
-            className={cn(
-              "ml-1 hidden gap-1 border-border text-[10px] sm:inline-flex sm:ml-2",
-              sessionInfo.expired ? "text-red-400" : "text-primary"
-            )}
-          >
-            <Clock className="h-3 w-3" />
-            {sessionInfo.remaining}
-          </Badge>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Call button - Screenshot 1 */}
+          {contact?.phone && (
+            <a
+              href={`tel:${contact.phone}`}
+              className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/40 bg-muted/60 hover:bg-muted text-foreground transition-colors shadow-xs"
+              title={`Call ${contact.phone}`}
+            >
+              <Phone className="h-4 w-4 text-emerald-500" />
+            </a>
+          )}
           {/* Contact-panel toggle — desktop only. The contact sidebar
               eats a chunk of horizontal width that crowds the thread on
               smaller laptops; this lets agents reclaim it when they just
@@ -1154,7 +1139,7 @@ export function MessageThread({
               <div key={group.date}>
                 {/* Date separator */}
                 <div className="mb-4 flex items-center justify-center">
-                  <span className="rounded-full bg-muted px-3 py-1 text-[10px] font-medium text-muted-foreground">
+                  <span className="rounded-lg bg-[#182229]/90 px-3 py-1 text-[11px] font-medium text-[#8696a0] shadow-xs">
                     {formatDateSeparator(group.date, t)}
                   </span>
                 </div>
