@@ -249,11 +249,16 @@ function InboxPageInner() {
           // Show push notification when app is not the focused conversation
           const isCurrentConv = activeConversation?.id === newMsg.conversation_id;
           if (!isCurrentConv || document.visibilityState !== "visible") {
-            // Find contact name for the conversation
-            const conv = conversations.find(c => c.id === newMsg.conversation_id);
-            const contactName = conv?.contact?.name || conv?.contact?.phone || "New message";
+            // Find contact details and unread count for notification
+            const conv = conversations.find((c) => c.id === newMsg.conversation_id);
+            const phone = conv?.contact?.phone || (conv as unknown as { phone_number?: string })?.phone_number || "";
+            const name = conv?.contact?.name;
+            const senderDisplay = name ? `${name}${phone ? ` (${phone})` : ""}` : (phone || "WhatsApp Message");
+            const newUnread = (Number(conv?.unread_count) || 0) + 1;
+            const countPrefix = newUnread > 1 ? `[${newUnread} msgs] ` : "";
+
             triggerMobileNotification({
-              title: contactName,
+              title: `${countPrefix}${senderDisplay}`,
               body: newMsg.content_text || "New message received",
             });
           }
@@ -275,7 +280,7 @@ function InboxPageInner() {
                     unread_count:
                       activeConversation?.id === newMsg.conversation_id
                         ? 0
-                        : c.unread_count + 1,
+                        : (Number(c.unread_count) || 0) + 1,
                   }
                 : c,
             ),

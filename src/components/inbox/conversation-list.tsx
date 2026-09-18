@@ -11,7 +11,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus, Tag, Contact } from "@/types";
-import { Search, ChevronDown, X, SlidersHorizontal, ListFilter, UserPlus } from "lucide-react";
+import { Search, ChevronDown, X, ListFilter, UserPlus } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
@@ -90,18 +90,9 @@ export function ConversationList({
   ], [t]);
 
   const [search, setSearch] = useState("");
-  // Persist showSearch across resync cycles so the search bar doesn't
-  // disappear when conversations are re-fetched (which remounts state).
-  const [showSearch, setShowSearch] = useState(() => {
-    if (typeof window !== "undefined") {
-      return sessionStorage.getItem("inbox:showSearch") === "true";
-    }
-    return false;
-  });
   const [tabFilter, setTabFilter] = useState<TabFilter>("all");
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>("all");
-  const [loading, setLoading] = useState(true);
 
   // Contact-based filters
   const [tags, setTags] = useState<Tag[]>([]);
@@ -133,10 +124,11 @@ export function ConversationList({
     return conversations.filter((c) => (Number(c.unread_count) || 0) > 0).length;
   }, [conversations]);
 
+  const userId = user?.id;
   const mineCount = useMemo(() => {
-    if (!user?.id) return 0;
-    return conversations.filter((c) => c.assigned_agent_id === user.id).length;
-  }, [conversations, user?.id]);
+    if (!userId) return 0;
+    return conversations.filter((c) => c.assigned_agent_id === userId).length;
+  }, [conversations, userId]);
 
   const onConversationsLoadedRef = useRef(onConversationsLoaded);
   useEffect(() => {
@@ -162,12 +154,10 @@ export function ConversationList({
           hint: error.hint,
           code: error.code,
         });
-        setLoading(false);
         return;
       }
 
       onConversationsLoadedRef.current(normalizeConversations(data ?? []));
-      setLoading(false);
     })();
 
     return () => {
@@ -213,8 +203,8 @@ export function ConversationList({
     // Tab Filter
     if (tabFilter === "unread") {
       result = result.filter((c) => (Number(c.unread_count) || 0) > 0);
-    } else if (tabFilter === "mine" && user?.id) {
-      result = result.filter((c) => c.assigned_agent_id === user.id);
+    } else if (tabFilter === "mine" && userId) {
+      result = result.filter((c) => c.assigned_agent_id === userId);
     }
 
     // Status filter
@@ -245,7 +235,7 @@ export function ConversationList({
     }
 
     return result;
-  }, [conversations, platformFilter, tabFilter, filter, user?.id, selectedTagIds, selectedCompany, search]);
+  }, [conversations, platformFilter, tabFilter, filter, userId, selectedTagIds, selectedCompany, search]);
 
   const toggleTag = useCallback((id: string) => {
     setSelectedTagIds((prev) =>
@@ -286,19 +276,38 @@ export function ConversationList({
             <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00a884]" />
           </span>
         </div>
+        {/* Right side actions: Search & Filter right in front of Inbox (matching PC view) */}
         <div className="flex items-center gap-2">
+          {/* Search Button */}
+          <button
+            type="button"
+            onClick={() => {
+              const el = document.getElementById("inbox-search-input");
+              if (el) {
+                el.focus();
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+              }
+            }}
+            aria-label="Search"
+            title="Search"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#1c2327] hover:bg-[#252f36] text-neutral-200 lg:border-border/40 lg:bg-muted/60 lg:hover:bg-muted lg:text-foreground transition-all shadow-xs active:scale-95"
+          >
+            <Search className="h-5 w-5" />
+          </button>
+
           {/* Filter Button with Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger
               className={cn(
-                "relative flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-[#1c2327] hover:bg-[#252f36] text-neutral-200 lg:border-border/40 lg:bg-muted/60 lg:hover:bg-muted lg:text-foreground transition-all shadow-xs active:scale-95",
+                "relative flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#1c2327] hover:bg-[#252f36] text-neutral-200 lg:border-border/40 lg:bg-muted/60 lg:hover:bg-muted lg:text-foreground transition-all shadow-xs active:scale-95",
                 hasContactFilters || filter !== "all"
                   ? "border-emerald-500/60 bg-emerald-950/40 text-[#00a884] dark:text-emerald-400"
                   : ""
               )}
               aria-label="Filter"
+              title="Filter"
             >
-              <SlidersHorizontal className="h-4.5 w-4.5" />
+              <ListFilter className="h-5 w-5" />
               {(hasContactFilters || filter !== "all") && (
                 <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-[#00a884] ring-2 ring-[#0b141a] lg:ring-card" />
               )}
@@ -391,9 +400,10 @@ export function ConversationList({
         <div className="relative flex items-center">
           <Search className="absolute left-3.5 h-4 w-4 text-[#00a884] pointer-events-none" />
           <Input
+            id="inbox-search-input"
             value={search}
             onChange={handleSearchChange}
-            placeholder={t("searchPlaceholder") || "Search by name, number..."}
+            placeholder={t("searchPlaceholder") || "Search conversations..."}
             className="h-10 border border-white/10 bg-[#141e24] pl-10 pr-9 text-sm text-white placeholder:text-neutral-500 rounded-xl focus-visible:ring-1 focus-visible:ring-[#00a884] focus-visible:border-[#00a884] transition-all lg:bg-muted/80 lg:border-border lg:text-foreground"
           />
           {search && (
