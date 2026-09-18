@@ -126,6 +126,7 @@ class MainActivity : AppCompatActivity() {
         binding.webView.isVerticalScrollBarEnabled = false
         binding.webView.isHorizontalScrollBarEnabled = false
         binding.webView.overScrollMode = View.OVER_SCROLL_NEVER
+        binding.webView.isNestedScrollingEnabled = true
 
         binding.webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {

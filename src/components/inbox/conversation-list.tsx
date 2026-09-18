@@ -675,6 +675,7 @@ function ConversationItem({
   const avatarBg = getAvatarColor(displayName);
   const previewText = conversation.last_message_text || t("noMessagesYet");
   const unreadCount = Number(conversation.unread_count) || 0;
+  const totalCount = (conversation as unknown as { message_count?: number }).message_count ?? 0;
 
   return (
     <button
@@ -749,14 +750,18 @@ function ConversationItem({
         </p>
       </div>
 
-      {/* Far Right Column (last me): Time on top, Unread Badge on bottom */}
+      {/* Far Right Column (last me): Time on top, Message Count / Unread Badge on bottom */}
       <div className="flex flex-col items-end justify-between shrink-0 self-stretch py-0.5 ml-2">
         <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap">
           {timeDisplay}
         </span>
         {unreadCount > 0 ? (
-          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#00a884] px-1.5 text-[11px] font-bold text-white shadow-xs">
+          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#00a884] px-1.5 text-[11px] font-bold text-white shadow-xs" title={`${unreadCount} unread messages`}>
             {unreadCount}
+          </span>
+        ) : totalCount > 0 ? (
+          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-muted/80 border border-border/40 px-1.5 text-[11px] font-medium text-muted-foreground shadow-xs" title={`${totalCount} messages`}>
+            {totalCount}
           </span>
         ) : (
           <span className="h-5" />

@@ -77,8 +77,10 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
           {/* Inbox manages its own split-pane layouts; standard pages get padding & vertical scroll. */}
           <main
             className={cn(
-              "flex-1 min-w-0",
-              isInbox ? "overflow-hidden p-0" : "overflow-y-auto p-4 sm:p-6 pb-20 lg:pb-6"
+              "flex-1 min-w-0 min-h-0",
+              isInbox
+                ? "overflow-hidden p-0"
+                : "overflow-y-auto overscroll-y-contain [touch-action:pan-y] [-webkit-overflow-scrolling:touch] p-4 sm:p-6 pb-24 lg:pb-6"
             )}
           >
             {/* Above every page: writes are being rejected and here's why.

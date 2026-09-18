@@ -411,7 +411,9 @@ function InboxPageInner() {
       // react-hooks/set-state-in-effect. Runs once per ?c=<id> URL value
       // via the ref, so realtime refreshes of the list can't snap the
       // user back to the deep-linked thread after they've navigated.
+      const isDesktop = typeof window !== "undefined" && window.innerWidth >= 1024;
       if (
+        isDesktop &&
         deepLinkConvId &&
         autoSelectedForDeepLinkRef.current !== deepLinkConvId &&
         loaded.length > 0
@@ -499,11 +501,7 @@ function InboxPageInner() {
     // the user later visits /inbox?c=<same-id> — desirable UX.
     autoSelectedForDeepLinkRef.current = null;
     try {
-      if (window.history.state?.conversationId) {
-        window.history.replaceState(null, "", "/inbox");
-      } else {
-        router.replace("/inbox", { scroll: false });
-      }
+      window.history.replaceState(null, "", "/inbox");
     } catch {
       router.replace("/inbox", { scroll: false });
     }
@@ -536,6 +534,11 @@ function InboxPageInner() {
         setActiveContact(null);
         setMessages([]);
         autoSelectedForDeepLinkRef.current = null;
+        try {
+          window.history.replaceState(null, "", "/inbox");
+        } catch {
+          // ignore
+        }
       }
     };
     window.addEventListener("popstate", handlePopState);

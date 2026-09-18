@@ -7,26 +7,30 @@ import type { Conversation, Contact, Tag } from "@/types";
  * flattens them onto `contact.tags`.
  */
 export const CONVERSATION_SELECT =
-  "*, contact:contacts(*, contact_tags(tags(*)))";
+  "*, contact:contacts(*, contact_tags(tags(*))), messages(count)";
 
 /** Raw shape returned by {@link CONVERSATION_SELECT} before flattening. */
 type RawContact = Contact & { contact_tags?: { tags: Tag | null }[] };
 type RawConversation = Omit<Conversation, "contact"> & {
   contact?: RawContact | null;
+  messages?: { count: number }[];
 };
 
 /**
- * Flatten the embedded `contact_tags(tags(*))` join into `contact.tags`.
+ * Flatten the embedded `contact_tags(tags(*))` join into `contact.tags`
+ * and extract total message_count.
  * Safe to call on rows fetched with {@link CONVERSATION_SELECT}; a row with
  * no contact (e.g. a freshly-inserted conversation) passes through untouched.
  */
 export function normalizeConversation(raw: RawConversation): Conversation {
   const rawContact = raw.contact;
-  if (!rawContact) return raw as Conversation;
+  const messageCount = raw.messages?.[0]?.count ?? 0;
+  if (!rawContact) return { ...raw, message_count: messageCount } as Conversation;
 
   const { contact_tags, ...contact } = rawContact;
   return {
     ...raw,
+    message_count: messageCount,
     contact: {
       ...contact,
       tags: (contact_tags ?? [])

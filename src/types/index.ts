@@ -190,6 +190,7 @@ export interface Conversation {
   last_message_text?: string;
   last_message_at?: string;
   unread_count: number;
+  message_count?: number;
   created_at: string;
   updated_at: string;
   contact?: Contact;
