@@ -1,0 +1,62 @@
+name: Build Android APK
+
+on:
+  push:
+    paths:
+      - 'android-app/**'
+      - '.github/workflows/build-apk.yml'
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build AI Botflow CRM APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build Debug APK
+        run: |
+          cd android-app
+          gradle assembleDebug --stacktrace
+
+      - name: Rename and Prepare APK
+        run: |
+          mkdir -p build-output
+          cp android-app/app/build/outputs/apk/debug/app-debug.apk build-output/ai-botflow-crm.apk
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-botflow-crm-apk
+          path: build-output/ai-botflow-crm.apk
+          if-no-files-found: error
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        with:
+          files: build-output/ai-botflow-crm.apk
+          name: AI Botflow CRM Android App
+          tag_name: v1.0.0-apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

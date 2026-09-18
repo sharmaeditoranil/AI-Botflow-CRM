@@ -25,6 +25,8 @@ import {
   Users,
   UsersRound,
   Workflow,
+  Sun,
+  Smartphone,
   X,
   Zap,
   Sparkles,
@@ -366,6 +368,22 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             </Link>
           )}
 
+          {/* Download Android App banner / button */}
+          <a
+            href="/downloads/ai-botflow-crm.apk"
+            download="ai-botflow-crm.apk"
+            className="mb-2 flex items-center justify-between rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5 text-xs text-emerald-400 transition-colors hover:bg-emerald-500/20"
+            title="Download Android App APK"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <Smartphone className="size-3.5 shrink-0 text-emerald-400" />
+              <span className="font-semibold text-[11px] truncate">Android App</span>
+            </div>
+            <span className="shrink-0 rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-bold text-emerald-300">
+              APK ↓
+            </span>
+          </a>
+
           <DropdownMenu>
             <DropdownMenuTrigger className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors hover:bg-muted/60 focus:bg-muted/60 focus:outline-none data-popup-open:bg-muted/60">
               <Avatar className="size-8 shrink-0">
@@ -419,6 +437,19 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               >
                 <Settings className="size-4" />
                 {t("menuSettings")}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                render={
+                  <a
+                    href="/downloads/ai-botflow-crm.apk"
+                    download="ai-botflow-crm.apk"
+                    onClick={onClose}
+                    className="text-popover-foreground focus:bg-accent focus:text-accent-foreground"
+                  />
+                }
+              >
+                <Smartphone className="size-4 text-emerald-400" />
+                <span>Download Android App</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-border" />
               <DropdownMenuItem

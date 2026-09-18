@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">AI Botflow CRM</string>
+    <string name="loading">Loading AI Botflow CRM…</string>
+    <string name="no_internet">No Internet Connection</string>
+    <string name="no_internet_desc">Please check your network settings and try again.</string>
+    <string name="retry">Retry</string>
+    <string name="downloading">Downloading file…</string>
+</resources>
