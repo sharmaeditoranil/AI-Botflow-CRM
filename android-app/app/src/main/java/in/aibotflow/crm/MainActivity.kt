@@ -1,4 +1,4 @@
-package in.aibotflow.crm
+package `in`.aibotflow.crm
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -28,7 +28,8 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import in.aibotflow.crm.databinding.ActivityMainBinding
+import `in`.aibotflow.crm.R
+import `in`.aibotflow.crm.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {
 
