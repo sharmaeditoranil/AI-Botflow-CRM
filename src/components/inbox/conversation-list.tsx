@@ -610,7 +610,7 @@ export function ConversationList({
       )}
 
       {/* Conversation Items List with native touch scrolling */}
-      <div className="min-h-0 flex-1 overflow-y-auto [-webkit-overflow-scrolling:touch] [overscroll-behavior-y:none] [touch-action:pan-y] pb-24">
+      <div className="min-h-0 flex-1 overflow-y-auto [-webkit-overflow-scrolling:touch] overscroll-y-contain [touch-action:pan-y] pb-24">
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center px-6">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.05] border border-white/10 mb-3">

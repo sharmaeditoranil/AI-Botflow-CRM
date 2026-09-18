@@ -55,10 +55,6 @@ class MainActivity : AppCompatActivity() {
     private val NOTIF_CHANNEL_NAME = "Message Notifications"
     private var notifIdCounter = 1000
 
-    // Pull-to-refresh prevention: track touch start Y
-    private var touchStartY = 0f
-    private var isPullToRefreshGesture = false
-
     // JavaScript bridge exposed to web app for native notifications & sound
     inner class AndroidBridge {
         @JavascriptInterface
@@ -215,7 +211,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         setupWebView()
-        setupTouchScrollFix()
         setupBackNavigation()
         setupRetryButton()
 
@@ -374,50 +369,6 @@ class MainActivity : AppCompatActivity() {
             }
         })
     }
-
-    /**
-     * Intercepts touch events on the WebView to prevent the Android
-     * pull-to-refresh / overscroll gesture from firing a page reload.
-     *
-     * Strategy:
-     *  - On ACTION_DOWN, record the Y position.
-     *  - On ACTION_MOVE, if the finger moved DOWN (positive dy) AND the
-     *    web page's scroll position is already at the top (scrollY == 0),
-     *    cancel the touch sequence by returning true (consumed). This is
-     *    the exact gesture that triggers Android's pull-to-refresh.
-     *  - For all other gestures (scroll down, scroll up from below top)
-     *    we return false so the WebView handles them normally.
-     */
-    @SuppressLint("ClickableViewAccessibility")
-    private fun setupTouchScrollFix() {
-        binding.webView.setOnTouchListener { v, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    touchStartY = event.rawY
-                    isPullToRefreshGesture = false
-                    false  // don't consume — let WebView see the down event
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val dy = event.rawY - touchStartY
-                    // Check if page is at the very top via JS evaluation would be async,
-                    // so we instead rely on WebView.getScrollY() which is synchronous
-                    val atTop = v.scrollY == 0
-                    if (dy > 8f && atTop && !isPullToRefreshGesture) {
-                        // Finger moving DOWN at scroll-top = pull-to-refresh gesture
-                        // Cancel it by returning true (consume the event)
-                        isPullToRefreshGesture = true
-                    }
-                    if (isPullToRefreshGesture) true else false
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    isPullToRefreshGesture = false
-                    false
-                }
-                else -> false
-            }
-        }
-    }
-
 
     private fun setupBackNavigation() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
