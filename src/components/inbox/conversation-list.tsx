@@ -11,7 +11,7 @@ import {
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus, Tag } from "@/types";
-import { Search, ChevronDown, X, SlidersHorizontal } from "lucide-react";
+import { Search, ChevronDown, X, ListFilter, UserPlus } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
@@ -23,7 +23,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   WhatsAppIcon,
   MessengerIcon,
@@ -35,9 +34,6 @@ interface ConversationListProps {
   onSelect: (conversation: Conversation) => void;
   conversations: Conversation[];
   onConversationsLoaded: (conversations: Conversation[]) => void;
-  /**
-   * Increment to force the fetch effect below to refire.
-   */
   resyncToken?: number;
 }
 
@@ -113,7 +109,7 @@ export function ConversationList({
     let instagram = 0;
 
     for (const c of conversations) {
-      const unread = c.unread_count || 0;
+      const unread = Number(c.unread_count) || 0;
       if (unread > 0) {
         all += unread;
         const ch = c.channel || "whatsapp";
@@ -127,7 +123,7 @@ export function ConversationList({
 
   // Derived counts for tabs
   const totalUnread = useMemo(() => {
-    return conversations.filter((c) => (c.unread_count || 0) > 0).length;
+    return conversations.filter((c) => (Number(c.unread_count) || 0) > 0).length;
   }, [conversations]);
 
   const mineCount = useMemo(() => {
@@ -209,14 +205,14 @@ export function ConversationList({
 
     // Tab Filter
     if (tabFilter === "unread") {
-      result = result.filter((c) => (c.unread_count || 0) > 0);
+      result = result.filter((c) => (Number(c.unread_count) || 0) > 0);
     } else if (tabFilter === "mine" && user?.id) {
       result = result.filter((c) => c.assigned_agent_id === user.id);
     }
 
     // Status filter
     if (filter === "unread") {
-      result = result.filter((c) => (c.unread_count || 0) > 0);
+      result = result.filter((c) => (Number(c.unread_count) || 0) > 0);
     } else if (filter !== "all") {
       result = result.filter((c) => c.status === filter);
     }
@@ -277,35 +273,35 @@ export function ConversationList({
       <div className="flex items-center justify-between px-4 pt-4 pb-2 shrink-0">
         <h1 className="text-2xl font-bold tracking-tight text-foreground">Inbox</h1>
         <div className="flex items-center gap-2">
-          {/* Search Toggle */}
+          {/* Search Button */}
           <button
             type="button"
             onClick={() => setShowSearch((prev) => !prev)}
             aria-label="Search"
             className={cn(
-              "flex h-9 w-9 items-center justify-center rounded-full transition-colors",
+              "flex h-10 w-10 items-center justify-center rounded-xl border border-border/40 bg-muted/60 hover:bg-muted text-foreground transition-colors shadow-xs",
               showSearch || search
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted/70 hover:bg-muted text-foreground"
+                ? "border-emerald-500/60 bg-emerald-950/20 text-[#00a884] dark:text-emerald-400"
+                : "text-foreground"
             )}
           >
             <Search className="h-4 w-4" />
           </button>
 
-          {/* Filter Dropdown */}
+          {/* Filter Button */}
           <DropdownMenu>
             <DropdownMenuTrigger
               className={cn(
-                "relative flex h-9 w-9 items-center justify-center rounded-full transition-colors",
+                "relative flex h-10 w-10 items-center justify-center rounded-xl border border-border/40 bg-muted/60 hover:bg-muted text-foreground transition-colors shadow-xs",
                 hasContactFilters || filter !== "all"
-                  ? "bg-[#00a884] text-white"
-                  : "bg-muted/70 hover:bg-muted text-foreground"
+                  ? "border-emerald-500/60 bg-emerald-950/20 text-[#00a884] dark:text-emerald-400"
+                  : "text-foreground"
               )}
-              aria-label="Filters"
+              aria-label="Filter"
             >
-              <SlidersHorizontal className="h-4 w-4" />
+              <ListFilter className="h-4 w-4" />
               {(hasContactFilters || filter !== "all") && (
-                <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-card" />
+                <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-[#00a884] ring-2 ring-card" />
               )}
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 border-border bg-popover shadow-lg">
@@ -607,8 +603,8 @@ export function ConversationList({
         </div>
       )}
 
-      {/* Conversation Items List */}
-      <ScrollArea className="min-h-0 flex-1">
+      {/* Conversation Items List with native touch scrolling */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain [touch-action:pan-y] [-webkit-overflow-scrolling:touch]">
         <div className="pb-24 lg:pb-4">
           {loading ? (
             <div className="flex items-center justify-center py-12">
@@ -632,16 +628,17 @@ export function ConversationList({
             </div>
           )}
         </div>
-      </ScrollArea>
+      </div>
 
-      {/* Floating Action Button (FAB) at bottom-right - Screenshot 2 */}
+      {/* Floating Action Button (FAB) - Compact Subscriber Add button */}
       <button
         type="button"
         onClick={() => router.push("/contacts")}
-        className="fixed bottom-20 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[#00a884] text-white shadow-xl hover:bg-[#008f6f] active:scale-95 transition-all lg:hidden"
-        aria-label="New WhatsApp Chat"
+        className="fixed bottom-20 right-4 z-30 flex h-11 w-11 items-center justify-center rounded-full bg-[#00a884] text-white shadow-lg hover:bg-[#008f6f] active:scale-95 transition-all lg:hidden"
+        aria-label="Add Subscriber"
+        title="Add Subscriber / New Chat"
       >
-        <WhatsAppIcon className="h-7 w-7 fill-current" />
+        <UserPlus className="h-5 w-5" />
       </button>
     </div>
   );
@@ -677,6 +674,7 @@ function ConversationItem({
   const timeDisplay = formatWhatsAppTime(conversation.last_message_at);
   const avatarBg = getAvatarColor(displayName);
   const previewText = conversation.last_message_text || t("noMessagesYet");
+  const unreadCount = Number(conversation.unread_count) || 0;
 
   return (
     <button
@@ -706,7 +704,7 @@ function ConversationItem({
             <span>{initials}</span>
           )}
         </div>
-        {/* Overlapping channel badge at bottom right */}
+        {/* Overlapping channel badge at bottom right of avatar */}
         <span
           className={cn(
             "absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full ring-2 ring-card shadow-xs text-white",
@@ -727,43 +725,42 @@ function ConversationItem({
         </span>
       </div>
 
-      {/* Main text content */}
-      <div className="min-w-0 flex-1 overflow-hidden">
-        {/* Name and Channel pill + Timestamp */}
-        <div className="flex items-center justify-between gap-1.5">
-          <div className="flex items-center gap-1.5 min-w-0 flex-1">
-            <span className="truncate font-bold text-[15px] text-foreground tracking-tight">
-              {displayName}
-            </span>
-            <span
-              className={cn(
-                "inline-flex shrink-0 items-center rounded px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider",
-                channel === "facebook"
-                  ? "bg-blue-500/15 text-[#0084FF]"
-                  : channel === "instagram"
-                  ? "bg-pink-500/15 text-pink-400"
-                  : "bg-emerald-500/15 text-[#00a884] dark:text-emerald-400"
-              )}
-            >
-              {channel === "facebook" ? "FB" : channel === "instagram" ? "IG" : "WA"}
-            </span>
-          </div>
-          <span className="shrink-0 text-[11px] font-medium text-muted-foreground whitespace-nowrap pl-1">
-            {timeDisplay}
+      {/* Center text content: Name and Preview */}
+      <div className="min-w-0 flex-1 overflow-hidden py-0.5">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="truncate font-bold text-[15px] text-foreground tracking-tight">
+            {displayName}
+          </span>
+          <span
+            className={cn(
+              "inline-flex shrink-0 items-center rounded px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider",
+              channel === "facebook"
+                ? "bg-blue-500/15 text-[#0084FF]"
+                : channel === "instagram"
+                ? "bg-pink-500/15 text-pink-400"
+                : "bg-emerald-500/15 text-[#00a884] dark:text-emerald-400"
+            )}
+          >
+            {channel === "facebook" ? "FB" : channel === "instagram" ? "IG" : "WA"}
           </span>
         </div>
+        <p className="truncate text-xs text-muted-foreground font-normal leading-relaxed mt-1">
+          {previewText}
+        </p>
+      </div>
 
-        {/* Message snippet + Unread Badge */}
-        <div className="mt-1 flex items-center justify-between gap-2">
-          <p className="truncate text-xs text-muted-foreground flex-1 min-w-0 font-normal leading-relaxed">
-            {previewText}
-          </p>
-          {conversation.unread_count > 0 && (
-            <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#00a884] px-1.5 text-[11px] font-bold text-white shadow-xs">
-              {conversation.unread_count}
-            </span>
-          )}
-        </div>
+      {/* Far Right Column (last me): Time on top, Unread Badge on bottom */}
+      <div className="flex flex-col items-end justify-between shrink-0 self-stretch py-0.5 ml-2">
+        <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap">
+          {timeDisplay}
+        </span>
+        {unreadCount > 0 ? (
+          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#00a884] px-1.5 text-[11px] font-bold text-white shadow-xs">
+            {unreadCount}
+          </span>
+        ) : (
+          <span className="h-5" />
+        )}
       </div>
     </button>
   );

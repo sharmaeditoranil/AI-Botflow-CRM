@@ -900,6 +900,12 @@ export function MessageThread({
     ? (currentAssignee?.full_name ?? t("assigned"))
     : t("assign");
 
+  const phoneToCall =
+    contact?.phone ||
+    (conversation as unknown as { contact_phone?: string })?.contact_phone ||
+    (conversation as unknown as { phone?: string })?.phone ||
+    (displayName && /^[+0-9\s\-()]+$/.test(displayName) ? displayName.replace(/\s+/g, "") : null);
+
   return (
     // `min-w-0` is load-bearing: the page already puts min-w-0 on the
     // thread's flex *wrapper* (issue #165), but this root keeps the
@@ -910,8 +916,6 @@ export function MessageThread({
     // root shrink lets the bubbles' break-words / max-w caps apply.
     // Issue #257.
     <div className={cn("flex min-w-0 flex-1 flex-col", DOODLE_BG_CLASSES)}>
-      {/* Header — solid card surface sits on top of the doodle so the
-          name/avatar/dropdowns stay legible. */}
       {/* Header — Screenshot 1 styling */}
       <div className="flex items-center justify-between gap-2 border-b border-border bg-card px-3 py-2.5 sm:px-4 shrink-0">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
@@ -963,20 +967,26 @@ export function MessageThread({
 
         <div className="flex items-center gap-1.5 sm:gap-2">
           {/* Call button - Screenshot 1 */}
-          {contact?.phone && (
+          {phoneToCall ? (
             <a
-              href={`tel:${contact.phone}`}
-              className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/40 bg-muted/60 hover:bg-muted text-foreground transition-colors shadow-xs"
-              title={`Call ${contact.phone}`}
+              href={`tel:${phoneToCall}`}
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/40 bg-muted/60 hover:bg-muted text-foreground transition-colors shadow-xs"
+              title={`Call ${phoneToCall}`}
+              aria-label={`Call ${phoneToCall}`}
             >
               <Phone className="h-4 w-4 text-emerald-500" />
             </a>
+          ) : (
+            <div
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/40 bg-muted/40 text-muted-foreground shadow-xs cursor-default"
+              title="Call"
+              aria-label="Call"
+            >
+              <Phone className="h-4 w-4" />
+            </div>
           )}
-          {/* Contact-panel toggle — desktop only. The contact sidebar
-              eats a chunk of horizontal width that crowds the thread on
-              smaller laptops; this lets agents reclaim it when they just
-              want to read and reply. Hidden on mobile, where the sidebar
-              never renders as a permanent panel anyway. Issue #258. */}
+
+          {/* Desktop-only controls: Contact-panel toggle, Refresh, Status, Assign */}
           {onToggleContactPanel && (
             <button
               type="button"
@@ -987,7 +997,7 @@ export function MessageThread({
               title={contactPanelOpen ? t("hideContact") : t("showContact")}
               aria-pressed={contactPanelOpen}
               className={cn(
-                "hidden h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground lg:inline-flex",
+                "hidden h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground lg:inline-flex",
                 contactPanelOpen ? "text-primary" : "text-muted-foreground",
               )}
             >
@@ -999,11 +1009,6 @@ export function MessageThread({
             </button>
           )}
 
-          {/* Manual refresh — forces a refetch of the messages + the
-              conversation list (the parent bumps its resyncToken). Useful
-              when realtime missed an event or the agent just wants to be
-              sure nothing's stale. Only rendered when the parent wires
-              up `onRefresh`. */}
           {onRefresh && (
             <button
               type="button"
@@ -1011,9 +1016,7 @@ export function MessageThread({
               disabled={isRefreshing}
               aria-label={t("refreshConversation")}
               title={t("refresh")}
-              className={cn(
-                "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60",
-              )}
+              className="hidden lg:inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
             >
               <RefreshCw
                 className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")}
@@ -1021,43 +1024,46 @@ export function MessageThread({
             </button>
           )}
 
-          {/* Status dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger className={cn(
-                  "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
-                  currentStatus?.color ?? "text-muted-foreground"
-                )}>
-                {currentStatus ? t(`status${currentStatus.label}`) : t("status")}
-                <ChevronDown className="h-3 w-3" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="border-border bg-popover"
-            >
-              {STATUS_OPTIONS.map((opt) => (
-                <DropdownMenuItem
-                  key={opt.value}
-                  onClick={() => handleStatusChange(opt.value)}
-                  className={cn("text-sm", opt.color)}
-                >
-                  {t(`status${opt.label}`)}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* Status dropdown — desktop only */}
+          <div className="hidden lg:block">
+            <DropdownMenu>
+              <DropdownMenuTrigger className={cn(
+                    "inline-flex items-center justify-center h-8 gap-1 px-2.5 text-xs font-medium rounded-md hover:bg-muted",
+                    currentStatus?.color ?? "text-muted-foreground"
+                  )}>
+                  {currentStatus ? t(`status${currentStatus.label}`) : t("status")}
+                  <ChevronDown className="h-3 w-3" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="border-border bg-popover"
+              >
+                {STATUS_OPTIONS.map((opt) => (
+                  <DropdownMenuItem
+                    key={opt.value}
+                    onClick={() => handleStatusChange(opt.value)}
+                    className={cn("text-sm", opt.color)}
+                  >
+                    {t(`status${opt.label}`)}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
 
-          {/* Assign dropdown */}
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              className={cn(
-                "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
-                assignedAgentId ? "text-primary" : "text-muted-foreground"
-              )}
-            >
-              <UserPlus className="h-3 w-3" />
-              <span className="hidden sm:inline">{assignLabel}</span>
-              <ChevronDown className="h-3 w-3" />
-            </DropdownMenuTrigger>
+          {/* Assign dropdown — desktop only */}
+          <div className="hidden lg:block">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className={cn(
+                  "inline-flex items-center justify-center h-8 gap-1 px-2.5 text-xs font-medium rounded-md hover:bg-muted",
+                  assignedAgentId ? "text-primary" : "text-muted-foreground"
+                )}
+              >
+                <UserPlus className="h-3 w-3" />
+                <span className="hidden sm:inline">{assignLabel}</span>
+                <ChevronDown className="h-3 w-3" />
+              </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
               className="border-border bg-popover"
@@ -1113,15 +1119,18 @@ export function MessageThread({
         </div>
       </div>
 
-      {/* Customer Tags Bar: Directly accessible in Inbox (Desktop & Mobile) */}
+      {/* Customer Tags Bar: Directly accessible in Inbox (Desktop only to match Screenshot 1) */}
       {contact && (
-        <div className="border-b border-border/60 bg-card/60 px-3 py-1.5 sm:px-4">
+        <div className="hidden lg:block border-b border-border/60 bg-card/60 px-3 py-1.5 sm:px-4">
           <ContactTagBar contactId={contact.id} />
         </div>
       )}
 
       {/* Messages Area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 overscroll-contain">
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto px-4 py-4 overscroll-y-contain [touch-action:pan-y] [-webkit-overflow-scrolling:touch]"
+      >
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />

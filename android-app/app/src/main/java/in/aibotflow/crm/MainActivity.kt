@@ -93,7 +93,6 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         setupWebView()
-        setupSwipeRefresh()
         setupBackNavigation()
         setupRetryButton()
 
@@ -149,7 +148,6 @@ class MainActivity : AppCompatActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                binding.swipeRefreshLayout.isRefreshing = false
                 binding.progressBar.visibility = View.GONE
                 CookieManager.getInstance().flush()
             }
@@ -157,7 +155,6 @@ class MainActivity : AppCompatActivity() {
             override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
                 if (request?.isForMainFrame == true) {
                     binding.progressBar.visibility = View.GONE
-                    binding.swipeRefreshLayout.isRefreshing = false
                     if (!isNetworkAvailable()) {
                         showErrorView()
                     }
@@ -251,20 +248,6 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
-    private fun setupSwipeRefresh() {
-        binding.swipeRefreshLayout.setColorSchemeResources(R.color.primary)
-        // Disable swipe refresh layout completely to eliminate accidental reloads when scrolling chat history up!
-        binding.swipeRefreshLayout.isEnabled = false
-        binding.swipeRefreshLayout.setOnRefreshListener {
-            if (isNetworkAvailable()) {
-                hideErrorView()
-                binding.webView.reload()
-            } else {
-                binding.swipeRefreshLayout.isRefreshing = false
-                showErrorView()
-            }
-        }
-    }
 
     private fun setupBackNavigation() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -308,12 +291,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun showErrorView() {
         binding.errorView.visibility = View.VISIBLE
-        binding.swipeRefreshLayout.visibility = View.GONE
+        binding.webView.visibility = View.GONE
     }
 
     private fun hideErrorView() {
         binding.errorView.visibility = View.GONE
-        binding.swipeRefreshLayout.visibility = View.VISIBLE
+        binding.webView.visibility = View.VISIBLE
     }
 
     private fun isNetworkAvailable(): Boolean {
