@@ -265,11 +265,11 @@ export function ConversationList({
   );
 
   return (
-    <div className="relative flex h-full w-full flex-col bg-[#0b141a] bg-[url('/inbox-doodle.svg')] bg-repeat text-white lg:bg-card lg:text-foreground lg:bg-none lg:w-80 lg:border-r lg:border-border overflow-hidden">
-      {/* Top Header - Sticky with glassmorphic backdrop */}
-      <div className="sticky top-0 z-10 bg-[#0b141a]/95 backdrop-blur-md lg:bg-card flex items-center justify-between px-4 pt-3.5 pb-2 shrink-0 border-b border-white/[0.04] lg:border-border/30">
+    <div className="relative flex h-full w-full flex-col bg-[#111b21] text-[#e9edef] lg:bg-card lg:text-foreground lg:w-80 lg:border-r lg:border-border overflow-hidden">
+      {/* Top Header - Sticky */}
+      <div className="sticky top-0 z-10 bg-[#111b21] flex items-center justify-between px-4 pt-3 pb-2 shrink-0 border-b border-[#222d34]/60 lg:border-border/30">
         <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-bold tracking-tight text-white lg:text-foreground">Inbox</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-[#e9edef] lg:text-foreground">Inbox</h1>
           {/* Subtle live realtime connection indicator */}
           <span className="flex h-2 w-2 relative ml-0.5" title="Live sync">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00a884] opacity-75" />
@@ -290,7 +290,7 @@ export function ConversationList({
             }}
             aria-label="Search"
             title="Search"
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#1c2327] hover:bg-[#252f36] text-neutral-200 lg:border-border/40 lg:bg-muted/60 lg:hover:bg-muted lg:text-foreground transition-all shadow-xs active:scale-95"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-[#202c33] hover:bg-[#2a3942] text-[#aebac1] transition-all active:scale-95 border border-white/[0.04] lg:border-border/40 lg:bg-muted/60 lg:hover:bg-muted lg:text-foreground shadow-xs"
           >
             <Search className="h-5 w-5" />
           </button>
@@ -299,9 +299,9 @@ export function ConversationList({
           <DropdownMenu>
             <DropdownMenuTrigger
               className={cn(
-                "relative flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#1c2327] hover:bg-[#252f36] text-neutral-200 lg:border-border/40 lg:bg-muted/60 lg:hover:bg-muted lg:text-foreground transition-all shadow-xs active:scale-95",
+                "relative flex h-10 w-10 items-center justify-center rounded-full bg-[#202c33] hover:bg-[#2a3942] text-[#aebac1] transition-all active:scale-95 border border-white/[0.04] lg:border-border/40 lg:bg-muted/60 lg:hover:bg-muted lg:text-foreground shadow-xs",
                 hasContactFilters || filter !== "all"
-                  ? "border-emerald-500/60 bg-emerald-950/40 text-[#00a884] dark:text-emerald-400"
+                  ? "bg-[#00a884]/20 text-[#00a884] border-[#00a884]/40"
                   : ""
               )}
               aria-label="Filter"
@@ -309,7 +309,7 @@ export function ConversationList({
             >
               <ListFilter className="h-5 w-5" />
               {(hasContactFilters || filter !== "all") && (
-                <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-[#00a884] ring-2 ring-[#0b141a] lg:ring-card" />
+                <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-[#00a884] ring-2 ring-[#111b21] lg:ring-card" />
               )}
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 border-border bg-popover shadow-lg">
@@ -396,21 +396,21 @@ export function ConversationList({
       </div>
 
       {/* Modern Search Bar */}
-      <div className="px-4 py-2 shrink-0">
+      <div className="px-4 py-2 shrink-0 bg-[#111b21]">
         <div className="relative flex items-center">
-          <Search className="absolute left-3.5 h-4 w-4 text-[#00a884] pointer-events-none" />
+          <Search className="absolute left-3.5 h-4 w-4 text-[#8696a0] pointer-events-none" />
           <Input
             id="inbox-search-input"
             value={search}
             onChange={handleSearchChange}
             placeholder={t("searchPlaceholder") || "Search conversations..."}
-            className="h-10 border border-white/10 bg-[#141e24] pl-10 pr-9 text-sm text-white placeholder:text-neutral-500 rounded-xl focus-visible:ring-1 focus-visible:ring-[#00a884] focus-visible:border-[#00a884] transition-all lg:bg-muted/80 lg:border-border lg:text-foreground"
+            className="h-10 border-0 bg-[#202c33] pl-10 pr-9 text-sm text-[#d1d7db] placeholder:text-[#8696a0] rounded-xl focus-visible:ring-1 focus-visible:ring-[#00a884] transition-all lg:bg-muted/80 lg:border lg:border-border lg:text-foreground"
           />
           {search && (
             <button
               type="button"
               onClick={() => setSearch("")}
-              className="absolute right-3 p-1 rounded-full text-neutral-400 hover:text-white transition-colors"
+              className="absolute right-3 p-1 rounded-full text-[#8696a0] hover:text-[#d1d7db] transition-colors"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -419,7 +419,7 @@ export function ConversationList({
       </div>
 
       {/* Filter Pills Row */}
-      <div className="flex items-center gap-2 overflow-x-auto px-4 py-1.5 no-scrollbar shrink-0">
+      <div className="flex items-center gap-2 overflow-x-auto px-4 py-1.5 no-scrollbar shrink-0 bg-[#111b21]">
         {/* All · 24 */}
         <button
           type="button"
@@ -430,8 +430,8 @@ export function ConversationList({
           className={cn(
             "inline-flex items-center shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition-all active:scale-95",
             tabFilter === "all" && filter === "all"
-              ? "bg-[#00a884] text-white shadow-[0_2px_8px_rgba(0,168,132,0.35)] font-bold"
-              : "border border-white/10 bg-[#1c2327] text-neutral-300 hover:bg-[#252f36] lg:border-border/40 lg:bg-muted/70 lg:text-muted-foreground"
+              ? "bg-[#00a884] text-[#111b21] font-bold shadow-none"
+              : "bg-[#202c33] text-[#8696a0] hover:bg-[#2a3942] hover:text-[#d1d7db] lg:border-border/40 lg:bg-muted/70 lg:text-muted-foreground"
           )}
         >
           <span>All</span>
@@ -443,10 +443,10 @@ export function ConversationList({
         <DropdownMenu>
           <DropdownMenuTrigger
             className={cn(
-              "inline-flex items-center gap-1.5 shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all border active:scale-95",
+              "inline-flex items-center gap-1.5 shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all active:scale-95",
               platformFilter !== "all"
-                ? "border-[#00a884]/50 bg-[#00a884]/20 text-[#00a884] font-bold shadow-[0_2px_8px_rgba(0,168,132,0.25)]"
-                : "border-white/10 bg-[#1c2327] text-neutral-300 hover:bg-[#252f36] lg:border-border/40 lg:bg-muted/70 lg:text-muted-foreground"
+                ? "bg-[#00a884]/20 text-[#00a884] font-bold border border-[#00a884]/40"
+                : "bg-[#202c33] text-[#aebac1] hover:bg-[#2a3942] lg:border-border/40 lg:bg-muted/70 lg:text-muted-foreground"
             )}
           >
             {platformFilter === "all" ? (
@@ -492,7 +492,7 @@ export function ConversationList({
               )}
             >
               <span className="flex items-center gap-2">
-                <WhatsAppIcon className="h-3.5 w-3.5 fill-current text-[#25D366]" /> WhatsApp
+                <WhatsAppIcon className="h-3.5 w-3.5 fill-current text-emerald-500" /> WhatsApp
               </span>
               {platformCounts.whatsapp > 0 && (
                 <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.2 text-[10px] font-bold text-emerald-500">
@@ -504,11 +504,11 @@ export function ConversationList({
               onClick={() => setPlatformFilter("facebook")}
               className={cn(
                 "text-sm flex items-center justify-between gap-3",
-                platformFilter === "facebook" && "text-[#0084FF] font-bold"
+                platformFilter === "facebook" && "text-blue-500 font-bold"
               )}
             >
               <span className="flex items-center gap-2">
-                <MessengerIcon className="h-3.5 w-3.5 fill-current text-[#0084FF]" /> Facebook
+                <MessengerIcon className="h-3.5 w-3.5 fill-current text-blue-500" /> Facebook
               </span>
               {platformCounts.facebook > 0 && (
                 <span className="rounded-full bg-blue-500/15 px-1.5 py-0.2 text-[10px] font-bold text-blue-500">
@@ -544,8 +544,8 @@ export function ConversationList({
           className={cn(
             "inline-flex items-center shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition-all active:scale-95",
             tabFilter === "unread"
-              ? "bg-[#00a884] text-white shadow-[0_2px_8px_rgba(0,168,132,0.35)] font-bold"
-              : "border border-white/10 bg-[#1c2327] text-neutral-300 hover:bg-[#252f36] lg:border-border/40 lg:bg-muted/70 lg:text-muted-foreground"
+              ? "bg-[#00a884] text-[#111b21] font-bold shadow-none"
+              : "bg-[#202c33] text-[#8696a0] hover:bg-[#2a3942] hover:text-[#d1d7db] lg:border-border/40 lg:bg-muted/70 lg:text-muted-foreground"
           )}
         >
           <span>Unread</span>
@@ -562,8 +562,8 @@ export function ConversationList({
           className={cn(
             "inline-flex items-center shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition-all active:scale-95",
             tabFilter === "mine"
-              ? "bg-[#00a884] text-white shadow-[0_2px_8px_rgba(0,168,132,0.35)] font-bold"
-              : "border border-white/10 bg-[#1c2327] text-neutral-300 hover:bg-[#252f36] lg:border-border/40 lg:bg-muted/70 lg:text-muted-foreground"
+              ? "bg-[#00a884] text-[#111b21] font-bold shadow-none"
+              : "bg-[#202c33] text-[#8696a0] hover:bg-[#2a3942] hover:text-[#d1d7db] lg:border-border/40 lg:bg-muted/70 lg:text-muted-foreground"
           )}
         >
           <span>Mine</span>
@@ -706,8 +706,8 @@ function ConversationItem({
         className={cn(
           "flex w-full items-center gap-3.5 px-4 py-3 text-left transition-all relative select-none",
           isActive
-            ? "bg-white/[0.08] lg:border-l-2 lg:border-[#00a884]"
-            : "hover:bg-white/[0.03] active:bg-white/[0.07]"
+            ? "bg-[#2a3942] lg:border-l-2 lg:border-[#00a884]"
+            : "hover:bg-[#202c33] active:bg-[#2a3942]"
         )}
       >
         {/* Avatar with Channel Badge */}
@@ -731,7 +731,7 @@ function ConversationItem({
           {/* Overlapping channel badge at bottom right of avatar */}
           <span
             className={cn(
-              "absolute -bottom-0.5 -right-0.5 flex h-4.5 w-4.5 items-center justify-center rounded-full ring-2 ring-[#0b141a] lg:ring-card shadow-xs text-white",
+              "absolute -bottom-0.5 -right-0.5 flex h-4.5 w-4.5 items-center justify-center rounded-full ring-2 ring-[#111b21] lg:ring-card shadow-xs text-white",
               channel === "facebook"
                 ? "bg-[#0084FF]"
                 : channel === "instagram"
@@ -752,7 +752,7 @@ function ConversationItem({
         {/* Center text content: Name and Preview */}
         <div className="min-w-0 flex-1 overflow-hidden">
           <div className="flex items-center gap-1.5 min-w-0">
-            <span className="truncate font-bold text-[15px] text-white lg:text-foreground tracking-tight">
+            <span className="truncate font-bold text-[15px] text-[#e9edef] lg:text-foreground tracking-tight">
               {displayName}
             </span>
             <span
@@ -768,7 +768,7 @@ function ConversationItem({
               {channel === "facebook" ? "FB" : channel === "instagram" ? "IG" : "WA"}
             </span>
           </div>
-          <p className="truncate text-[13px] text-neutral-400 font-normal leading-relaxed mt-0.5">
+          <p className="truncate text-[13px] text-[#8696a0] font-normal leading-relaxed mt-0.5">
             {previewText}
           </p>
         </div>
@@ -777,13 +777,13 @@ function ConversationItem({
         <div className="flex flex-col items-end justify-between shrink-0 self-stretch py-0.5 ml-2">
           <span className={cn(
             "text-[11px] whitespace-nowrap font-medium transition-colors",
-            unreadCount > 0 ? "text-[#00a884] font-bold" : "text-neutral-400"
+            unreadCount > 0 ? "text-[#00a884] font-bold" : "text-[#8696a0]"
           )}>
             {timeDisplay}
           </span>
           {unreadCount > 0 ? (
             <span
-              className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#00a884] px-1.5 text-[11px] font-bold text-[#0b141a] shadow-[0_2px_8px_rgba(0,168,132,0.4)]"
+              className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#00a884] px-1.5 text-[11px] font-bold text-[#111b21] shadow-none"
               title={`${unreadCount} unread messages`}
             >
               {unreadCount}
@@ -793,7 +793,7 @@ function ConversationItem({
       </button>
 
       {/* Inset Divider starting after avatar — quintessential WhatsApp look */}
-      <div className="ml-[72px] border-b border-white/[0.05] lg:border-border/30" />
+      <div className="ml-[72px] border-b border-[#222d34] lg:border-border/30" />
     </div>
   );
 }
