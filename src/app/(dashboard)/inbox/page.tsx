@@ -473,17 +473,14 @@ function InboxPageInner() {
         ),
       );
       // Record the selection on the deep-link ref BEFORE we change the
-      // URL. The router.replace below flips `deepLinkConvId`, which can
-      // in turn cause ConversationList to refetch and eventually call
-      // handleConversationsLoaded again. Without this line, the ref
-      // still points at the previous value, the auto-select block
-      // sees `ref !== deepLinkConvId`, fires a second time, and
-      // clobbers the messages MessageThread just fetched.
+      // URL.
       autoSelectedForDeepLinkRef.current = conv.id;
-      // Reflect the selection in the URL so a refresh lands the user
-      // back in the same thread, and so copy-paste links work. Use
-      // replace() to avoid polluting browser history with every click.
-      router.replace(`/inbox?c=${conv.id}`, { scroll: false });
+      // Push history state so Android hardware back button & browser back return to the conversation list
+      try {
+        window.history.pushState({ conversationId: conv.id }, "", `/inbox?c=${conv.id}`);
+      } catch {
+        router.replace(`/inbox?c=${conv.id}`, { scroll: false });
+      }
     },
     [activeConversation?.id, router]
   );
@@ -498,8 +495,49 @@ function InboxPageInner() {
     // Clearing the ref lets the deep-link auto-selector fire again if
     // the user later visits /inbox?c=<same-id> — desirable UX.
     autoSelectedForDeepLinkRef.current = null;
-    router.replace("/inbox", { scroll: false });
+    try {
+      if (window.history.state?.conversationId) {
+        window.history.replaceState(null, "", "/inbox");
+      } else {
+        router.replace("/inbox", { scroll: false });
+      }
+    } catch {
+      router.replace("/inbox", { scroll: false });
+    }
   }, [router]);
+
+  // Expose global methods on window so Android hardware back button can close active chat without leaving inbox!
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      (window as unknown as { __inboxHasActiveConversation?: () => boolean }).__inboxHasActiveConversation = () => {
+        return !!activeConversation;
+      };
+      (window as unknown as { __inboxCloseActiveConversation?: () => boolean }).__inboxCloseActiveConversation = () => {
+        handleCloseConversation();
+        return true;
+      };
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        delete (window as unknown as { __inboxHasActiveConversation?: () => boolean }).__inboxHasActiveConversation;
+        delete (window as unknown as { __inboxCloseActiveConversation?: () => boolean }).__inboxCloseActiveConversation;
+      }
+    };
+  }, [activeConversation, handleCloseConversation]);
+
+  // Handle browser popstate so hardware back also closes active chat naturally
+  useEffect(() => {
+    const handlePopState = () => {
+      if (activeConversation) {
+        setActiveConversation(null);
+        setActiveContact(null);
+        setMessages([]);
+        autoSelectedForDeepLinkRef.current = null;
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [activeConversation]);
 
 
   const handleMessagesLoaded = useCallback((loaded: Message[]) => {
@@ -562,7 +600,7 @@ function InboxPageInner() {
   const hasActiveConv = !!activeConversation;
 
   return (
-    <div className="-m-4 flex h-[calc(100vh-3.5rem)] flex-col overflow-hidden sm:-m-6">
+    <div className="flex h-full w-full flex-col overflow-hidden">
       {/* WhatsApp connection banner — in the flex column, not absolute,
           so it pushes the panels down instead of overlapping them. */}
       {whatsappConnected === false && (

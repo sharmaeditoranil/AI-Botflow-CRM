@@ -253,7 +253,7 @@ export function ConversationList({
     // w-full on mobile so the list occupies the whole viewport when it's
     // the single pane showing; fixed 320px on desktop where it shares the
     // row with the thread + contact sidebar.
-    <div className="flex h-full w-full flex-col border-r border-border bg-card lg:w-80">
+    <div className="flex h-full w-full flex-col bg-card lg:w-80 lg:border-r lg:border-border overflow-hidden">
       {/* Search + Filter */}
       <div className="space-y-2 border-b border-border p-3">
         <div className="relative">
@@ -679,7 +679,7 @@ function ConversationItem({
     <button
       onClick={handleClick}
       className={cn(
-        "flex w-full items-start gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/50",
+        "flex w-full items-start gap-3 pl-3 pr-3.5 py-3 text-left transition-colors hover:bg-muted/50 border-b border-border/30",
         isActive && "border-l-2 border-primary bg-muted/70"
       )}
     >
@@ -716,10 +716,10 @@ function ConversationItem({
       </div>
 
       {/* Content */}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="truncate text-sm font-medium text-foreground">
+      <div className="min-w-0 flex-1 overflow-hidden">
+        <div className="flex items-center justify-between gap-1.5">
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            <span className="truncate text-sm font-semibold text-foreground">
               {displayName}
             </span>
             <span
@@ -735,21 +735,31 @@ function ConversationItem({
               {channel === "facebook" ? "FB" : channel === "instagram" ? "IG" : "WA"}
             </span>
           </div>
-          <span className="shrink-0 text-[10px] text-muted-foreground">{timeAgo}</span>
+          <span className="shrink-0 text-[10px] font-medium text-muted-foreground whitespace-nowrap pl-1">
+            {timeAgo}
+          </span>
         </div>
-        <div className="mt-0.5 flex items-center justify-between gap-2">
-          <p className="truncate text-xs text-muted-foreground">
+
+        {/* Display phone number if contact has both a name and a phone number */}
+        {contact?.name && contact?.phone && (
+          <p className="truncate text-[11px] text-muted-foreground/80 font-mono mt-0.5">
+            {contact.phone}
+          </p>
+        )}
+
+        <div className="mt-1 flex items-center justify-between gap-2">
+          <p className="truncate text-xs text-muted-foreground flex-1 min-w-0">
             {conversation.last_message_text || t("noMessagesYet")}
           </p>
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1.5 pl-1.5">
             {conversation.unread_count > 0 && (
-              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-600 px-1.5 text-[11px] font-bold text-white shadow-xs">
                 {conversation.unread_count}
               </span>
             )}
             <span
               className={cn(
-                "h-2 w-2 rounded-full",
+                "h-2 w-2 rounded-full shrink-0",
                 STATUS_COLORS[conversation.status]
               )}
               title={conversation.status}

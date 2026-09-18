@@ -124,6 +124,10 @@ class MainActivity : AppCompatActivity() {
         cookieManager.setAcceptCookie(true)
         cookieManager.setAcceptThirdPartyCookies(binding.webView, true)
 
+        binding.webView.isVerticalScrollBarEnabled = false
+        binding.webView.isHorizontalScrollBarEnabled = false
+        binding.webView.overScrollMode = View.OVER_SCROLL_NEVER
+
         binding.webView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url?.toString() ?: return false
@@ -249,6 +253,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupSwipeRefresh() {
         binding.swipeRefreshLayout.setColorSchemeResources(R.color.primary)
+        // Disable swipe refresh layout completely to eliminate accidental reloads when scrolling chat history up!
+        binding.swipeRefreshLayout.isEnabled = false
         binding.swipeRefreshLayout.setOnRefreshListener {
             if (isNetworkAvailable()) {
                 hideErrorView()
@@ -263,10 +269,18 @@ class MainActivity : AppCompatActivity() {
     private fun setupBackNavigation() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (binding.webView.canGoBack()) {
-                    binding.webView.goBack()
-                } else {
-                    finish()
+                // If a chat conversation is currently open, close it first and return to conversation list (1 step back)
+                binding.webView.evaluateJavascript(
+                    "(function() { if (typeof window.__inboxHasActiveConversation === 'function' && window.__inboxHasActiveConversation()) { if (typeof window.__inboxCloseActiveConversation === 'function') { window.__inboxCloseActiveConversation(); return true; } } return false; })();"
+                ) { result ->
+                    val handled = result?.trim()?.equals("true", ignoreCase = true) == true
+                    if (!handled) {
+                        if (binding.webView.canGoBack()) {
+                            binding.webView.goBack()
+                        } else {
+                            finish()
+                        }
+                    }
                 }
             }
         })
