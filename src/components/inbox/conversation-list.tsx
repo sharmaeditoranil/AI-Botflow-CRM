@@ -276,22 +276,29 @@ export function ConversationList({
 
   return (
     <div className="relative flex h-full w-full flex-col bg-[#0b141a] bg-[url('/inbox-doodle.svg')] bg-repeat text-white lg:bg-card lg:text-foreground lg:bg-none lg:w-80 lg:border-r lg:border-border overflow-hidden">
-      {/* Top Header - Sticky so it never scrolls away */}
-      <div className="sticky top-0 z-10 bg-[#0b141a]/95 backdrop-blur-md lg:bg-card flex items-center justify-between px-4 pt-4 pb-2 shrink-0">
-        <h1 className="text-2xl font-bold tracking-tight text-white lg:text-foreground">Inbox</h1>
+      {/* Top Header - Sticky with glassmorphic backdrop */}
+      <div className="sticky top-0 z-10 bg-[#0b141a]/95 backdrop-blur-md lg:bg-card flex items-center justify-between px-4 pt-3.5 pb-2 shrink-0 border-b border-white/[0.04] lg:border-border/30">
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold tracking-tight text-white lg:text-foreground">Inbox</h1>
+          {/* Subtle live realtime connection indicator */}
+          <span className="flex h-2 w-2 relative ml-0.5" title="Live sync">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00a884] opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00a884]" />
+          </span>
+        </div>
         <div className="flex items-center gap-2">
           {/* Filter Button with Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger
               className={cn(
-                "relative flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-[#1c2327] hover:bg-[#252f36] text-neutral-200 lg:border-border/40 lg:bg-muted/60 lg:hover:bg-muted lg:text-foreground transition-colors shadow-xs",
+                "relative flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-[#1c2327] hover:bg-[#252f36] text-neutral-200 lg:border-border/40 lg:bg-muted/60 lg:hover:bg-muted lg:text-foreground transition-all shadow-xs active:scale-95",
                 hasContactFilters || filter !== "all"
                   ? "border-emerald-500/60 bg-emerald-950/40 text-[#00a884] dark:text-emerald-400"
                   : ""
               )}
               aria-label="Filter"
             >
-              <SlidersHorizontal className="h-5 w-5" />
+              <SlidersHorizontal className="h-4.5 w-4.5" />
               {(hasContactFilters || filter !== "all") && (
                 <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-[#00a884] ring-2 ring-[#0b141a] lg:ring-card" />
               )}
@@ -379,30 +386,30 @@ export function ConversationList({
         </div>
       </div>
 
-      {/* Permanent Always-Visible Search Box */}
-      <div className="px-4 py-1.5 shrink-0">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+      {/* Modern Search Bar */}
+      <div className="px-4 py-2 shrink-0">
+        <div className="relative flex items-center">
+          <Search className="absolute left-3.5 h-4 w-4 text-[#00a884] pointer-events-none" />
           <Input
             value={search}
             onChange={handleSearchChange}
-            placeholder={t("searchPlaceholder")}
-            className="h-9 border border-white/10 bg-[#1c2327] pl-9 pr-8 text-sm text-white placeholder:text-neutral-400 rounded-xl lg:bg-muted/80 lg:border-border lg:text-foreground"
+            placeholder={t("searchPlaceholder") || "Search by name, number..."}
+            className="h-10 border border-white/10 bg-[#141e24] pl-10 pr-9 text-sm text-white placeholder:text-neutral-500 rounded-xl focus-visible:ring-1 focus-visible:ring-[#00a884] focus-visible:border-[#00a884] transition-all lg:bg-muted/80 lg:border-border lg:text-foreground"
           />
           {search && (
             <button
               type="button"
               onClick={() => setSearch("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white lg:hover:text-foreground"
+              className="absolute right-3 p-1 rounded-full text-neutral-400 hover:text-white transition-colors"
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5" />
             </button>
           )}
         </div>
       </div>
 
-      {/* Filter Pills Row - Exact match to Screenshot */}
-      <div className="flex items-center gap-2 overflow-x-auto px-4 py-2 no-scrollbar shrink-0">
+      {/* Filter Pills Row */}
+      <div className="flex items-center gap-2 overflow-x-auto px-4 py-1.5 no-scrollbar shrink-0">
         {/* All · 24 */}
         <button
           type="button"
@@ -411,9 +418,9 @@ export function ConversationList({
             setFilter("all");
           }}
           className={cn(
-            "inline-flex items-center shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition-all",
+            "inline-flex items-center shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition-all active:scale-95",
             tabFilter === "all" && filter === "all"
-              ? "bg-[#00a884] text-white shadow-xs font-bold"
+              ? "bg-[#00a884] text-white shadow-[0_2px_8px_rgba(0,168,132,0.35)] font-bold"
               : "border border-white/10 bg-[#1c2327] text-neutral-300 hover:bg-[#252f36] lg:border-border/40 lg:bg-muted/70 lg:text-muted-foreground"
           )}
         >
@@ -426,35 +433,35 @@ export function ConversationList({
         <DropdownMenu>
           <DropdownMenuTrigger
             className={cn(
-              "inline-flex items-center gap-1.5 shrink-0 rounded-full px-3 py-1.5 text-xs font-medium transition-all border",
+              "inline-flex items-center gap-1.5 shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all border active:scale-95",
               platformFilter !== "all"
-                ? "border-[#00a884]/40 bg-[#00a884]/20 text-[#00a884] dark:text-emerald-400 font-bold"
+                ? "border-[#00a884]/50 bg-[#00a884]/20 text-[#00a884] font-bold shadow-[0_2px_8px_rgba(0,168,132,0.25)]"
                 : "border-white/10 bg-[#1c2327] text-neutral-300 hover:bg-[#252f36] lg:border-border/40 lg:bg-muted/70 lg:text-muted-foreground"
             )}
           >
             {platformFilter === "all" ? (
               <span className="flex items-center gap-1">
-                <span className="h-2.5 w-2.5 rounded-full bg-[#25D366]" />
-                <span className="h-2.5 w-2.5 rounded-full bg-gradient-to-tr from-[#f09433] via-[#dc2743] to-[#bc1888]" />
-                <span className="h-2.5 w-2.5 rounded-full bg-[#0084FF]" />
+                <span className="h-2.5 w-2.5 rounded-full bg-[#25D366] shadow-xs" />
+                <span className="h-2.5 w-2.5 rounded-full bg-gradient-to-tr from-[#f09433] via-[#dc2743] to-[#bc1888] shadow-xs" />
+                <span className="h-2.5 w-2.5 rounded-full bg-[#0084FF] shadow-xs" />
               </span>
             ) : platformFilter === "whatsapp" ? (
-              <span className="flex items-center gap-1 text-[#25D366]">
+              <span className="flex items-center gap-1.5 text-[#25D366] font-bold">
                 <WhatsAppIcon className="h-3 w-3 fill-current" />
-                <span>WA</span>
+                <span>WhatsApp</span>
               </span>
             ) : platformFilter === "facebook" ? (
-              <span className="flex items-center gap-1 text-[#0084FF]">
+              <span className="flex items-center gap-1.5 text-[#0084FF] font-bold">
                 <MessengerIcon className="h-3 w-3 fill-current" />
-                <span>FB</span>
+                <span>Facebook</span>
               </span>
             ) : (
-              <span className="flex items-center gap-1 text-pink-500">
+              <span className="flex items-center gap-1.5 text-pink-400 font-bold">
                 <InstagramIcon className="h-3 w-3 fill-current" />
-                <span>IG</span>
+                <span>Instagram</span>
               </span>
             )}
-            <ChevronDown className="h-3 w-3 opacity-70" />
+            <ChevronDown className="h-3 w-3 opacity-70 ml-0.5" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="border-border bg-popover shadow-md">
             <DropdownMenuItem
@@ -525,9 +532,9 @@ export function ConversationList({
             setTabFilter(tabFilter === "unread" ? "all" : "unread");
           }}
           className={cn(
-            "inline-flex items-center shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition-all",
+            "inline-flex items-center shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition-all active:scale-95",
             tabFilter === "unread"
-              ? "bg-[#00a884] text-white shadow-xs font-bold"
+              ? "bg-[#00a884] text-white shadow-[0_2px_8px_rgba(0,168,132,0.35)] font-bold"
               : "border border-white/10 bg-[#1c2327] text-neutral-300 hover:bg-[#252f36] lg:border-border/40 lg:bg-muted/70 lg:text-muted-foreground"
           )}
         >
@@ -543,9 +550,9 @@ export function ConversationList({
             setTabFilter(tabFilter === "mine" ? "all" : "mine");
           }}
           className={cn(
-            "inline-flex items-center shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition-all",
+            "inline-flex items-center shrink-0 rounded-full px-4 py-1.5 text-xs font-semibold transition-all active:scale-95",
             tabFilter === "mine"
-              ? "bg-[#00a884] text-white shadow-xs font-bold"
+              ? "bg-[#00a884] text-white shadow-[0_2px_8px_rgba(0,168,132,0.35)] font-bold"
               : "border border-white/10 bg-[#1c2327] text-neutral-300 hover:bg-[#252f36] lg:border-border/40 lg:bg-muted/70 lg:text-muted-foreground"
           )}
         >
@@ -595,13 +602,25 @@ export function ConversationList({
       {/* Conversation Items List with native touch scrolling */}
       <div className="min-h-0 flex-1 overflow-y-auto [-webkit-overflow-scrolling:touch] [overscroll-behavior-y:none] [touch-action:pan-y] pb-24">
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center px-4">
-            <p className="text-sm font-medium text-neutral-400">
+          <div className="flex flex-col items-center justify-center py-20 text-center px-6">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.05] border border-white/10 mb-3">
+              <Search className="h-6 w-6 text-neutral-500" />
+            </div>
+            <p className="text-sm font-semibold text-neutral-300">
               {search ? t("noMatchingConversations") : t("noConversations")}
             </p>
-            <p className="mt-1 text-xs text-neutral-500">
+            <p className="mt-1 text-xs text-neutral-500 max-w-xs">
               {search ? t("tryDifferentSearch") : t("conversationsWillAppear")}
             </p>
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="mt-3 text-xs font-semibold text-[#00a884] hover:underline"
+              >
+                Clear search
+              </button>
+            )}
           </div>
         ) : (
           filtered.map((conv) => (
@@ -621,11 +640,11 @@ export function ConversationList({
       <button
         type="button"
         onClick={() => router.push("/contacts")}
-        className="fixed bottom-20 right-4 z-30 flex h-11 w-11 items-center justify-center rounded-full bg-[#00a884] text-white shadow-xl hover:bg-[#02906f] active:scale-95 transition-all lg:hidden"
+        className="fixed bottom-20 right-4 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-[#00a884] text-white shadow-[0_4px_18px_rgba(0,168,132,0.45)] hover:bg-[#02906f] active:scale-90 transition-all lg:hidden"
         aria-label="Add Subscriber"
         title="Add Subscriber"
       >
-        <UserPlus className="h-5 w-5" />
+        <UserPlus className="h-5.5 w-5.5" />
       </button>
     </div>
   );
@@ -671,92 +690,100 @@ function ConversationItem({
   const unreadCount = Number(conversation.unread_count) || 0;
 
   return (
-    <button
-      onClick={handleClick}
-      className={cn(
-        "flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors border-b border-white/[0.06] lg:border-border/20 relative group",
-        isActive
-          ? "bg-white/[0.08] lg:border-l-2 lg:border-[#00a884]"
-          : "hover:bg-white/[0.04] active:bg-white/[0.08]"
-      )}
-    >
-      {/* Avatar with Channel Badge */}
-      <div className="relative shrink-0">
-        <div
-          className={cn(
-            "flex h-12 w-12 items-center justify-center rounded-full font-bold text-sm tracking-wide shadow-xs",
-            contact?.avatar_url ? "bg-muted" : avatarBg
-          )}
-        >
-          {contact?.avatar_url ? (
-            <img
-              src={contact.avatar_url}
-              alt={displayName}
-              className="h-12 w-12 rounded-full object-cover"
-            />
-          ) : (
-            <span>{initials}</span>
-          )}
-        </div>
-        {/* Overlapping channel badge at bottom right of avatar */}
-        <span
-          className={cn(
-            "absolute -bottom-0.5 -right-0.5 flex h-4.5 w-4.5 items-center justify-center rounded-full ring-2 ring-[#0b141a] lg:ring-card shadow-xs text-white",
-            channel === "facebook"
-              ? "bg-[#0084FF]"
-              : channel === "instagram"
-              ? "bg-gradient-to-tr from-[#f09433] via-[#dc2743] to-[#bc1888]"
-              : "bg-[#25D366]"
-          )}
-        >
-          {channel === "facebook" ? (
-            <MessengerIcon className="h-2.5 w-2.5 fill-current" />
-          ) : channel === "instagram" ? (
-            <InstagramIcon className="h-2.5 w-2.5 fill-current" />
-          ) : (
-            <WhatsAppIcon className="h-2.5 w-2.5 fill-current" />
-          )}
-        </span>
-      </div>
-
-      {/* Center text content: Name and Preview */}
-      <div className="min-w-0 flex-1 overflow-hidden py-0.5">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className="truncate font-bold text-[15px] text-white lg:text-foreground tracking-tight">
-            {displayName}
-          </span>
-          <span
+    <div className="relative group">
+      <button
+        onClick={handleClick}
+        className={cn(
+          "flex w-full items-center gap-3.5 px-4 py-3 text-left transition-all relative select-none",
+          isActive
+            ? "bg-white/[0.08] lg:border-l-2 lg:border-[#00a884]"
+            : "hover:bg-white/[0.03] active:bg-white/[0.07]"
+        )}
+      >
+        {/* Avatar with Channel Badge */}
+        <div className="relative shrink-0">
+          <div
             className={cn(
-              "inline-flex shrink-0 items-center rounded px-1.5 py-0.2 text-[9px] font-bold uppercase tracking-wider",
-              channel === "facebook"
-                ? "bg-blue-950/80 text-[#60a5fa] border border-blue-800/40"
-                : channel === "instagram"
-                ? "bg-pink-950/80 text-[#f472b6] border border-pink-800/40"
-                : "bg-emerald-950/80 text-[#34d399] border border-emerald-800/40"
+              "flex h-12 w-12 items-center justify-center rounded-full font-bold text-sm tracking-wide shadow-xs select-none",
+              contact?.avatar_url ? "bg-muted" : avatarBg
             )}
           >
-            {channel === "facebook" ? "FB" : channel === "instagram" ? "IG" : "WA"}
+            {contact?.avatar_url ? (
+              <img
+                src={contact.avatar_url}
+                alt={displayName}
+                className="h-12 w-12 rounded-full object-cover"
+              />
+            ) : (
+              <span>{initials}</span>
+            )}
+          </div>
+          {/* Overlapping channel badge at bottom right of avatar */}
+          <span
+            className={cn(
+              "absolute -bottom-0.5 -right-0.5 flex h-4.5 w-4.5 items-center justify-center rounded-full ring-2 ring-[#0b141a] lg:ring-card shadow-xs text-white",
+              channel === "facebook"
+                ? "bg-[#0084FF]"
+                : channel === "instagram"
+                ? "bg-gradient-to-tr from-[#f09433] via-[#dc2743] to-[#bc1888]"
+                : "bg-[#25D366]"
+            )}
+          >
+            {channel === "facebook" ? (
+              <MessengerIcon className="h-2.5 w-2.5 fill-current" />
+            ) : channel === "instagram" ? (
+              <InstagramIcon className="h-2.5 w-2.5 fill-current" />
+            ) : (
+              <WhatsAppIcon className="h-2.5 w-2.5 fill-current" />
+            )}
           </span>
         </div>
-        <p className="truncate text-[13px] text-neutral-400 font-normal leading-relaxed mt-0.5">
-          {previewText}
-        </p>
-      </div>
 
-      {/* Far Right Column: Time on top, Unread Badge on bottom */}
-      <div className="flex flex-col items-end justify-between shrink-0 self-stretch py-0.5 ml-2">
-        <span className="text-xs text-neutral-400 whitespace-nowrap">
-          {timeDisplay}
-        </span>
-        {unreadCount > 0 ? (
-          <span
-            className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#00a884] px-1.5 text-[11px] font-bold text-[#0b141a] shadow-xs"
-            title={`${unreadCount} unread messages`}
-          >
-            {unreadCount}
+        {/* Center text content: Name and Preview */}
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="truncate font-bold text-[15px] text-white lg:text-foreground tracking-tight">
+              {displayName}
+            </span>
+            <span
+              className={cn(
+                "inline-flex shrink-0 items-center rounded px-1.5 py-0.2 text-[9px] font-extrabold uppercase tracking-wider",
+                channel === "facebook"
+                  ? "bg-blue-500/15 text-[#0084FF] border border-blue-500/30"
+                  : channel === "instagram"
+                  ? "bg-pink-500/15 text-pink-400 border border-pink-500/30"
+                  : "bg-emerald-500/15 text-[#25D366] border border-emerald-500/30"
+              )}
+            >
+              {channel === "facebook" ? "FB" : channel === "instagram" ? "IG" : "WA"}
+            </span>
+          </div>
+          <p className="truncate text-[13px] text-neutral-400 font-normal leading-relaxed mt-0.5">
+            {previewText}
+          </p>
+        </div>
+
+        {/* Far Right Column: Time on top, Unread Badge on bottom */}
+        <div className="flex flex-col items-end justify-between shrink-0 self-stretch py-0.5 ml-2">
+          <span className={cn(
+            "text-[11px] whitespace-nowrap font-medium transition-colors",
+            unreadCount > 0 ? "text-[#00a884] font-bold" : "text-neutral-400"
+          )}>
+            {timeDisplay}
           </span>
-        ) : null}
-      </div>
-    </button>
+          {unreadCount > 0 ? (
+            <span
+              className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#00a884] px-1.5 text-[11px] font-bold text-[#0b141a] shadow-[0_2px_8px_rgba(0,168,132,0.4)]"
+              title={`${unreadCount} unread messages`}
+            >
+              {unreadCount}
+            </span>
+          ) : null}
+        </div>
+      </button>
+
+      {/* Inset Divider starting after avatar — quintessential WhatsApp look */}
+      <div className="ml-[72px] border-b border-white/[0.05] lg:border-border/30" />
+    </div>
   );
 }
