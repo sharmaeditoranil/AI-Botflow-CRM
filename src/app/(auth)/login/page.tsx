@@ -88,50 +88,60 @@ function LoginPageInner() {
     window.location.href = destination;
   };
 
-  // Handler: Send Email OTP
+  // Handler: Send Email OTP via Brevo
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: {
-        shouldCreateUser: false,
-      },
-    });
+    try {
+      const res = await fetch("/api/auth/send-login-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const data = await res.json();
 
-    if (error) {
-      setError(error.message);
+      if (!res.ok) {
+        setError(data.error || "Failed to send verification code.");
+        setLoading(false);
+        return;
+      }
+
+      setOtpStep("verify");
+      setResendCooldown(60);
+    } catch {
+      setError("Network error while sending verification code.");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setOtpStep("verify");
-    setResendCooldown(60);
-    setLoading(false);
   };
 
-  // Handler: Resend OTP
+  // Handler: Resend OTP via Brevo
   const handleResendOtp = async () => {
     if (resendCooldown > 0 || !email) return;
     setError(null);
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: {
-        shouldCreateUser: false,
-      },
-    });
+    try {
+      const res = await fetch("/api/auth/resend-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), type: "login" }),
+      });
+      const data = await res.json();
 
-    setLoading(false);
-    if (error) {
-      setError(error.message);
-      return;
+      if (!res.ok) {
+        setError(data.error || "Failed to resend code.");
+        return;
+      }
+
+      setResendCooldown(60);
+    } catch {
+      setError("Network error while resending verification code.");
+    } finally {
+      setLoading(false);
     }
-
-    setResendCooldown(60);
   };
 
   // Handler: Verify OTP & Log in

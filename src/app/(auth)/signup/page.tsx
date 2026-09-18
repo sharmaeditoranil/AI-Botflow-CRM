@@ -98,51 +98,32 @@ function SignupPageInner() {
 
     setLoading(true);
 
-    const emailRedirectTo = inviteToken
-      ? `${window.location.origin}/join/${encodeURIComponent(inviteToken)}`
-      : undefined;
+    try {
+      const res = await fetch("/api/auth/send-signup-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+          fullName: fullName.trim(),
+        }),
+      });
 
-    const { data, error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: {
-        data: {
-          full_name: fullName.trim(),
-        },
-        ...(emailRedirectTo ? { emailRedirectTo } : {}),
-      },
-    });
+      const data = await res.json();
 
-    if (error) {
-      if (error.message?.toLowerCase().includes("rate limit")) {
-        setError("Email sending limit exceeded by Supabase. Please wait a few minutes or sign in if you already have an account.");
-      } else {
-        setError(error.message);
+      if (!res.ok) {
+        setError(data.error || "Failed to create account.");
+        setLoading(false);
+        return;
       }
+
+      setSuccess(true);
+      setResendCooldown(60);
+    } catch {
+      setError("Network error while creating account. Please try again.");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    // Check if user already exists (Supabase returns empty identities array without throwing an error)
-    if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
-      setError("An account with this email already exists. Please sign in or use forgot password to reset it.");
-      setLoading(false);
-      return;
-    }
-
-    // If Supabase auto-confirmed user (email confirmation disabled)
-    if (data?.session) {
-      const destination = inviteToken
-        ? `/join/${encodeURIComponent(inviteToken)}`
-        : "/dashboard";
-      window.location.href = destination;
-      return;
-    }
-
-    // Supabase dispatched email confirmation with 6-digit OTP
-    setSuccess(true);
-    setResendCooldown(60);
-    setLoading(false);
   };
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
@@ -152,11 +133,23 @@ function SignupPageInner() {
     setError(null);
     setOtpLoading(true);
 
-    const { error } = await supabase.auth.verifyOtp({
+    let { error } = await supabase.auth.verifyOtp({
       email: email.trim(),
       token: otp.trim(),
       type: "signup",
     });
+
+    if (error) {
+      // If code was resent or generated via magiclink token
+      const fallback = await supabase.auth.verifyOtp({
+        email: email.trim(),
+        token: otp.trim(),
+        type: "email",
+      });
+      if (!fallback.error) {
+        error = null;
+      }
+    }
 
     if (error) {
       setError(error.message);
@@ -182,21 +175,32 @@ function SignupPageInner() {
     setResendNotice(false);
     setOtpLoading(true);
 
-    const { error } = await supabase.auth.resend({
-      type: "signup",
-      email: email.trim(),
-    });
+    try {
+      const res = await fetch("/api/auth/resend-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim(),
+          type: "signup",
+        }),
+      });
 
-    setOtpLoading(false);
+      const data = await res.json();
 
-    if (error) {
-      setError(error.message);
-      return;
+      if (!res.ok) {
+        setError(data.error || "Failed to resend code.");
+        setOtpLoading(false);
+        return;
+      }
+
+      setResendCooldown(60);
+      setResendNotice(true);
+      setTimeout(() => setResendNotice(false), 5000);
+    } catch {
+      setError("Network error while resending verification code.");
+    } finally {
+      setOtpLoading(false);
     }
-
-    setResendCooldown(60);
-    setResendNotice(true);
-    setTimeout(() => setResendNotice(false), 5000);
   };
 
   if (success) {
