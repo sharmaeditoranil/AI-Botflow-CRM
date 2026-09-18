@@ -5,6 +5,7 @@ on:
     paths:
       - 'android-app/**'
       - '.github/workflows/build-apk.yml'
+      - 'public/brand/**'
     branches:
       - main
   workflow_dispatch:
@@ -34,7 +35,7 @@ jobs:
       - name: Build Debug APK
         run: |
           cd android-app
-          gradle assembleDebug --stacktrace
+          gradle assembleDebug --stacktrace --info
 
       - name: Rename and Prepare APK
         run: |
