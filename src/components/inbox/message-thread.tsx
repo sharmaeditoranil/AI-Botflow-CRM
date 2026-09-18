@@ -1118,6 +1118,7 @@ export function MessageThread({
           </DropdownMenu>
         </div>
       </div>
+    </div>
 
       {/* Customer Tags Bar: Directly accessible in Inbox (Desktop only to match Screenshot 1) */}
       {contact && (
