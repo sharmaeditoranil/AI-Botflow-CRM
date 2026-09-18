@@ -13,6 +13,8 @@ jobs:
   build:
     name: Build AI Botflow CRM APK
     runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
 
     steps:
       - name: Checkout Repository
@@ -23,9 +25,6 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -48,15 +47,3 @@ jobs:
           name: ai-botflow-crm-apk
           path: build-output/ai-botflow-crm.apk
           if-no-files-found: error
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
-        with:
-          files: build-output/ai-botflow-crm.apk
-          name: AI Botflow CRM Android App
-          tag_name: v1.0.0-apk
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
