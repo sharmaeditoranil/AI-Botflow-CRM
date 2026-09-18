@@ -280,28 +280,7 @@ export function ConversationList({
       <div className="sticky top-0 z-10 bg-[#0b141a]/95 backdrop-blur-md lg:bg-card flex items-center justify-between px-4 pt-4 pb-2 shrink-0">
         <h1 className="text-2xl font-bold tracking-tight text-white lg:text-foreground">Inbox</h1>
         <div className="flex items-center gap-2">
-          {/* Search Button */}
-          <button
-            type="button"
-            onClick={() => {
-              setShowSearch((prev) => {
-                const next = !prev;
-                try { sessionStorage.setItem("inbox:showSearch", String(next)); } catch {}
-                return next;
-              });
-            }}
-            aria-label="Search"
-            className={cn(
-              "flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-[#1c2327] hover:bg-[#252f36] text-neutral-200 lg:border-border/40 lg:bg-muted/60 lg:hover:bg-muted lg:text-foreground transition-colors shadow-xs",
-              showSearch || search
-                ? "border-emerald-500/60 bg-emerald-950/40 text-[#00a884] dark:text-emerald-400"
-                : ""
-            )}
-          >
-            <Search className="h-5 w-5" />
-          </button>
-
-          {/* Filter Button */}
+          {/* Filter Button with Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger
               className={cn(
@@ -400,30 +379,27 @@ export function ConversationList({
         </div>
       </div>
 
-      {/* Expandable Search Input */}
-      {(showSearch || search) && (
-        <div className="px-4 py-1.5 shrink-0">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={handleSearchChange}
-              placeholder={t("searchPlaceholder")}
-              autoFocus
-              className="h-9 border-border bg-muted/80 pl-9 pr-8 text-sm text-foreground placeholder-muted-foreground rounded-xl"
-            />
-            {search && (
-              <button
-                type="button"
-                onClick={() => setSearch("")}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
-          </div>
+      {/* Permanent Always-Visible Search Box */}
+      <div className="px-4 py-1.5 shrink-0">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+          <Input
+            value={search}
+            onChange={handleSearchChange}
+            placeholder={t("searchPlaceholder")}
+            className="h-9 border border-white/10 bg-[#1c2327] pl-9 pr-8 text-sm text-white placeholder:text-neutral-400 rounded-xl lg:bg-muted/80 lg:border-border lg:text-foreground"
+          />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white lg:hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Filter Pills Row - Exact match to Screenshot */}
       <div className="flex items-center gap-2 overflow-x-auto px-4 py-2 no-scrollbar shrink-0">
@@ -641,15 +617,15 @@ export function ConversationList({
         )}
       </div>
 
-      {/* Floating Action Button (FAB) - WhatsApp New Chat Button */}
+      {/* Floating Action Button (FAB) - Compact Add Subscriber Button */}
       <button
         type="button"
         onClick={() => router.push("/contacts")}
-        className="fixed bottom-20 right-4 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-[#00a884] text-white shadow-2xl hover:bg-[#02906f] active:scale-95 transition-all lg:hidden"
-        aria-label="New WhatsApp Chat"
-        title="Start New Chat"
+        className="fixed bottom-20 right-4 z-30 flex h-11 w-11 items-center justify-center rounded-full bg-[#00a884] text-white shadow-xl hover:bg-[#02906f] active:scale-95 transition-all lg:hidden"
+        aria-label="Add Subscriber"
+        title="Add Subscriber"
       >
-        <WhatsAppIcon className="h-7 w-7 fill-current" />
+        <UserPlus className="h-5 w-5" />
       </button>
     </div>
   );
@@ -693,7 +669,6 @@ function ConversationItem({
   const avatarBg = getAvatarColor(displayName);
   const previewText = conversation.last_message_text || t("noMessagesYet");
   const unreadCount = Number(conversation.unread_count) || 0;
-  const totalCount = (conversation as unknown as { message_count?: number }).message_count ?? 0;
 
   return (
     <button
@@ -780,16 +755,7 @@ function ConversationItem({
           >
             {unreadCount}
           </span>
-        ) : totalCount > 0 ? (
-          <span
-            className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/10 border border-white/10 px-1.5 text-[11px] font-medium text-neutral-400 shadow-xs"
-            title={`${totalCount} messages`}
-          >
-            {totalCount}
-          </span>
-        ) : (
-          <span className="h-5" />
-        )}
+        ) : null}
       </div>
     </button>
   );
