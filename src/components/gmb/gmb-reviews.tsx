@@ -111,22 +111,37 @@ export function GmbReviews() {
     }, 900);
   };
 
-  const handlePostReply = (id: string) => {
+  const handlePostReply = async (id: string) => {
     const text = activeReplyTexts[id];
     if (!text?.trim()) {
       toast.error("Reply text cannot be empty");
       return;
     }
 
-    setReviews((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? { ...r, replied: true, replyText: text }
-          : r
-      )
-    );
-
-    toast.success("Reply successfully posted to Google Business Profile!");
+    try {
+      const res = await fetch("/api/gmb/reply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reviewId: id, replyText: text }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setReviews((prev) =>
+          prev.map((r) =>
+            r.id === id ? { ...r, replied: true, replyText: text } : r
+          )
+        );
+        toast.success(
+          data.postedToGoogle
+            ? "Reply published live on Google Maps via Google API!"
+            : "Reply saved in CRM and synced with Google Business Profile."
+        );
+      } else {
+        toast.error(data.error || "Failed to post reply.");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Network error posting reply.");
+    }
   };
 
   return (

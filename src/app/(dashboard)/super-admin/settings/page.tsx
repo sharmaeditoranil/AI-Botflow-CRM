@@ -27,6 +27,8 @@ export default function SuperAdminSettingsPage() {
     razorpay_key_id: '',
     razorpay_key_secret: '',
     razorpay_webhook_secret: '',
+    google_client_id: '',
+    google_client_secret: '',
     support_email: 'support@aibotflow.in',
     support_phone: '',
   });
@@ -43,6 +45,8 @@ export default function SuperAdminSettingsPage() {
             razorpay_key_id: data.settings.razorpay_key_id || '',
             razorpay_key_secret: data.settings.razorpay_key_secret || '',
             razorpay_webhook_secret: data.settings.razorpay_webhook_secret || '',
+            google_client_id: data.settings.google_client_id || '',
+            google_client_secret: data.settings.google_client_secret || '',
             support_email: data.settings.support_email || 'support@aibotflow.in',
             support_phone: data.settings.support_phone || '',
           });
@@ -189,6 +193,57 @@ export default function SuperAdminSettingsPage() {
           <div className="rounded-lg border border-border/80 bg-muted/40 p-3 text-[11px] text-muted-foreground">
             <strong>Webhook URL for Razorpay:</strong>{' '}
             <code className="text-primary font-semibold">https://dash.aibotflow.in/api/webhooks/razorpay</code>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Google Cloud API & Business Profile (GMB) Credentials */}
+      <Card className="border-border bg-card">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className="flex size-6 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400">
+              <span className="font-bold text-xs">G</span>
+            </div>
+            <div>
+              <CardTitle className="text-base font-bold text-foreground">
+                Google Business Profile (GMB) OAuth API
+              </CardTitle>
+              <CardDescription className="text-xs text-muted-foreground">
+                OAuth 2.0 Web Application credentials from Google Cloud Console used for 1-click Google Business Profile connect.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4 text-xs">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label className="text-muted-foreground">Google Client ID</Label>
+              <Input
+                placeholder="e.g. 123456789-xxx.apps.googleusercontent.com"
+                value={form.google_client_id}
+                onChange={(e) => setForm({ ...form, google_client_id: e.target.value })}
+                className="border-border bg-muted"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-muted-foreground">Google Client Secret</Label>
+              <Input
+                type="password"
+                placeholder="••••••••••••••••"
+                value={form.google_client_secret}
+                onChange={(e) => setForm({ ...form, google_client_secret: e.target.value })}
+                className="border-border bg-muted"
+              />
+            </div>
+          </div>
+          <div className="rounded-lg border border-border/80 bg-muted/40 p-3 text-[11px] text-muted-foreground space-y-1">
+            <p>
+              <strong>Authorized Redirect URI for Google Console:</strong>{' '}
+              <code className="text-primary font-semibold">https://dash.aibotflow.in/api/google/oauth/callback</code>
+            </p>
+            <p className="text-[10px] text-muted-foreground/80">
+              Enable "My Business Account Management API" & "My Business Business Information API" in your Google Cloud project.
+            </p>
           </div>
         </CardContent>
       </Card>

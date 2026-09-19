@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import Link from "next/link";
 import {
   Store,
   CheckCircle2,
@@ -20,16 +21,70 @@ import {
   AlertCircle,
   Building2,
   ShieldCheck,
+  KeyRound,
 } from "lucide-react";
 
 export function GbpConnect() {
-  const [isConnected, setIsConnected] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [googleAppConfigured, setGoogleAppConfigured] = useState(true);
   const [storeName, setStoreName] = useState("Aibotflow Tech Solutions");
   const [category, setCategory] = useState("Software Company & Marketing Agency");
   const [phone, setPhone] = useState("+91 98765 43210");
   const [address, setAddress] = useState("Sector 62, Noida, Uttar Pradesh 201309, India");
   const [website, setWebsite] = useState("https://aibotflow.in");
+
+  useEffect(() => {
+    fetch("/api/gmb/config")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data) {
+          setGoogleAppConfigured(data.googleAppConfigured ?? true);
+          if (data.connected) {
+            setIsConnected(true);
+            if (data.locations && data.locations.length > 0) {
+              const loc = data.locations[0];
+              if (loc.location_name) setStoreName(loc.location_name);
+              if (loc.address) setAddress(loc.address);
+              if (loc.phone) setPhone(loc.phone);
+              if (loc.website) setWebsite(loc.website);
+              if (loc.primary_category) setCategory(loc.primary_category);
+            }
+          }
+        }
+      })
+      .catch((err) => console.error("Error checking GMB config:", err));
+  }, []);
+
+  const handleConnectWithGoogle = async () => {
+    try {
+      setIsConnecting(true);
+      const res = await fetch("/api/google/oauth/url");
+      const data = await res.json();
+
+      if (!res.ok || data.error) {
+        toast.error(data.error || "Failed to initialize Google connection.");
+        return;
+      }
+
+      if (data.configured === false) {
+        setGoogleAppConfigured(false);
+        toast.error("Google OAuth API credentials missing", {
+          description: "Please configure Google Client ID and Secret in Super Admin Settings first.",
+        });
+        return;
+      }
+
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to start Google OAuth flow.");
+    } finally {
+      setIsConnecting(false);
+    }
+  };
 
   const handleSync = () => {
     setIsSyncing(true);
@@ -41,18 +96,30 @@ export function GbpConnect() {
     }, 1200);
   };
 
-  const handleConnectToggle = () => {
-    if (isConnected) {
-      setIsConnected(false);
-      toast.info("Google Business Profile Disconnected");
-    } else {
-      setIsConnected(true);
-      toast.success("Connected to Google Business Profile!");
-    }
-  };
-
   return (
     <div className="space-y-6">
+      {/* Warning banner if credentials missing */}
+      {!googleAppConfigured && (
+        <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-xs text-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="size-5 shrink-0 text-amber-400" />
+            <div>
+              <p className="font-semibold text-foreground">Google Cloud API Credentials Not Configured</p>
+              <p className="text-muted-foreground text-[11px] mt-0.5">
+                To enable live Google OAuth and 1-click connect, configure your Google Client ID & Secret.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/super-admin/settings"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-amber-500/20 px-3 py-1.5 font-semibold text-amber-300 hover:bg-amber-500/30 transition-colors shrink-0 self-start sm:self-auto"
+          >
+            <KeyRound className="size-3.5" />
+            Configure in Super Admin →
+          </Link>
+        </div>
+      )}
+
       {/* Top Connection Banner */}
       <div className="relative overflow-hidden rounded-2xl border border-border/70 bg-gradient-to-r from-card via-card/90 to-primary/10 p-5 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -69,12 +136,12 @@ export function GbpConnect() {
                   </Badge>
                 ) : (
                   <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-300 text-[10px] font-semibold">
-                    Disconnected
+                    Not Connected
                   </Badge>
                 )}
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Sync location, customer reviews, AI review auto-replies, and local SEO ranking.
+                Official Google Cloud API integration for location sync, live reviews, and automated AI replies.
               </p>
             </div>
           </div>
@@ -95,7 +162,10 @@ export function GbpConnect() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={handleConnectToggle}
+                  onClick={() => {
+                    setIsConnected(false);
+                    toast.info("Google Business Profile Disconnected");
+                  }}
                   className="rounded-xl text-xs text-muted-foreground hover:text-destructive"
                 >
                   Disconnect
@@ -104,10 +174,12 @@ export function GbpConnect() {
             ) : (
               <Button
                 size="sm"
-                onClick={handleConnectToggle}
+                onClick={handleConnectWithGoogle}
+                disabled={isConnecting}
                 className="rounded-xl bg-primary text-primary-foreground text-xs shadow-sm hover:bg-primary/90"
               >
-                Connect with Google
+                <Store className="size-3.5 mr-1.5" />
+                {isConnecting ? "Connecting..." : "Connect with Google"}
               </Button>
             )}
           </div>
@@ -264,7 +336,7 @@ export function GbpConnect() {
                     <p className="text-[11px] text-muted-foreground">{category}</p>
                   </div>
                   <div className="flex items-center gap-1 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-bold text-amber-300">
-                    ★ 4.9
+                    ★ 4.8
                   </div>
                 </div>
 
@@ -297,9 +369,9 @@ export function GbpConnect() {
               <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 flex items-start gap-2.5">
                 <CheckCircle2 className="size-4 text-emerald-400 shrink-0 mt-0.5" />
                 <div className="text-[11px] space-y-0.5">
-                  <p className="font-semibold text-foreground">API Sync Active</p>
+                  <p className="font-semibold text-foreground">API Sync Ready</p>
                   <p className="text-muted-foreground">
-                    Google Cloud Business Profile API v1 is active and receiving customer reviews in real-time.
+                    Google Cloud Business Profile API v1 is configured with OAuth 2.0.
                   </p>
                 </div>
               </div>
