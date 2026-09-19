@@ -120,6 +120,8 @@ export function GbpConnect() {
     } finally {
       setIsRenaming(false);
     }
+  };
+
   // Account Protection Shield State
   const [isAccountProtected, setIsAccountProtected] = useState(false);
 
