@@ -89,26 +89,32 @@ export function GmbReviews() {
     return true;
   });
 
-  const generateAiReply = (review: ReviewItem) => {
+  const generateAiReply = async (review: ReviewItem) => {
     setGeneratingId(review.id);
-    setTimeout(() => {
-      let generated = "";
-      if (review.rating >= 4) {
-        if (tone === "friendly") {
-          generated = `Dear ${review.name}, thank you so much for the glowing 5-star rating! We are delighted that you had a wonderful experience with Aibotflow CRM. Your kind words motivate our team to keep innovating! ✨`;
-        } else if (tone === "grateful") {
-          generated = `Hi ${review.name}, words cannot express our gratitude for your wonderful review! We're truly honored to be a part of your business growth. Looking forward to serving you always! 🙏`;
-        } else {
-          generated = `Hello ${review.name}, thank you for choosing Aibotflow. We greatly appreciate your positive feedback and are committed to maintaining the highest standard of service for your team.`;
-        }
-      } else {
-        generated = `Hello ${review.name}, thank you for your candid feedback. We sincerely apologize for the initial setup friction you encountered. Our technical team has simplified our onboarding docs, and we would love to assist you personally. Please reach out to us at support@aibotflow.in so we can make this right!`;
-      }
+    try {
+      const res = await fetch("/api/gmb/generate-reply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reviewerName: review.name,
+          rating: review.rating,
+          reviewText: review.comment,
+          tone,
+        }),
+      });
 
-      setActiveReplyTexts((prev) => ({ ...prev, [review.id]: generated }));
+      const data = await res.json();
+      if (res.ok && data.reply) {
+        setActiveReplyTexts((prev) => ({ ...prev, [review.id]: data.reply }));
+        toast.success("Google Gemini AI generated reply in real-time!");
+      } else {
+        toast.error(data.error || "Failed to generate reply.");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error reaching Google Gemini API.");
+    } finally {
       setGeneratingId(null);
-      toast.success("AI Reply generated based on customer sentiment!");
-    }, 900);
+    }
   };
 
   const handlePostReply = async (id: string) => {
