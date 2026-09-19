@@ -56,7 +56,8 @@ export async function GET(req: NextRequest) {
     oauthUrl.searchParams.set("response_type", "code");
     oauthUrl.searchParams.set("scope", scope);
     oauthUrl.searchParams.set("access_type", "offline");
-    oauthUrl.searchParams.set("prompt", "consent");
+    oauthUrl.searchParams.set("prompt", "consent select_account");
+    oauthUrl.searchParams.set("include_granted_scopes", "true");
     oauthUrl.searchParams.set("state", state);
 
     return NextResponse.json({

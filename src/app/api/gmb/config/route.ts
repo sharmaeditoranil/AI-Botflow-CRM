@@ -44,11 +44,17 @@ export async function GET() {
       .eq("account_id", profile.account_id)
       .order("created_at", { ascending: false });
 
+    const activeLocation =
+      locations?.find((l) => (l.metadata as any)?.is_active) ||
+      locations?.[0] ||
+      null;
+
     return NextResponse.json({
       googleAppConfigured,
       connected: !!googleAccount,
       account: googleAccount || null,
       locations: locations || [],
+      activeLocation,
     });
   } catch (err: any) {
     console.error("[GMB Config API] error:", err);
