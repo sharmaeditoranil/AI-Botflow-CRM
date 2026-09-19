@@ -136,18 +136,20 @@ export async function POST() {
                   .upsert(
                     {
                       account_id: profile.account_id,
-                      location_id: savedLoc?.id || loc.name,
-                      review_id: rev.reviewId || `rev_${Date.now()}`,
+                      location_id: savedLoc?.id || null,
+                      google_review_id: rev.reviewId || `rev_${Date.now()}`,
                       reviewer_name: rev.reviewer?.displayName || "Google User",
                       reviewer_photo_url: rev.reviewer?.profilePhotoUrl || null,
                       star_rating: ratingNum,
                       comment: rev.comment || "",
-                      review_reply: rev.reviewReply?.comment || null,
+                      reply_text: rev.reviewReply?.comment || null,
                       reply_timestamp: rev.reviewReply?.updateTime || null,
+                      is_replied: !!rev.reviewReply?.comment,
+                      sentiment: ratingNum >= 4 ? "positive" : ratingNum === 3 ? "neutral" : "negative",
                       review_timestamp: rev.createTime || new Date().toISOString(),
                       updated_at: new Date().toISOString(),
                     },
-                    { onConflict: "account_id,review_id" }
+                    { onConflict: "account_id,google_review_id" }
                   );
                 syncedReviewsCount++;
               }

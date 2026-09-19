@@ -110,14 +110,14 @@ export function GmbReviews() {
       const revData = await revRes.json();
       if (revData?.reviews && revData.reviews.length > 0) {
         const mapped: ReviewItem[] = revData.reviews.map((r: any) => ({
-          id: r.id || r.review_id,
+          id: r.id || r.google_review_id || r.review_id,
           name: r.reviewer_name || "Google User",
           rating: r.star_rating || 5,
           date: r.review_timestamp ? new Date(r.review_timestamp).toLocaleDateString() : "Recently",
           comment: r.comment || "",
-          sentiment: r.star_rating >= 4 ? "positive" : r.star_rating === 3 ? "neutral" : "negative",
-          replied: !!r.review_reply,
-          replyText: r.review_reply || undefined,
+          sentiment: r.sentiment || (r.star_rating >= 4 ? "positive" : r.star_rating === 3 ? "neutral" : "negative"),
+          replied: r.is_replied ?? !!(r.reply_text || r.review_reply),
+          replyText: r.reply_text || r.review_reply || undefined,
         }));
         setReviews(mapped);
       }
