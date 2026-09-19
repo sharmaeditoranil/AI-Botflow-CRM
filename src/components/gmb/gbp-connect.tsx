@@ -605,7 +605,8 @@ export function GbpConnect() {
 
             {/* Profile cards list */}
             {locations.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {locations.map((loc) => {
                   const isActive = loc.id === activeLocId || loc.metadata?.is_active;
                   return (
@@ -830,7 +831,8 @@ export function GbpConnect() {
                   </div>
                 </div>
               )}
-            ) : (
+            </>
+          ) : (
               <div className="rounded-2xl border border-primary/30 bg-gradient-to-b from-primary/5 via-card to-card p-6 text-center space-y-3.5">
                 <div className="flex items-center justify-center gap-2">
                   <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-300 text-[11px] font-semibold py-0.5 px-2.5">
