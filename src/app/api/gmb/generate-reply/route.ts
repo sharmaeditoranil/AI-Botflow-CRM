@@ -20,9 +20,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing reviewer name or review text" }, { status: 400 });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: "GEMINI_API_KEY is not configured in server environment" }, { status: 500 });
+    const openaiKey = process.env.OPENAI_API_KEY;
+    const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY;
+
+    if (!openaiKey && !geminiKey) {
+      return NextResponse.json(
+        { error: "Neither OPENAI_API_KEY nor GEMINI_API_KEY is configured in server environment" },
+        { status: 500 }
+      );
     }
 
     const toneInstructions =
@@ -45,37 +50,85 @@ Rules:
 - Keep the response between 2 to 4 sentences.
 - Do NOT include quotes, placeholders, or multiple options. Output ONLY the ready-to-publish response text.`;
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+    let generatedText = "";
+    let modelName = "";
 
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [{ text: prompt }],
-          },
-        ],
-      }),
-    });
+    // 1. If OpenAI key is present, prioritize OpenAI (GPT-4o-mini)
+    if (openaiKey) {
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${openaiKey}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are an expert customer relations manager writing Google Business Profile review replies for Aibotflow CRM.",
+            },
+            { role: "user", content: prompt },
+          ],
+          max_tokens: 350,
+          temperature: 0.7,
+        }),
+      });
 
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error("[GMB Gemini Generate Reply] Error from Gemini API:", errText);
-      return NextResponse.json({ error: "Failed to generate reply from Google Gemini" }, { status: 500 });
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("[GMB OpenAI Generate Reply] Error from OpenAI:", errText);
+        return NextResponse.json(
+          { error: "Failed to generate reply from OpenAI API" },
+          { status: 500 }
+        );
+      }
+
+      const data = await res.json();
+      generatedText = data?.choices?.[0]?.message?.content?.trim() || "";
+      modelName = "gpt-4o-mini";
+    } else if (geminiKey) {
+      // 2. Fallback to Gemini
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`;
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [{ text: prompt }],
+            },
+          ],
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("[GMB Gemini Generate Reply] Error from Gemini API:", errText);
+        return NextResponse.json(
+          { error: "Failed to generate reply from Google Gemini" },
+          { status: 500 }
+        );
+      }
+
+      const data = await res.json();
+      generatedText =
+        data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+      modelName = "gemini-2.5-flash";
     }
-
-    const data = await res.json();
-    const generatedText =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
 
     return NextResponse.json({
       success: true,
       reply: generatedText,
-      model: "gemini-2.5-flash",
+      model: modelName,
     });
   } catch (err: any) {
-    console.error("[GMB Gemini Generate Reply] Exception:", err);
-    return NextResponse.json({ error: err.message || "Failed to generate reply" }, { status: 500 });
+    console.error("[GMB AI Generate Reply] Exception:", err);
+    return NextResponse.json(
+      { error: err.message || "Failed to generate reply" },
+      { status: 500 }
+    );
   }
 }

@@ -106,12 +106,12 @@ export function GmbReviews() {
       const data = await res.json();
       if (res.ok && data.reply) {
         setActiveReplyTexts((prev) => ({ ...prev, [review.id]: data.reply }));
-        toast.success("Google Gemini AI generated reply in real-time!");
+        toast.success(`AI generated reply using ${data.model || "AI"}!`);
       } else {
         toast.error(data.error || "Failed to generate reply.");
       }
     } catch (err: any) {
-      toast.error(err.message || "Error reaching Google Gemini API.");
+      toast.error(err.message || "Error reaching AI API.");
     } finally {
       setGeneratingId(null);
     }
