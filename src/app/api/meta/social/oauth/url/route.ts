@@ -41,14 +41,19 @@ export async function GET(req: NextRequest) {
         : (process.env.NEXT_PUBLIC_SITE_URL || 'https://dash.aibotflow.in');
 
     const redirectUri = requestedRedirectUri || `${computedOrigin}/api/meta/social/oauth/callback`;
-    const state = `${profile.account_id}:${user.id}`;
+    const encodedRedirectUri = Buffer.from(redirectUri).toString('base64url');
+    // Prepend accountId and userId, and append encoded redirectUri to state
+    const state = `${profile.account_id}:${user.id}:${encodedRedirectUri}`;
+
     const scope = [
       'pages_show_list',
-      'pages_messaging',
+      'pages_read_engagement',
       'pages_manage_metadata',
+      'pages_messaging',
       'instagram_basic',
       'instagram_manage_messages',
       'public_profile',
+      'business_management',
     ].join(',');
 
     const oauthUrl = new URL('https://www.facebook.com/v21.0/dialog/oauth');
@@ -57,6 +62,7 @@ export async function GET(req: NextRequest) {
     oauthUrl.searchParams.set('state', state);
     oauthUrl.searchParams.set('scope', scope);
     oauthUrl.searchParams.set('response_type', 'code');
+    oauthUrl.searchParams.set('auth_type', 'rerequest');
 
     return NextResponse.json({
       configured: true,

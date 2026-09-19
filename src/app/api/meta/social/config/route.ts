@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server';
 import { requireRole } from '@/lib/auth/account';
-import { encrypt, decrypt } from '@/lib/whatsapp/encryption';
+import { encrypt } from '@/lib/whatsapp/encryption';
+import { getSocialAppCredentials } from '@/lib/social/meta-social';
 
 export async function GET() {
   try {
     const { supabase, accountId } = await requireRole('agent');
+    const { appId, appSecret } = await getSocialAppCredentials();
+    const metaAppConfigured = Boolean(appId && appSecret);
 
     const { data, error } = await supabase
       .from('meta_social_config')
@@ -14,11 +17,11 @@ export async function GET() {
 
     if (error) {
       console.error('Error fetching meta_social_config:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: error.message, metaAppConfigured }, { status: 500 });
     }
 
     if (!data) {
-      return NextResponse.json({ config: null });
+      return NextResponse.json({ config: null, metaAppConfigured });
     }
 
     // Mask access token before returning to client
@@ -28,7 +31,7 @@ export async function GET() {
       has_access_token: Boolean(data.facebook_page_access_token),
     };
 
-    return NextResponse.json({ config: safeConfig });
+    return NextResponse.json({ config: safeConfig, metaAppConfigured });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unauthorized';
     return NextResponse.json({ error: message }, { status: 401 });

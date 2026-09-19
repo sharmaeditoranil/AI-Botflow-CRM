@@ -22,6 +22,7 @@ import {
   Sparkles,
   ChevronDown,
   ChevronUp,
+  AlertCircle,
 } from "lucide-react";
 import {
   MessengerIcon,
@@ -45,6 +46,7 @@ export function SocialChannelsConfig() {
   const [switchingPage, setSwitchingPage] = useState(false);
   const [showManualConfig, setShowManualConfig] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [metaAppConfigured, setMetaAppConfigured] = useState<boolean | null>(null);
 
   // Form states
   const [fbPageId, setFbPageId] = useState("");
@@ -71,6 +73,10 @@ export function SocialChannelsConfig() {
       setLoading(true);
       const res = await fetch("/api/meta/social/config");
       const data = await res.json();
+
+      if (typeof data.metaAppConfigured === 'boolean') {
+        setMetaAppConfigured(data.metaAppConfigured);
+      }
 
       if (data.config) {
         const c: MetaSocialConfig = data.config;
@@ -127,6 +133,11 @@ export function SocialChannelsConfig() {
   }, [loadConfig]);
 
   const handleLaunchOAuth = async () => {
+    if (metaAppConfigured === false) {
+      toast.error("Meta App credentials (App ID & Secret) are not configured. Super-Admin must configure them in Super Admin > Settings.");
+      return;
+    }
+
     try {
       setConnectingOAuth(true);
       const redirectUri = `${window.location.origin}/api/meta/social/oauth/callback`;
@@ -255,6 +266,21 @@ export function SocialChannelsConfig() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4 relative z-10">
+          {metaAppConfigured === false && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2.5">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-amber-500" />
+              <div>
+                <span className="font-semibold">Meta Tech Provider credentials not configured yet.</span>
+                <p className="mt-0.5 text-muted-foreground text-[11px]">
+                  Super-Admin ko platform settings me Meta App ID aur Secret daalna hoga taaki 1-click connect chalu ho sake.{' '}
+                  <a href="/super-admin/settings" className="font-medium underline text-foreground hover:text-primary">
+                    Open Super Admin Settings &rarr;
+                  </a>
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center gap-3">
             <Button
               type="button"
@@ -277,6 +303,13 @@ export function SocialChannelsConfig() {
               <ShieldCheck className="h-4 w-4 text-emerald-500" />
               Auto-subscribes webhooks and securely saves permanent Page Access Tokens.
             </p>
+          </div>
+
+          <div className="rounded-lg bg-muted/40 p-2.5 text-[11px] text-muted-foreground border border-border/40 flex items-start gap-2">
+            <Info className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
+            <span>
+              <strong>Instagram Note:</strong> Instagram DMs CRM me aane ke liye aapka Instagram Professional/Business account Meta Business Suite me Facebook Page se linked hona zaroori hai.
+            </span>
           </div>
 
           {availablePages.length > 1 && (

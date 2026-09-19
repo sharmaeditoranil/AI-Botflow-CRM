@@ -292,23 +292,30 @@ function getAdminSupabase() {
 export async function getSocialAppCredentials(): Promise<{
   appId: string | null;
   appSecret: string | null;
+  configId: string | null;
 }> {
+  const getEnvId = () => (process.env.META_APP_ID || process.env.FACEBOOK_APP_ID || process.env.NEXT_PUBLIC_META_APP_ID || null)?.trim() || null;
+  const getEnvSecret = () => (process.env.META_APP_SECRET || process.env.FACEBOOK_APP_SECRET || null)?.trim() || null;
+  const getEnvConfigId = () => (process.env.META_CONFIG_ID || null)?.trim() || null;
+
   try {
     const supabase = getAdminSupabase();
     const { data } = await supabase
       .from('platform_settings')
-      .select('meta_app_id, meta_app_secret')
+      .select('meta_app_id, meta_app_secret, meta_config_id')
       .eq('id', 'default')
       .maybeSingle();
 
     return {
-      appId: data?.meta_app_id || process.env.META_APP_ID || null,
-      appSecret: data?.meta_app_secret || process.env.META_APP_SECRET || null,
+      appId: data?.meta_app_id?.trim() || getEnvId(),
+      appSecret: data?.meta_app_secret?.trim() || getEnvSecret(),
+      configId: data?.meta_config_id?.trim() || getEnvConfigId(),
     };
   } catch {
     return {
-      appId: process.env.META_APP_ID || null,
-      appSecret: process.env.META_APP_SECRET || null,
+      appId: getEnvId(),
+      appSecret: getEnvSecret(),
+      configId: getEnvConfigId(),
     };
   }
 }
@@ -330,8 +337,9 @@ export async function exchangeCodeForUserToken(
 
   try {
     const res = await fetch(url.toString());
-    const data = (await res.json()) as { access_token?: string; error?: { message?: string } };
+    const data = (await res.json()) as { access_token?: string; error?: { message?: string; code?: number } };
     if (!res.ok || !data.access_token) {
+      console.error('[Meta Social] Code exchange error:', data);
       return { error: data.error?.message || 'Failed to exchange authorization code with Meta.' };
     }
     return { userAccessToken: data.access_token };
@@ -369,21 +377,64 @@ export async function getLongLivedUserToken(
 /**
  * Fetches all Facebook Pages the user manages, with their permanent Page Access Tokens
  * and connected Instagram Business Accounts.
+ * Resilient: if nested instagram query fails, falls back to basic page query and inspects IG individually.
  */
 export async function fetchUserFacebookPages(
   userAccessToken: string
 ): Promise<{ pages: FacebookPage[] } | { error: string }> {
-  const url = new URL(`${META_GRAPH_BASE_URL}/me/accounts`);
-  url.searchParams.set('fields', 'id,name,access_token,category,instagram_business_account{id,username}');
-  url.searchParams.set('access_token', userAccessToken);
+  // Step 1: Try full query including nested instagram_business_account
+  const fullUrl = new URL(`${META_GRAPH_BASE_URL}/me/accounts`);
+  fullUrl.searchParams.set('fields', 'id,name,access_token,category,instagram_business_account{id,username}');
+  fullUrl.searchParams.set('access_token', userAccessToken);
 
   try {
-    const res = await fetch(url.toString());
+    const res = await fetch(fullUrl.toString());
+    const data = (await res.json()) as { data?: FacebookPage[]; error?: { message?: string } };
+
+    if (res.ok && Array.isArray(data.data)) {
+      return { pages: data.data };
+    }
+
+    console.warn('[Meta Social] Full /me/accounts query failed, trying basic fields:', data.error);
+  } catch (err) {
+    console.warn('[Meta Social] Full /me/accounts network error, falling back to basic fields:', err);
+  }
+
+  // Step 2: Fallback query with basic fields only
+  const basicUrl = new URL(`${META_GRAPH_BASE_URL}/me/accounts`);
+  basicUrl.searchParams.set('fields', 'id,name,access_token,category');
+  basicUrl.searchParams.set('access_token', userAccessToken);
+
+  try {
+    const res = await fetch(basicUrl.toString());
     const data = (await res.json()) as { data?: FacebookPage[]; error?: { message?: string } };
     if (!res.ok || !Array.isArray(data.data)) {
       return { error: data.error?.message || 'Failed to fetch Facebook Pages for user.' };
     }
-    return { pages: data.data };
+
+    const pages: FacebookPage[] = data.data;
+
+    // Step 3: Best-effort fetch of Instagram account for each page individually
+    for (const page of pages) {
+      if (page.access_token) {
+        try {
+          const igUrl = `${META_GRAPH_BASE_URL}/${encodeURIComponent(page.id)}?fields=instagram_business_account{id,username}&access_token=${encodeURIComponent(page.access_token)}`;
+          const igRes = await fetch(igUrl);
+          if (igRes.ok) {
+            const igData = (await igRes.json()) as {
+              instagram_business_account?: { id: string; username?: string };
+            };
+            if (igData.instagram_business_account) {
+              page.instagram_business_account = igData.instagram_business_account;
+            }
+          }
+        } catch {
+          // Ignore individual IG resolution errors
+        }
+      }
+    }
+
+    return { pages };
   } catch (err: unknown) {
     return { error: err instanceof Error ? err.message : 'Network error connecting to Meta Graph API.' };
   }

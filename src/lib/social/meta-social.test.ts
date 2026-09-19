@@ -197,6 +197,40 @@ describe('Meta Social Messaging', () => {
       }
     });
 
+    it('fetchUserFacebookPages falls back to basic fields when full query fails', async () => {
+      global.fetch = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          json: async () => ({
+            error: { message: 'Cannot access instagram_business_account', code: 100 },
+          }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            data: [
+              {
+                id: 'page-2',
+                name: 'Fallback Brand',
+                access_token: 'page-token-2',
+              },
+            ],
+          }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: false,
+          json: async () => ({ error: { message: 'Not found' } }),
+        } as Response);
+
+      const res = await fetchUserFacebookPages('user-token-456');
+      expect('pages' in res).toBe(true);
+      if ('pages' in res) {
+        expect(res.pages[0].id).toBe('page-2');
+        expect(res.pages[0].name).toBe('Fallback Brand');
+      }
+    });
+
     it('subscribePageToApp returns success', async () => {
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,

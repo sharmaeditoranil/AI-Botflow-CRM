@@ -5535,3 +5535,82 @@ ALTER TABLE ai_configs
   ADD COLUMN IF NOT EXISTS unsubscribe_reply_text TEXT DEFAULT 'Aapka request note kar liya gaya hai. Aage se aapko hamari taraf se koi automated WhatsApp message nahi aayega. Dhanyawad.',
   ADD COLUMN IF NOT EXISTS unsubscribe_tag_name TEXT DEFAULT 'Unsubscribed',
   ADD COLUMN IF NOT EXISTS qualified_tag_name TEXT DEFAULT 'Qualified Lead';
+
+-- ============================================================
+-- 045_meta_social_channels & 046_meta_social_metadata
+-- Add Facebook Messenger and Instagram DM channel support.
+-- ============================================================
+
+ALTER TABLE conversations
+  ADD COLUMN IF NOT EXISTS channel VARCHAR(32) NOT NULL DEFAULT 'whatsapp';
+
+CREATE INDEX IF NOT EXISTS idx_conversations_account_channel
+  ON conversations(account_id, channel);
+
+ALTER TABLE messages
+  ADD COLUMN IF NOT EXISTS channel VARCHAR(32) NOT NULL DEFAULT 'whatsapp';
+
+CREATE INDEX IF NOT EXISTS idx_messages_channel
+  ON messages(channel);
+
+ALTER TABLE contacts
+  ADD COLUMN IF NOT EXISTS fb_user_id TEXT,
+  ADD COLUMN IF NOT EXISTS ig_user_id TEXT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_account_fb_user_id
+  ON contacts (account_id, fb_user_id)
+  WHERE fb_user_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_account_ig_user_id
+  ON contacts (account_id, ig_user_id)
+  WHERE ig_user_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS meta_social_config (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  facebook_page_id TEXT,
+  facebook_page_name TEXT,
+  facebook_page_access_token TEXT,
+  facebook_status TEXT NOT NULL DEFAULT 'disconnected' CHECK (facebook_status IN ('connected', 'disconnected')),
+  instagram_account_id TEXT,
+  instagram_username TEXT,
+  instagram_status TEXT NOT NULL DEFAULT 'disconnected' CHECK (instagram_status IN ('connected', 'disconnected')),
+  verify_token TEXT,
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT meta_social_config_account_id_key UNIQUE (account_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_meta_social_config_account
+  ON meta_social_config(account_id);
+CREATE INDEX IF NOT EXISTS idx_meta_social_config_fb_page
+  ON meta_social_config(facebook_page_id)
+  WHERE facebook_page_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_meta_social_config_ig_acc
+  ON meta_social_config(instagram_account_id)
+  WHERE instagram_account_id IS NOT NULL;
+
+ALTER TABLE meta_social_config ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS meta_social_config_select ON meta_social_config;
+CREATE POLICY meta_social_config_select
+  ON meta_social_config FOR SELECT
+  USING (is_account_member(account_id));
+
+DROP POLICY IF EXISTS meta_social_config_insert ON meta_social_config;
+CREATE POLICY meta_social_config_insert
+  ON meta_social_config FOR INSERT
+  WITH CHECK (is_account_member(account_id, 'admin'));
+
+DROP POLICY IF EXISTS meta_social_config_update ON meta_social_config;
+CREATE POLICY meta_social_config_update
+  ON meta_social_config FOR UPDATE
+  USING (is_account_member(account_id, 'admin'));
+
+DROP POLICY IF EXISTS meta_social_config_delete ON meta_social_config;
+CREATE POLICY meta_social_config_delete
+  ON meta_social_config FOR DELETE
+  USING (is_account_member(account_id, 'admin'));
+

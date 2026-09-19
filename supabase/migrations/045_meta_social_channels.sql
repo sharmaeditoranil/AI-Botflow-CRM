@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS meta_social_config (
   instagram_status TEXT NOT NULL DEFAULT 'disconnected' CHECK (instagram_status IN ('connected', 'disconnected')),
   -- Webhook verification
   verify_token TEXT,
+  metadata JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   CONSTRAINT meta_social_config_account_id_key UNIQUE (account_id)
