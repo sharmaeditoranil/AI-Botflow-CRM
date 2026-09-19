@@ -149,7 +149,7 @@ export function GmbGrowthScore() {
               </div>
               <Progress value={26} className="h-1.5 rounded-full" />
               <p className="text-[10px] text-muted-foreground">
-                Searched specifically for 'Aibotflow'.
+                Searched specifically for &apos;Aibotflow&apos;.
               </p>
             </div>
           </CardContent>

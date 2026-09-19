@@ -242,7 +242,7 @@ export default function SuperAdminSettingsPage() {
               <code className="text-primary font-semibold">https://dash.aibotflow.in/api/google/oauth/callback</code>
             </p>
             <p className="text-[10px] text-muted-foreground/80">
-              Enable "My Business Account Management API" & "My Business Business Information API" in your Google Cloud project.
+              Enable &quot;My Business Account Management API&quot; &amp; &quot;My Business Business Information API&quot; in your Google Cloud project.
             </p>
           </div>
         </CardContent>

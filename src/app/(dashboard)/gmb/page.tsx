@@ -10,7 +10,6 @@ import {
   MessageSquare,
   SearchCheck,
   TrendingUp,
-  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
