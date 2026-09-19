@@ -12,19 +12,30 @@ export async function GET() {
       .eq('id', 'default')
       .single();
 
+    const defaultSettings = {
+      meta_app_id: '',
+      meta_app_secret: '',
+      meta_config_id: '',
+      razorpay_key_id: '',
+      razorpay_key_secret: '',
+      razorpay_webhook_secret: '',
+      google_client_id: process.env.GOOGLE_CLIENT_ID || '',
+      google_client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
+      support_email: 'support@aibotflow.in',
+      support_phone: '',
+    };
+
+    const finalSettings = {
+      ...defaultSettings,
+      ...(settings || {}),
+      google_client_id:
+        settings?.google_client_id || process.env.GOOGLE_CLIENT_ID || '',
+      google_client_secret:
+        settings?.google_client_secret || process.env.GOOGLE_CLIENT_SECRET || '',
+    };
+
     return NextResponse.json({
-      settings: settings || {
-        meta_app_id: '',
-        meta_app_secret: '',
-        meta_config_id: '',
-        razorpay_key_id: '',
-        razorpay_key_secret: '',
-        razorpay_webhook_secret: '',
-        google_client_id: '',
-        google_client_secret: '',
-        support_email: 'support@aibotflow.in',
-        support_phone: '',
-      },
+      settings: finalSettings,
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 403 });
@@ -50,7 +61,7 @@ export async function POST(req: NextRequest) {
       support_phone,
     } = body;
 
-    const payload = {
+    const payload: Record<string, any> = {
       id: 'default',
       meta_app_id: meta_app_id?.trim() || null,
       meta_app_secret: meta_app_secret?.trim() || null,
@@ -65,9 +76,19 @@ export async function POST(req: NextRequest) {
       updated_at: new Date().toISOString(),
     };
 
-    const { error } = await supabase
+    let { error } = await supabase
       .from('platform_settings')
       .upsert(payload, { onConflict: 'id' });
+
+    // Fallback if google_client_id column does not exist in DB yet
+    if (error && error.message?.includes('google_client_id')) {
+      delete payload.google_client_id;
+      delete payload.google_client_secret;
+      const retry = await supabase
+        .from('platform_settings')
+        .upsert(payload, { onConflict: 'id' });
+      error = retry.error;
+    }
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
