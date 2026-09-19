@@ -375,7 +375,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
 
           {/* Android App Link */}
           <a
-            href="/downloads/ai-botflow-crm.apk?v=3"
+            href="/downloads/ai-botflow-crm.apk?v=4"
             download="ai-botflow-crm.apk"
             className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5 text-xs text-emerald-400 transition-colors hover:bg-emerald-500/20"
             title="Download Android App APK"
@@ -448,7 +448,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               <DropdownMenuItem
                 render={
                   <a
-                    href="/downloads/ai-botflow-crm.apk?v=3"
+                    href="/downloads/ai-botflow-crm.apk?v=4"
                     download="ai-botflow-crm.apk"
                     onClick={onClose}
                     className="text-popover-foreground focus:bg-accent focus:text-accent-foreground cursor-pointer"
