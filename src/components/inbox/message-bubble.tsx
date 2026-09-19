@@ -99,7 +99,7 @@ function MessageContent({
   switch (message.content_type) {
     case "text":
       return (
-        <p className="whitespace-pre-wrap break-words text-sm">
+        <p className="whitespace-pre-wrap break-words [word-break:break-word] text-sm leading-relaxed">
           {message.content_text}
         </p>
       );
@@ -113,7 +113,7 @@ function MessageContent({
             <MediaUnavailable label={t("photo")} t={t} />
           )}
           {message.content_text && (
-            <p className="mt-1 whitespace-pre-wrap break-words text-sm">
+            <p className="mt-1 whitespace-pre-wrap break-words [word-break:break-word] text-sm leading-relaxed">
               {message.content_text}
             </p>
           )}
@@ -129,7 +129,7 @@ function MessageContent({
             <MediaUnavailable label={t("video")} t={t} />
           )}
           {message.content_text && (
-            <p className="mt-1 whitespace-pre-wrap break-words text-sm">
+            <p className="mt-1 whitespace-pre-wrap break-words [word-break:break-word] text-sm leading-relaxed">
               {message.content_text}
             </p>
           )}
@@ -175,12 +175,12 @@ function MessageContent({
             {t("template")}
           </span>
           {message.content_text ? (
-            <p className="mt-1 whitespace-pre-wrap break-words text-sm">
+            <p className="mt-1 whitespace-pre-wrap break-words [word-break:break-word] text-sm leading-relaxed">
               {message.content_text}
             </p>
           ) : (
             message.template_name && (
-              <p className="mt-1 break-words text-sm italic opacity-80">
+              <p className="mt-1 break-words [word-break:break-word] text-sm italic opacity-80">
                 {message.template_name}
               </p>
             )
@@ -197,15 +197,6 @@ function MessageContent({
       );
 
     case "interactive": {
-      // Three cases share content_type='interactive':
-      //  - OUTBOUND with payload (composer / automation / Flow send after
-      //    migration 035): render the buttons/list as they appear on the phone.
-      //  - INBOUND tap (customer chose an option, sender_type='customer'):
-      //    no payload; show the tapped option's title with a reply affordance
-      //    so agents can tell it's a tap, not the customer typing.
-      //  - OUTBOUND with NO payload (legacy bot/Flow sends from before
-      //    migration 035 backfilled the column): show the body text plainly —
-      //    it is our own message, NOT a customer tap.
       if (message.interactive_payload) {
         return <InteractivePreview payload={message.interactive_payload} />;
       }
@@ -216,14 +207,14 @@ function MessageContent({
               <CornerDownLeft className="h-3 w-3" />
               {t("buttonReply")}
             </span>
-            <p className="whitespace-pre-wrap break-words text-sm">
+            <p className="whitespace-pre-wrap break-words [word-break:break-word] text-sm leading-relaxed">
               {message.content_text || t("interactiveReply")}
             </p>
           </div>
         );
       }
       return (
-        <p className="whitespace-pre-wrap break-words text-sm">
+        <p className="whitespace-pre-wrap break-words [word-break:break-word] text-sm leading-relaxed">
           {message.content_text || t("interactiveReply")}
         </p>
       );
@@ -231,7 +222,7 @@ function MessageContent({
 
     default:
       return (
-        <p className="whitespace-pre-wrap break-words text-sm">
+        <p className="whitespace-pre-wrap break-words [word-break:break-word] text-sm leading-relaxed">
           {message.content_text || t("unsupported")}
         </p>
       );
@@ -257,13 +248,13 @@ export function MessageBubble({
   return (
     <div
       className={cn(
-        "flex flex-col",
+        "flex flex-col w-full",
         isAgent ? "items-end" : "items-start",
       )}
     >
       <div
         className={cn(
-          "relative rounded-2xl px-3.5 py-2 shadow-xs transition-shadow max-w-[85%] sm:max-w-[75%]",
+          "relative w-fit max-w-full min-w-[70px] rounded-2xl px-3.5 py-2 shadow-xs transition-shadow",
           isAgent
             ? "rounded-tr-xs bg-[#005c4b] text-white"
             : "rounded-tl-xs bg-[#202c33] text-white",
