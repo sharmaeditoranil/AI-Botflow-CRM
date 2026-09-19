@@ -15,6 +15,9 @@ jobs:
     name: Build AI Botflow CRM APK
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -56,3 +59,16 @@ jobs:
           name: ai-botflow-crm-apk
           path: build-output/ai-botflow-crm.apk
           if-no-files-found: error
+
+      - name: Update Downloadable APK in Repository
+        run: |
+          mkdir -p public/downloads
+          cp build-output/ai-botflow-crm.apk public/downloads/ai-botflow-crm.apk
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add public/downloads/ai-botflow-crm.apk
+          if ! git diff --staged --quiet; then
+            git commit -m "build(mobile): update downloadable APK with new launcher icon [skip ci]"
+            git push origin main
+          fi
+
