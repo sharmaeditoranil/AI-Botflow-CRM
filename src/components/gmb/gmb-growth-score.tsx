@@ -34,10 +34,10 @@ export interface KeywordItem {
 }
 
 const DEFAULT_KEYWORDS: KeywordItem[] = [
-  { id: "kw_1", keyword: "WhatsApp CRM software Noida", rank: 1, searches: "1.2k / mo", trend: "up" },
-  { id: "kw_2", keyword: "AI WhatsApp marketing agency", rank: 2, searches: "2.4k / mo", trend: "up" },
-  { id: "kw_3", keyword: "Meta Cloud API CRM India", rank: 3, searches: "950 / mo", trend: "steady" },
-  { id: "kw_4", keyword: "Customer support WhatsApp automation", rank: 2, searches: "1.8k / mo", trend: "up" },
+  { id: "kw_1", keyword: "Best Photography Academy near me", rank: 1, searches: "2.8k / mo", trend: "up" },
+  { id: "kw_2", keyword: "Professional Wedding Photographer & Studio", rank: 2, searches: "3.4k / mo", trend: "up" },
+  { id: "kw_3", keyword: "Color Lab Photo Album Printing", rank: 1, searches: "1.9k / mo", trend: "up" },
+  { id: "kw_4", keyword: "Digital Studio & Camera Diploma Course", rank: 3, searches: "1.5k / mo", trend: "steady" },
 ];
 
 export function GmbGrowthScore() {

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -23,6 +24,8 @@ import {
   Store,
   ExternalLink,
   Building2,
+  Plus,
+  X,
 } from "lucide-react";
 
 interface ReviewItem {
@@ -39,39 +42,39 @@ interface ReviewItem {
 const INITIAL_REVIEWS: ReviewItem[] = [
   {
     id: "rev-1",
-    name: "Vikram Malhotra",
+    name: "Rajesh Kumar",
     rating: 5,
     date: "2 hours ago",
-    comment: "Excellent WhatsApp CRM software! Automation flows and AI bot response have doubled our customer leads conversion within a week.",
+    comment: "Best photography academy in the region! The mentorship on lighting, camera composition, and studio setup is top notch. Practical photoshoot training really boosted my confidence.",
     sentiment: "positive",
     replied: true,
-    replyText: "Thank you so much Vikram! We are thrilled to see Aibotflow helping scale your business leads. Feel free to reach out anytime!",
+    replyText: "Thank you Rajesh ji! Proud to see your photography skills growing so fast. Keep capturing great frames!",
   },
   {
     id: "rev-2",
-    name: "Pooja Verma",
+    name: "Amit Gupta",
     rating: 5,
     date: "1 day ago",
-    comment: "Customer support is top notch. The broadcast feature works seamlessly without number bans. Highly recommended.",
+    comment: "Highly recommended for professional photography courses and wedding shoots. Very humble teachers and great practical studio sessions.",
     sentiment: "positive",
     replied: false,
   },
   {
     id: "rev-3",
-    name: "Rohit Singhania",
-    rating: 4,
+    name: "Pooja Verma",
+    rating: 5,
     date: "3 days ago",
-    comment: "Great experience overall. Flow builder has so many templates. Would love more direct webhook integrations with Indian payment gateways.",
+    comment: "Enrolled for the professional diploma batch. Faculty teaches with high-end DSLR cameras and practical studio strobe lights. Value for money!",
     sentiment: "positive",
     replied: false,
   },
   {
     id: "rev-4",
-    name: "Sunil Mehta",
-    rating: 2,
+    name: "Manoj Tiwari",
+    rating: 4,
     date: "5 days ago",
-    comment: "Initial setup took a bit of time for Meta WhatsApp Cloud API verification. Documentation could be simpler for beginners.",
-    sentiment: "negative",
+    comment: "Great photography studio setup and framing quality. Excellent guidance for beginner photographers.",
+    sentiment: "positive",
     replied: false,
   },
 ];
@@ -86,6 +89,13 @@ export function GmbReviews() {
   const [activeReplyTexts, setActiveReplyTexts] = useState<Record<string, string>>({});
   const [tone, setTone] = useState<"friendly" | "professional" | "grateful">("friendly");
   const [autoReplyEnabled, setAutoReplyEnabled] = useState(true);
+
+  // Manual Review Form
+  const [showAddReview, setShowAddReview] = useState(false);
+  const [newRevName, setNewRevName] = useState("");
+  const [newRevRating, setNewRevRating] = useState("5");
+  const [newRevComment, setNewRevComment] = useState("");
+  const [isAddingRev, setIsAddingRev] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -211,6 +221,42 @@ export function GmbReviews() {
     }
   };
 
+  const handleAddReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRevName.trim() || !newRevComment.trim()) {
+      toast.error("Please enter reviewer name and comment");
+      return;
+    }
+
+    try {
+      setIsAddingRev(true);
+      const res = await fetch("/api/gmb/reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reviewer_name: newRevName.trim(),
+          star_rating: Number(newRevRating),
+          comment: newRevComment.trim(),
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast.success(`Review from "${newRevName.trim()}" added successfully!`);
+        setNewRevName("");
+        setNewRevComment("");
+        setShowAddReview(false);
+        await loadData();
+      } else {
+        toast.error(data.error || "Failed to add review");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error saving review");
+    } finally {
+      setIsAddingRev(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Active Profile & Sync Status Header */}
@@ -221,29 +267,121 @@ export function GmbReviews() {
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground font-medium">Storefront:</span>
               <span className="text-sm font-bold text-foreground">
-                {activeLocationName || "Active Business Profile"}
+                {activeLocationName || "Quick Art Photography Academy"}
               </span>
               <Badge variant="outline" className="text-[10px] text-emerald-400 border-emerald-500/30 bg-emerald-500/10">
                 Connected
               </Badge>
             </div>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              Google API application pending — reviews auto-sync once Google approves the access request.
+              Google API application review in progress — You can manage reviews and generate instant AI replies right now.
             </p>
           </div>
         </div>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleSyncReviews}
-          disabled={isSyncing}
-          className="rounded-xl text-xs border-primary/40 text-primary hover:bg-primary/10 shrink-0"
-        >
-          <RefreshCw className={`size-3.5 mr-1.5 ${isSyncing ? "animate-spin" : ""}`} />
-          {isSyncing ? "Syncing..." : "Sync Reviews from Google"}
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            size="sm"
+            onClick={() => setShowAddReview(!showAddReview)}
+            className="rounded-xl text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+          >
+            <Plus className="size-3.5 mr-1" />
+            {showAddReview ? "Cancel" : "+ Add Customer Review"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSyncReviews}
+            disabled={isSyncing}
+            className="rounded-xl text-xs border-border text-foreground hover:bg-muted"
+          >
+            <RefreshCw className={`size-3.5 mr-1.5 ${isSyncing ? "animate-spin" : ""}`} />
+            {isSyncing ? "Syncing..." : "Sync from Google"}
+          </Button>
+        </div>
       </div>
+
+      {/* Inline Add Review Form */}
+      {showAddReview && (
+        <form
+          onSubmit={handleAddReview}
+          className="rounded-2xl border border-primary/30 bg-primary/5 p-4 sm:p-5 space-y-3.5 transition-all shadow-xs"
+        >
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-bold text-foreground flex items-center gap-1.5">
+              <Star className="size-4 text-amber-400 fill-amber-400" />
+              Add Customer Review for {activeLocationName || "Active Profile"}
+            </h4>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowAddReview(false)}
+              className="h-6 w-6 p-0 text-muted-foreground"
+            >
+              <X className="size-3.5" />
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-foreground">Customer Name *</label>
+              <Input
+                placeholder="e.g. Ramesh Sharma"
+                value={newRevName}
+                onChange={(e) => setNewRevName(e.target.value)}
+                required
+                className="h-8 text-xs rounded-xl bg-background"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-foreground">Rating</label>
+              <select
+                value={newRevRating}
+                onChange={(e) => setNewRevRating(e.target.value)}
+                className="h-8 w-full text-xs rounded-xl border border-border bg-background px-2 text-foreground focus:outline-hidden"
+              >
+                <option value="5">★★★★★ (5 Stars - Excellent)</option>
+                <option value="4">★★★★☆ (4 Stars - Good)</option>
+                <option value="3">★★★☆☆ (3 Stars - Average)</option>
+                <option value="2">★★☆☆☆ (2 Stars - Needs Improvement)</option>
+                <option value="1">★☆☆☆☆ (1 Star - Poor)</option>
+              </select>
+            </div>
+            <div className="space-y-1 sm:col-span-3">
+              <label className="text-[11px] font-semibold text-foreground">Customer Review Comment *</label>
+              <Textarea
+                placeholder="e.g. Excellent service! Studio album quality was beyond expectations."
+                value={newRevComment}
+                onChange={(e) => setNewRevComment(e.target.value)}
+                required
+                rows={2}
+                className="text-xs rounded-xl bg-background resize-none"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowAddReview(false)}
+              className="rounded-xl text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              disabled={isAddingRev}
+              className="rounded-xl text-xs bg-primary text-primary-foreground"
+            >
+              {isAddingRev ? "Saving..." : "Save Review"}
+            </Button>
+          </div>
+        </form>
+      )}
 
       {/* Top Banner & AI Auto-Reply Switch */}
       <div className="rounded-2xl border border-border/70 bg-gradient-to-r from-card via-card/90 to-primary/10 p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
