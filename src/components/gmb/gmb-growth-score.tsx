@@ -43,7 +43,22 @@ const DEFAULT_KEYWORDS: KeywordItem[] = [
 export function GmbGrowthScore() {
   const growthScore = 89;
 
-  const [keywords, setKeywords] = useState<KeywordItem[]>(DEFAULT_KEYWORDS);
+  const [keywords, setKeywords] = useState<KeywordItem[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("wacrm:gmb:keywords");
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed;
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+    return DEFAULT_KEYWORDS;
+  });
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -58,21 +73,6 @@ export function GmbGrowthScore() {
   const [editRank, setEditRank] = useState("1");
   const [editSearches, setEditSearches] = useState("");
   const [editTrend, setEditTrend] = useState<"up" | "down" | "steady">("up");
-
-  // Load from localStorage on mount
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("wacrm:gmb:keywords");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setKeywords(parsed);
-        }
-      }
-    } catch {
-      // ignore
-    }
-  }, []);
 
   const saveKeywords = (updated: KeywordItem[]) => {
     setKeywords(updated);
