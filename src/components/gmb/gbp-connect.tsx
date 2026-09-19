@@ -274,6 +274,29 @@ export function GbpConnect() {
     }
   };
 
+  const handleSyncFromGoogle = async () => {
+    try {
+      setIsSyncing(true);
+      const res = await fetch("/api/gmb/sync", { method: "POST" });
+      const data = await res.json();
+
+      if (data.pendingApproval) {
+        toast.info(data.message || "Google API access approval is pending with Google.", {
+          duration: 6000,
+        });
+      } else if (data.success) {
+        toast.success(data.message || "Synced profiles & reviews from Google!");
+        await loadConfig();
+      } else {
+        toast.error(data.error || "Sync failed.");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error syncing with Google.");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Missing credentials alert */}
@@ -333,6 +356,16 @@ export function GbpConnect() {
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
             {isConnected ? (
               <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSyncFromGoogle}
+                  disabled={isSyncing}
+                  className="rounded-xl text-xs border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10"
+                >
+                  <RefreshCw className={`size-3.5 mr-1.5 ${isSyncing ? "animate-spin" : ""}`} />
+                  {isSyncing ? "Syncing..." : "Sync from Google"}
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
@@ -540,23 +573,43 @@ export function GbpConnect() {
                 })}
               </div>
             ) : (
-              <div className="rounded-2xl border border-border/80 bg-muted/20 p-4 text-center space-y-2">
-                <Store className="size-8 text-muted-foreground mx-auto" />
-                <div>
-                  <p className="text-xs font-bold text-foreground">
-                    Google Account Connected ({connectedEmail})
+              <div className="rounded-2xl border border-primary/30 bg-gradient-to-b from-primary/5 via-card to-card p-6 text-center space-y-3.5">
+                <div className="flex items-center justify-center gap-2">
+                  <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-300 text-[11px] font-semibold py-0.5 px-2.5">
+                    Google Business API Application Under Review
+                  </Badge>
+                </div>
+                <div className="max-w-xl mx-auto space-y-1.5">
+                  <p className="text-sm font-bold text-foreground">
+                    Google Account Connected: <span className="text-primary">{connectedEmail}</span>
                   </p>
-                  <p className="text-[11px] text-muted-foreground max-w-md mx-auto mt-0.5">
-                    Google ne profile details automatic send nahi ki kyunki Google consent screen par &quot;Manage business listings&quot; permission checkbox tick nahi tha.
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Google Business Profile API access ki application Google developer team ke pass submit ho chuki hai. 
+                    Approval milte hi upar diye gaye <strong className="text-foreground font-semibold">&quot;Sync from Google&quot;</strong> button ko click karte hi aapke 3 real Google locations aur live Google reviews automatic import ho jayenge.
+                  </p>
+                  <p className="text-xs text-emerald-400 font-medium pt-1">
+                    ✓ Approval aane tak aap direct niche apne 3 business profiles add karke unka SEO rank, AI review replies aur phone details abhi manage kar sakte hain.
                   </p>
                 </div>
-                <Button
-                  size="sm"
-                  onClick={() => setShowAddForm(true)}
-                  className="rounded-xl text-xs bg-primary text-primary-foreground mt-1"
-                >
-                  <Plus className="size-3.5 mr-1" /> Add / Link Your 3 Profiles
-                </Button>
+                <div className="pt-2 flex items-center justify-center gap-3">
+                  <Button
+                    size="sm"
+                    onClick={() => setShowAddForm(true)}
+                    className="rounded-xl text-xs bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 px-4"
+                  >
+                    <Plus className="size-3.5 mr-1.5" /> + Add / Link Your 3 Profiles Now
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSyncFromGoogle}
+                    disabled={isSyncing}
+                    className="rounded-xl text-xs border-border text-foreground hover:bg-muted"
+                  >
+                    <RefreshCw className={`size-3.5 mr-1.5 ${isSyncing ? "animate-spin" : ""}`} />
+                    Check Google API Sync
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>

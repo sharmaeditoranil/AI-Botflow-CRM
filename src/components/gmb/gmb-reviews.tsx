@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,10 @@ import {
   Bot,
   Flame,
   ArrowRight,
+  RefreshCw,
+  Store,
+  ExternalLink,
+  Building2,
 } from "lucide-react";
 
 interface ReviewItem {
@@ -74,12 +78,69 @@ const INITIAL_REVIEWS: ReviewItem[] = [
 
 export function GmbReviews() {
   const [reviews, setReviews] = useState<ReviewItem[]>(INITIAL_REVIEWS);
+  const [activeLocationName, setActiveLocationName] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [selectedRatingFilter, setSelectedRatingFilter] = useState<number | "all">("all");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<"all" | "unreplied" | "replied">("all");
   const [generatingId, setGeneratingId] = useState<string | null>(null);
   const [activeReplyTexts, setActiveReplyTexts] = useState<Record<string, string>>({});
   const [tone, setTone] = useState<"friendly" | "professional" | "grateful">("friendly");
   const [autoReplyEnabled, setAutoReplyEnabled] = useState(true);
+
+  const loadData = useCallback(async () => {
+    try {
+      const cfgRes = await fetch("/api/gmb/config");
+      const cfg = await cfgRes.json();
+      if (cfg?.locations && cfg.locations.length > 0) {
+        const active = cfg.locations.find((l: any) => l.metadata?.is_active) || cfg.locations[0];
+        if (active) setActiveLocationName(active.location_name);
+      }
+
+      const revRes = await fetch("/api/gmb/reviews");
+      const revData = await revRes.json();
+      if (revData?.reviews && revData.reviews.length > 0) {
+        const mapped: ReviewItem[] = revData.reviews.map((r: any) => ({
+          id: r.id || r.review_id,
+          name: r.reviewer_name || "Google User",
+          rating: r.star_rating || 5,
+          date: r.review_timestamp ? new Date(r.review_timestamp).toLocaleDateString() : "Recently",
+          comment: r.comment || "",
+          sentiment: r.star_rating >= 4 ? "positive" : r.star_rating === 3 ? "neutral" : "negative",
+          replied: !!r.review_reply,
+          replyText: r.review_reply || undefined,
+        }));
+        setReviews(mapped);
+      }
+    } catch (err) {
+      console.error("Error loading reviews:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handleSyncReviews = async () => {
+    try {
+      setIsSyncing(true);
+      const res = await fetch("/api/gmb/sync", { method: "POST" });
+      const data = await res.json();
+      if (data.pendingApproval) {
+        toast.info(data.message || "Google Business API application is under Google review.", {
+          duration: 6000,
+        });
+      } else if (data.success) {
+        toast.success(data.message || "Synced reviews from Google!");
+        await loadData();
+      } else {
+        toast.error(data.error || "Failed to sync reviews.");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error syncing reviews.");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   // Filter reviews
   const filteredReviews = reviews.filter((rev) => {
@@ -152,6 +213,38 @@ export function GmbReviews() {
 
   return (
     <div className="space-y-6">
+      {/* Active Profile & Sync Status Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card/60 p-4 rounded-2xl border border-border/70">
+        <div className="flex items-center gap-2.5">
+          <Store className="size-5 text-primary shrink-0" />
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground font-medium">Storefront:</span>
+              <span className="text-sm font-bold text-foreground">
+                {activeLocationName || "Active Business Profile"}
+              </span>
+              <Badge variant="outline" className="text-[10px] text-emerald-400 border-emerald-500/30 bg-emerald-500/10">
+                Connected
+              </Badge>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Google API application pending — reviews auto-sync once Google approves the access request.
+            </p>
+          </div>
+        </div>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleSyncReviews}
+          disabled={isSyncing}
+          className="rounded-xl text-xs border-primary/40 text-primary hover:bg-primary/10 shrink-0"
+        >
+          <RefreshCw className={`size-3.5 mr-1.5 ${isSyncing ? "animate-spin" : ""}`} />
+          {isSyncing ? "Syncing..." : "Sync Reviews from Google"}
+        </Button>
+      </div>
+
       {/* Top Banner & AI Auto-Reply Switch */}
       <div className="rounded-2xl border border-border/70 bg-gradient-to-r from-card via-card/90 to-primary/10 p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">

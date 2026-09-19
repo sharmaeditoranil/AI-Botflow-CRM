@@ -156,3 +156,29 @@ export async function postReviewReplyToGoogle(
     return { success: false, error: err.message };
   }
 }
+
+/**
+ * Fetch customer reviews for a given Google Business Profile location.
+ */
+export async function fetchGoogleBusinessReviews(
+  accessToken: string,
+  parentLocationName: string // e.g. "accounts/123/locations/456"
+): Promise<any[]> {
+  try {
+    const url = `https://mybusiness.googleapis.com/v4/${parentLocationName}/reviews?pageSize=50`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (!res.ok) {
+      console.warn("[GBP] fetch reviews warning:", await res.text());
+      return [];
+    }
+
+    const data = await res.json();
+    return data.reviews || [];
+  } catch (err) {
+    console.error("[GBP] Error fetching reviews:", err);
+    return [];
+  }
+}
