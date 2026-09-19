@@ -13,7 +13,6 @@ import {
   ArrowUpRight,
   Sparkles,
   KeyRound,
-  BellRing,
 } from "lucide-react";
 import Link from "next/link";
 
