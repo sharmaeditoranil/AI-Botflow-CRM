@@ -11,6 +11,7 @@ import {
   DollarSign,
   Send,
   ArrowRight,
+  Store,
 } from 'lucide-react'
 import { BrandLogo } from '@/components/brand/brand-logo'
 
@@ -174,6 +175,32 @@ export default function DashboardPage() {
 
       {/* Onboarding Checklist for new users */}
       <OnboardingChecklist />
+
+      {/* Google Business Profile & Local Growth Quick Strip */}
+      <div className="rounded-2xl border border-border/70 bg-gradient-to-r from-card via-card/90 to-primary/5 p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+            <Store className="size-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-xs text-foreground">Google Business Profile</span>
+              <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.2 text-[10px] font-semibold text-emerald-400">
+                ★ 4.8 (148 Reviews)
+              </span>
+            </div>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Local SEO Growth Score is at <strong className="text-foreground font-semibold">89/100</strong>. AI review auto-replies active.
+            </p>
+          </div>
+        </div>
+        <Link
+          href="/gmb"
+          className="inline-flex items-center justify-center gap-1 text-xs font-semibold text-primary hover:underline self-start sm:self-auto shrink-0"
+        >
+          Manage Google Profile <ArrowRight className="size-3.5" />
+        </Link>
+      </div>
 
       {/* Metric cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

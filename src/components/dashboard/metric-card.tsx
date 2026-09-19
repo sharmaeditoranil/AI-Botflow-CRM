@@ -23,35 +23,43 @@ interface MetricCardProps {
 
 export function MetricCard({ title, value, icon: Icon, delta, subtitle }: MetricCardProps) {
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
+    <div className="group rounded-2xl border border-border/70 bg-card/90 backdrop-blur-xs p-5 shadow-xs hover:shadow-md hover:border-border/90 transition-all duration-200 relative overflow-hidden">
       <div className="flex items-start justify-between">
-        <p className="text-sm font-medium text-muted-foreground">{title}</p>
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-          <Icon className="h-4 w-4" />
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{title}</p>
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary border border-primary/20 group-hover:scale-110 transition-transform">
+          <Icon className="h-4.5 w-4.5" />
         </div>
       </div>
-      <p className="mt-3 text-[28px] leading-none font-bold tabular-nums text-foreground">
+      <p className="mt-3 text-2xl sm:text-3xl font-extrabold tracking-tight tabular-nums text-foreground">
         {value}
       </p>
-      {delta ? <DeltaRow sign={delta.sign} label={delta.label} /> : subtitle ? (
-        <p className="mt-2 text-sm text-muted-foreground">{subtitle}</p>
+      {delta ? (
+        <DeltaRow sign={delta.sign} label={delta.label} />
+      ) : subtitle ? (
+        <p className="mt-2.5 text-xs text-muted-foreground">{subtitle}</p>
       ) : null}
     </div>
   )
 }
 
 function DeltaRow({ sign, label }: { sign: number; label: string }) {
-  const tone =
-    sign > 0
-      ? 'text-primary'
-      : sign < 0
-      ? 'text-red-400'
-      : 'text-muted-foreground'
-  const Arrow = sign > 0 ? ArrowUp : sign < 0 ? ArrowDown : Minus
+  const isPositive = sign > 0
+  const isNegative = sign < 0
+  const Arrow = isPositive ? ArrowUp : isNegative ? ArrowDown : Minus
+
   return (
-    <div className={cn('mt-2 flex items-center gap-1 text-sm', tone)}>
-      <Arrow className="h-4 w-4" aria-hidden />
-      <span className="tabular-nums">{label}</span>
+    <div className="mt-2.5 flex items-center">
+      <span
+        className={cn(
+          'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold',
+          isPositive && 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20',
+          isNegative && 'bg-rose-500/10 text-rose-400 border border-rose-500/20',
+          !isPositive && !isNegative && 'bg-muted text-muted-foreground border border-border/50'
+        )}
+      >
+        <Arrow className="h-3 w-3" aria-hidden />
+        <span className="tabular-nums">{label}</span>
+      </span>
     </div>
   )
 }

@@ -1,27 +1,52 @@
 "use client"
 
 import Link from 'next/link'
-import { UserPlus, Briefcase, Radio, Zap } from 'lucide-react'
+import { UserPlus, Briefcase, Radio, Zap, Store } from 'lucide-react'
 import type { ComponentType } from 'react'
-
 import { useTranslations } from 'next-intl'
 
-// Quick-action shortcuts. Each navigates to the page that owns the
-// relevant "create" flow. We deliberately don't try to auto-open any
-// modal on the target page — that'd require touching those pages,
-// which is out of scope here.
 interface Action {
   labelKey: string
   href: string
   icon: ComponentType<{ className?: string }>
   tint: string
+  bg: string
+  border: string
 }
 
 const ACTIONS: Action[] = [
-  { labelKey: 'newContact', href: '/contacts', icon: UserPlus, tint: 'text-primary' },
-  { labelKey: 'newDeal', href: '/pipelines', icon: Briefcase, tint: 'text-blue-400' },
-  { labelKey: 'newBroadcast', href: '/broadcasts/new', icon: Radio, tint: 'text-amber-400' },
-  { labelKey: 'newAutomation', href: '/automations/new', icon: Zap, tint: 'text-primary' },
+  {
+    labelKey: 'newContact',
+    href: '/contacts',
+    icon: UserPlus,
+    tint: 'text-primary',
+    bg: 'bg-primary/10',
+    border: 'border-primary/25',
+  },
+  {
+    labelKey: 'newDeal',
+    href: '/pipelines',
+    icon: Briefcase,
+    tint: 'text-blue-400',
+    bg: 'bg-blue-500/10',
+    border: 'border-blue-500/25',
+  },
+  {
+    labelKey: 'newBroadcast',
+    href: '/broadcasts/new',
+    icon: Radio,
+    tint: 'text-amber-400',
+    bg: 'bg-amber-500/10',
+    border: 'border-amber-500/25',
+  },
+  {
+    labelKey: 'newAutomation',
+    href: '/automations/new',
+    icon: Zap,
+    tint: 'text-emerald-400',
+    bg: 'bg-emerald-500/10',
+    border: 'border-emerald-500/25',
+  },
 ]
 
 export function QuickActions() {
@@ -35,12 +60,14 @@ export function QuickActions() {
           <Link
             key={a.href}
             href={a.href}
-            className="group flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:border-border hover:bg-muted/60"
+            className="group flex items-center gap-3 rounded-2xl border border-border/70 bg-card/90 p-3.5 shadow-xs transition-all duration-200 hover:border-border hover:shadow-md hover:scale-[1.01]"
           >
-            <div className={`flex h-9 w-9 items-center justify-center rounded-lg bg-muted ${a.tint}`}>
-              <Icon className="h-4 w-4" />
+            <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl border ${a.border} ${a.bg} ${a.tint} group-hover:scale-110 transition-transform`}>
+              <Icon className="size-4.5" />
             </div>
-            <span className="text-sm font-medium text-foreground">{t(a.labelKey as string)}</span>
+            <span className="text-xs sm:text-sm font-semibold text-foreground truncate">
+              {t(a.labelKey as string)}
+            </span>
           </Link>
         )
       })}

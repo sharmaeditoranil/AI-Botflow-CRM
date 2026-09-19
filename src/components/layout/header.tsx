@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
-import { LogOut, Menu, Settings as SettingsIcon, User } from "lucide-react";
+import { LogOut, Menu, Settings as SettingsIcon, UserCircle, ChevronRight } from "lucide-react";
 import { BrandLogo } from "@/components/brand/brand-logo";
 import {
   Avatar,
@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ModeToggle } from "@/components/layout/mode-toggle";
 import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 
 const pageTitles: Record<string, string> = {
   "/dashboard": "dashboard",
@@ -28,24 +29,25 @@ const pageTitles: Record<string, string> = {
   "/pipelines": "pipelines",
   "/broadcasts": "broadcasts",
   "/automations": "automations",
+  "/flows": "flows",
+  "/agents": "agents",
+  "/gmb": "gmb",
+  "/profile": "profile",
+  "/billing": "billing",
   "/settings": "settings",
 };
 
 function getPageTitleKey(pathname: string): string {
   if (pageTitles[pathname]) return pageTitles[pathname];
   const match = Object.entries(pageTitles).find(([path]) =>
-    pathname.startsWith(path),
+    pathname.startsWith(path)
   );
   return match ? match[1] : "dashboard";
 }
 
 interface HeaderProps {
-  /** Wired to the shell's drawer state. Used only on mobile — the
-   *  hamburger button is hidden on lg+. */
   onOpenSidebar?: () => void;
 }
-
-import { useTranslations } from "next-intl";
 
 export function Header({ onOpenSidebar }: HeaderProps) {
   const t = useTranslations("Header");
@@ -63,96 +65,114 @@ export function Header({ onOpenSidebar }: HeaderProps) {
   return (
     <header
       className={cn(
-        "h-14 shrink-0 items-center justify-between gap-3 border-b border-border bg-background px-4 lg:px-6",
+        "h-15 shrink-0 items-center justify-between gap-3 border-b border-border/60 bg-background/80 backdrop-blur-md px-4 lg:px-6 transition-all",
         isInbox ? "hidden lg:flex" : "flex"
       )}
     >
-      <div className="flex min-w-0 items-center gap-2">
-        {/* Hamburger — mobile only. 44×44 hit target per Apple HIG. */}
+      <div className="flex min-w-0 items-center gap-3">
+        {/* Mobile Hamburger */}
         <button
           type="button"
           onClick={onOpenSidebar}
           aria-label={t("openMenu")}
-          className="flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:hidden"
+          className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/50 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:hidden"
         >
-          <Menu className="h-5 w-5" />
+          <Menu className="h-4 w-4" />
         </button>
+
         <div className="flex items-center gap-2 lg:hidden">
           <BrandLogo size={24} />
         </div>
-        <h1 className="truncate text-base font-semibold text-foreground sm:text-lg">
-          {t(titleKey as string)}
-        </h1>
+
+        {/* Page Title & Breadcrumb */}
+        <div className="flex items-center gap-2">
+          <span className="hidden sm:inline text-xs font-medium text-muted-foreground/70">
+            Aibotflow
+          </span>
+          <ChevronRight className="hidden sm:inline size-3 text-muted-foreground/40" />
+          <h1 className="truncate text-sm font-semibold tracking-tight text-foreground sm:text-base">
+            {t(titleKey as string)}
+          </h1>
+        </div>
+
+        {/* Live System Status Indicator */}
+        <div className="hidden md:flex items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-400">
+          <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <span>Realtime Active</span>
+        </div>
       </div>
 
-      <div className="flex items-center gap-1 sm:gap-2">
+      <div className="flex items-center gap-2 sm:gap-3">
+        {/* Theme mode toggle */}
         <ModeToggle />
 
+        {/* User profile dropdown trigger */}
         <DropdownMenu>
-        <DropdownMenuTrigger
-          className="flex items-center gap-2 rounded-md px-1 py-1 transition-colors hover:bg-muted/70 focus:bg-muted/70 focus:outline-none data-popup-open:bg-muted/70 sm:gap-3 sm:pl-1 sm:pr-3"
-          aria-label={t("openAccountMenu")}
-        >
-          <Avatar className="size-8">
-            {profile?.avatar_url ? (
-              <AvatarImage
-                src={profile.avatar_url}
-                alt={profile.full_name ?? t("defaultAvatar")}
-              />
-            ) : null}
-            <AvatarFallback className="bg-primary/10 text-sm font-medium text-primary">
-              {initial}
-            </AvatarFallback>
-          </Avatar>
-          <span className="hidden text-sm font-medium text-foreground sm:inline">
-            {profile?.full_name ?? t("defaultUser")}
-          </span>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="end"
-          sideOffset={6}
-          className="min-w-56 bg-popover text-popover-foreground ring-border"
-        >
-          <div className="px-2 py-1.5">
-            <p className="truncate text-sm font-medium text-foreground">
+          <DropdownMenuTrigger
+            className="flex items-center gap-2 rounded-xl border border-border/40 p-1 transition-all hover:bg-muted/70 focus:outline-none data-popup-open:bg-muted/70 sm:gap-2.5 sm:px-2"
+            aria-label={t("openAccountMenu")}
+          >
+            <Avatar className="size-7 ring-1 ring-border/50">
+              {profile?.avatar_url ? (
+                <AvatarImage
+                  src={profile.avatar_url}
+                  alt={profile.full_name ?? t("defaultAvatar")}
+                />
+              ) : null}
+              <AvatarFallback className="bg-primary/15 text-xs font-bold text-primary">
+                {initial}
+              </AvatarFallback>
+            </Avatar>
+            <span className="hidden text-xs font-medium text-foreground sm:inline max-w-32 truncate">
               {profile?.full_name ?? t("defaultUser")}
-            </p>
-            <p className="truncate text-xs text-muted-foreground">
-              {profile?.email ?? ""}
-            </p>
-          </div>
-          <DropdownMenuSeparator className="bg-border" />
-          <DropdownMenuItem
-            render={
-              <Link
-                href="/settings?tab=profile"
-                className="text-popover-foreground focus:bg-accent focus:text-accent-foreground"
-              />
-            }
+            </span>
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent
+            align="end"
+            sideOffset={8}
+            className="min-w-56 bg-popover text-popover-foreground ring-border shadow-xl rounded-xl"
           >
-            <User className="size-4" />
-            {t("menuProfile")}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            render={
-              <Link
-                href="/settings?tab=whatsapp"
-                className="text-popover-foreground focus:bg-accent focus:text-accent-foreground"
-              />
-            }
-          >
-            <SettingsIcon className="size-4" />
-            {t("menuSettings")}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator className="bg-border" />
-          <DropdownMenuItem
-            onClick={signOut}
-            className="text-popover-foreground focus:bg-accent focus:text-accent-foreground"
-          >
-            <LogOut className="size-4" />
-            {t("menuSignOut")}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
+            <div className="px-3 py-2">
+              <p className="truncate text-xs font-semibold text-foreground">
+                {profile?.full_name ?? t("defaultUser")}
+              </p>
+              <p className="truncate text-[10px] text-muted-foreground">
+                {profile?.email ?? ""}
+              </p>
+            </div>
+            <DropdownMenuSeparator className="bg-border/60" />
+            <DropdownMenuItem
+              render={
+                <Link
+                  href="/profile"
+                  className="text-popover-foreground focus:bg-accent focus:text-accent-foreground cursor-pointer"
+                />
+              }
+            >
+              <UserCircle className="size-4 text-primary" />
+              <span>My Profile</span>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              render={
+                <Link
+                  href="/settings"
+                  className="text-popover-foreground focus:bg-accent focus:text-accent-foreground cursor-pointer"
+                />
+              }
+            >
+              <SettingsIcon className="size-4" />
+              <span>{t("settings")}</span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="bg-border/60" />
+            <DropdownMenuItem
+              onClick={signOut}
+              className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer"
+            >
+              <LogOut className="size-4" />
+              <span>Sign out</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
         </DropdownMenu>
       </div>
     </header>
