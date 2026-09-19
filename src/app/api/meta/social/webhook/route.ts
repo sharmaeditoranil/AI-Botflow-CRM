@@ -110,7 +110,22 @@ export async function POST(request: Request) {
 
     for (const entry of body.entry) {
       const entryId = entry.id;
-      const messagingEvents = entry.messaging || [];
+      const messagingEvents: any[] = [...(entry.messaging || [])];
+
+      // Instagram and Messenger may also send events under entry.changes or standby
+      const rawEntry = entry as any;
+      if (rawEntry.changes && Array.isArray(rawEntry.changes)) {
+        for (const change of rawEntry.changes) {
+          if (change.field === 'messages' && change.value) {
+            messagingEvents.push(change.value);
+          }
+        }
+      }
+      if (rawEntry.standby && Array.isArray(rawEntry.standby)) {
+        messagingEvents.push(...rawEntry.standby);
+      }
+
+      console.log(`[Social Webhook] Channel: ${channel}, Entry ID: ${entryId}, Events count: ${messagingEvents.length}`);
 
       // Find the account's social config matching this page/account ID
       let configRow: {

@@ -9,14 +9,26 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const cloned = request.clone();
   try {
-    const body = await request.json();
+    const rawText = await request.text();
+    const body = JSON.parse(rawText);
+
+    const makeForwardReq = () =>
+      new Request(request.url, {
+        method: 'POST',
+        headers: request.headers,
+        body: rawText,
+      });
+
     if (body.object === 'page' || body.object === 'instagram') {
-      return socialPOST(cloned);
+      return socialPOST(makeForwardReq());
     }
-    return waPOST(cloned);
-  } catch {
-    return socialPOST(cloned);
+    return waPOST(makeForwardReq() as unknown as NextRequest);
+  } catch (err) {
+    console.error('[meta-webhook] error forwarding webhook:', err);
+    return new Response(JSON.stringify({ received: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 }

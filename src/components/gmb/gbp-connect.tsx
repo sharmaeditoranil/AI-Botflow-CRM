@@ -27,6 +27,8 @@ import {
   Check,
   LogOut,
   Layers,
+  Pencil,
+  X,
 } from "lucide-react";
 
 export interface GmbLocation {
@@ -70,6 +72,49 @@ export function GbpConnect() {
   const [newLocPhone, setNewLocPhone] = useState("");
   const [newLocWebsite, setNewLocWebsite] = useState("");
   const [isCreatingLoc, setIsCreatingLoc] = useState(false);
+
+  // Quick rename state for individual profile cards
+  const [editingLocId, setEditingLocId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const [isRenaming, setIsRenaming] = useState(false);
+
+  const handleQuickRename = async (loc: GmbLocation) => {
+    if (!editingName.trim()) {
+      toast.error("Profile name cannot be empty");
+      return;
+    }
+    try {
+      setIsRenaming(true);
+      const res = await fetch("/api/gmb/locations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: loc.id,
+          location_name: editingName.trim(),
+          address: loc.address,
+          phone: loc.phone,
+          website: loc.website,
+          primary_category: loc.primary_category,
+          is_active: loc.id === activeLocId,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast.success(`Profile renamed to "${editingName.trim()}"!`);
+        if (loc.id === activeLocId) {
+          setStoreName(editingName.trim());
+        }
+        setEditingLocId(null);
+        await loadConfig();
+      } else {
+        toast.error(data.error || "Failed to rename profile");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error renaming profile");
+    } finally {
+      setIsRenaming(false);
+    }
+  };
 
   const loadConfig = async () => {
     try {
@@ -511,7 +556,11 @@ export function GbpConnect() {
                   return (
                     <div
                       key={loc.id}
-                      onClick={() => handleSelectLocation(loc)}
+                      onClick={() => {
+                        if (editingLocId !== loc.id) {
+                          handleSelectLocation(loc);
+                        }
+                      }}
                       className={`relative cursor-pointer rounded-2xl border p-3.5 transition-all flex flex-col justify-between gap-3 ${
                         isActive
                           ? "border-primary bg-primary/10 shadow-sm ring-1 ring-primary/40"
@@ -520,17 +569,69 @@ export function GbpConnect() {
                     >
                       <div className="space-y-1.5">
                         <div className="flex items-start justify-between gap-2">
-                          <h4 className="text-xs font-bold text-foreground line-clamp-1">
-                            {loc.location_name}
-                          </h4>
-                          {isActive ? (
-                            <Badge className="bg-emerald-500 text-white text-[9px] px-1.5 py-0 font-bold shrink-0">
-                              <Check className="size-2.5 mr-0.5" /> Active
-                            </Badge>
+                          {editingLocId === loc.id ? (
+                            <div
+                              className="flex items-center gap-1.5 w-full"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Input
+                                value={editingName}
+                                onChange={(e) => setEditingName(e.target.value)}
+                                className="h-7 text-xs rounded-lg bg-background"
+                                placeholder="Profile name"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") handleQuickRename(loc);
+                                  if (e.key === "Escape") setEditingLocId(null);
+                                }}
+                              />
+                              <Button
+                                size="sm"
+                                className="h-7 text-[10px] px-2 rounded-lg bg-primary text-primary-foreground shrink-0"
+                                onClick={() => handleQuickRename(loc)}
+                                disabled={isRenaming}
+                              >
+                                {isRenaming ? "..." : "Save"}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-7 text-[10px] px-1.5 rounded-lg text-muted-foreground shrink-0"
+                                onClick={() => setEditingLocId(null)}
+                              >
+                                <X className="size-3" />
+                              </Button>
+                            </div>
                           ) : (
-                            <span className="text-[10px] text-muted-foreground hover:text-primary shrink-0">
-                              Click to Select
-                            </span>
+                            <>
+                              <h4 className="text-xs font-bold text-foreground line-clamp-1 flex-1">
+                                {loc.location_name}
+                              </h4>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 w-6 p-0 text-muted-foreground hover:text-primary rounded-md"
+                                  title="Rename Profile"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingLocId(loc.id);
+                                    setEditingName(loc.location_name);
+                                  }}
+                                >
+                                  <Pencil className="size-3" />
+                                </Button>
+                                {isActive ? (
+                                  <Badge className="bg-emerald-500 text-white text-[9px] px-1.5 py-0 font-bold shrink-0">
+                                    <Check className="size-2.5 mr-0.5" /> Active
+                                  </Badge>
+                                ) : (
+                                  <span className="text-[10px] text-muted-foreground hover:text-primary shrink-0">
+                                    Click to Select
+                                  </span>
+                                )}
+                              </div>
+                            </>
                           )}
                         </div>
                         <p className="text-[11px] text-primary/80 font-medium line-clamp-1">
@@ -708,7 +809,7 @@ export function GbpConnect() {
                   onClick={handleSaveActiveLocation}
                   className="rounded-xl text-xs bg-primary text-primary-foreground shadow-sm"
                 >
-                  {isSaving ? "Saving..." : "Save Active Profile"}
+                  {isSaving ? "Saving..." : "Save / Rename Active Profile"}
                 </Button>
               </div>
             </CardContent>
