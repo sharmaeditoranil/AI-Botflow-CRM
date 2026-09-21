@@ -72,12 +72,12 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
             Your profile). Headless — renders nothing. */}
         <BrowserNotificationsListener />
         <Sidebar open={sidebarOpen} onClose={closeSidebar} />
-        <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+        <div className="flex flex-1 flex-col overflow-hidden min-w-0 max-w-full">
           <Header onOpenSidebar={openSidebar} />
           {/* Inbox manages its own split-pane layouts; standard pages get padding & vertical scroll. */}
           <main
             className={cn(
-              "flex-1 min-w-0 min-h-0",
+              "flex-1 min-w-0 max-w-full min-h-0",
               isInbox
                 ? "overflow-hidden p-0"
                 : "overflow-y-auto overscroll-y-contain [touch-action:pan-y] [-webkit-overflow-scrolling:touch] p-4 sm:p-6 pb-24 lg:pb-6"

@@ -265,19 +265,19 @@ export function ConversationList({
   );
 
   return (
-    <div className="relative flex h-full w-full flex-col bg-[#111b21] text-[#e9edef] lg:bg-card lg:text-foreground lg:w-80 lg:border-r lg:border-border overflow-hidden">
+    <div className="relative flex h-full w-full max-w-full min-w-0 flex-col bg-[#111b21] text-[#e9edef] lg:bg-card lg:text-foreground lg:w-80 lg:border-r lg:border-border overflow-hidden">
       {/* Top Header - Sticky */}
-      <div className="sticky top-0 z-10 bg-[#111b21] flex items-center justify-between px-4 pt-3 pb-2 shrink-0 border-b border-[#222d34]/60 lg:border-border/30">
-        <div className="flex items-center gap-2">
+      <div className="sticky top-0 z-10 bg-[#111b21] flex items-center justify-between px-4 pt-3 pb-2 shrink-0 border-b border-[#222d34]/60 lg:border-border/30 w-full max-w-full">
+        <div className="flex items-center gap-2 min-w-0 shrink-0">
           <h1 className="text-2xl font-bold tracking-tight text-[#e9edef] lg:text-foreground">Inbox</h1>
           {/* Subtle live realtime connection indicator */}
-          <span className="flex h-2 w-2 relative ml-0.5" title="Live sync">
+          <span className="flex h-2 w-2 relative ml-0.5 shrink-0" title="Live sync">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00a884] opacity-75" />
             <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00a884]" />
           </span>
         </div>
         {/* Right side actions: Search & Filter right in front of Inbox (matching PC view) */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {/* Search Button */}
           <button
             type="button"
@@ -396,8 +396,8 @@ export function ConversationList({
       </div>
 
       {/* Modern Search Bar */}
-      <div className="px-4 py-2 shrink-0 bg-[#111b21]">
-        <div className="relative flex items-center">
+      <div className="px-4 py-2 shrink-0 bg-[#111b21] w-full max-w-full">
+        <div className="relative flex items-center w-full max-w-full">
           <Search className="absolute left-3.5 h-4 w-4 text-[#8696a0] pointer-events-none" />
           <Input
             id="inbox-search-input"
@@ -419,7 +419,7 @@ export function ConversationList({
       </div>
 
       {/* Filter Pills Row */}
-      <div className="flex items-center gap-2 overflow-x-auto px-4 py-1.5 no-scrollbar shrink-0 bg-[#111b21]">
+      <div className="flex items-center gap-2 overflow-x-auto overflow-y-hidden px-4 py-1.5 no-scrollbar shrink-0 bg-[#111b21] w-full max-w-full">
         {/* All · 24 */}
         <button
           type="button"
@@ -610,7 +610,7 @@ export function ConversationList({
       )}
 
       {/* Conversation Items List with native touch scrolling */}
-      <div className="min-h-0 flex-1 overflow-y-auto [-webkit-overflow-scrolling:touch] overscroll-y-contain [touch-action:pan-y] pb-24">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full [-webkit-overflow-scrolling:touch] overscroll-y-contain [touch-action:pan-y] pb-24">
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center px-6">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.05] border border-white/10 mb-3">
@@ -700,11 +700,12 @@ function ConversationItem({
   const unreadCount = Number(conversation.unread_count) || 0;
 
   return (
-    <div className="relative group">
+    <div className="relative group w-full max-w-full min-w-0 overflow-hidden">
       <button
+        type="button"
         onClick={handleClick}
         className={cn(
-          "flex w-full items-center gap-3.5 px-4 py-3 text-left transition-all relative select-none",
+          "flex w-full max-w-full min-w-0 items-center gap-3.5 px-4 py-3 text-left transition-all relative select-none overflow-hidden",
           isActive
             ? "bg-[#2a3942] lg:border-l-2 lg:border-[#00a884]"
             : "hover:bg-[#202c33] active:bg-[#2a3942]"
@@ -783,7 +784,7 @@ function ConversationItem({
           </span>
           {unreadCount > 0 ? (
             <span
-              className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#00a884] px-1.5 text-[11px] font-bold text-[#111b21] shadow-none"
+              className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-[#00a884] px-1.5 text-[11px] font-bold text-[#111b21] shadow-none"
               title={`${unreadCount} unread messages`}
             >
               {unreadCount}
