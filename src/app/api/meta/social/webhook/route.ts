@@ -318,6 +318,8 @@ export async function POST(request: Request) {
           }
         }
 
+        if (!conversationId) continue;
+
         // 4. Insert message
         await supabase.from('messages').insert({
           conversation_id: conversationId,
