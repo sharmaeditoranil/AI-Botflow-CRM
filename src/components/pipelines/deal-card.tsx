@@ -32,6 +32,7 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
   const contactLabel = deal.contact?.name || deal.contact?.phone || t("noContact");
   const assigneeLabel = deal.assignee?.full_name || null;
 
+  const todayStr = new Date().toISOString().split("T")[0];
   const isOverdue = !!(deal.expected_close_date && deal.expected_close_date < todayStr && deal.status === "open");
   const isDueToday = !!(deal.expected_close_date && deal.expected_close_date === todayStr && deal.status === "open");
 
