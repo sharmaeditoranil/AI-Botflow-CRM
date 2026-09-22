@@ -21,6 +21,9 @@ export async function GET() {
       razorpay_webhook_secret: '',
       google_client_id: process.env.GOOGLE_CLIENT_ID || '',
       google_client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
+      admin_openai_api_key: process.env.OPENAI_API_KEY || '',
+      admin_gemini_api_key: process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '',
+      admin_ai_model: 'gpt-4o-mini',
       support_email: 'support@aibotflow.in',
       support_phone: '',
     };
@@ -32,6 +35,12 @@ export async function GET() {
         settings?.google_client_id || process.env.GOOGLE_CLIENT_ID || '',
       google_client_secret:
         settings?.google_client_secret || process.env.GOOGLE_CLIENT_SECRET || '',
+      admin_openai_api_key:
+        settings?.admin_openai_api_key || process.env.OPENAI_API_KEY || '',
+      admin_gemini_api_key:
+        settings?.admin_gemini_api_key || process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY || '',
+      admin_ai_model:
+        settings?.admin_ai_model || 'gpt-4o-mini',
     };
 
     return NextResponse.json({
@@ -57,6 +66,9 @@ export async function POST(req: NextRequest) {
       razorpay_webhook_secret,
       google_client_id,
       google_client_secret,
+      admin_openai_api_key,
+      admin_gemini_api_key,
+      admin_ai_model,
       support_email,
       support_phone,
     } = body;
@@ -71,6 +83,9 @@ export async function POST(req: NextRequest) {
       razorpay_webhook_secret: razorpay_webhook_secret?.trim() || null,
       google_client_id: google_client_id?.trim() || null,
       google_client_secret: google_client_secret?.trim() || null,
+      admin_openai_api_key: admin_openai_api_key?.trim() || null,
+      admin_gemini_api_key: admin_gemini_api_key?.trim() || null,
+      admin_ai_model: admin_ai_model?.trim() || 'gpt-4o-mini',
       support_email: support_email?.trim() || 'support@aibotflow.in',
       support_phone: support_phone?.trim() || null,
       updated_at: new Date().toISOString(),

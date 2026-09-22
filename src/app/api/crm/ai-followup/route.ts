@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/automations/admin-client';
 import { engineSendText } from '@/lib/flows/meta-send';
+import { generateWithAdminAi } from '@/lib/ai/admin-ai';
 
 export async function POST(req: NextRequest) {
   try {
@@ -75,16 +76,36 @@ export async function POST(req: NextRequest) {
       const instructions = deal.followup_instructions || '';
       const memory = contact.ai_memory || '';
 
-      // Personalized AI follow-up message formulation
+      // Personalized AI follow-up message formulation using Admin Master AI key
       let followUpText = '';
-      if (instructions) {
-        followUpText = `Namaste ${customerName}! 🙏 Just checking in regarding ${instructions}. Please let us know if you have any questions!`;
-      } else if (memory.toLowerCase().includes('fee') || memory.toLowerCase().includes('price') || memory.toLowerCase().includes('cost')) {
-        followUpText = `Hi ${customerName}! 👋 Following up on our previous discussion about pricing. We have an exclusive offer valid this week — would you like to explore?`;
-      } else if (memory.toLowerCase().includes('demo') || memory.toLowerCase().includes('trial')) {
-        followUpText = `Namaste ${customerName}! 🙏 Just checking if you would like a quick 5-minute walkthrough of our features today. Let us know what time suits you!`;
-      } else {
-        followUpText = `Namaste ${customerName}! 🙏 Hope you're having a great day. Just following up regarding your inquiry to see if you have any questions. We're here to help!`;
+      try {
+        const aiPrompt = `Write a polite, engaging, personalized WhatsApp follow-up message in natural Hinglish/English for a business lead.
+Customer Name: ${customerName}
+Lead Title: ${deal.title}
+Context: ${memory || 'General inquiry'}
+Deal Value: ₹${deal.value || 0}
+Special Instruction: ${instructions || 'Follow up politely and ask if they need assistance or want to proceed'}
+
+Keep it concise (2-3 sentences max), warm, professional, with appropriate emojis. Do not include placeholders.`;
+
+        followUpText = await generateWithAdminAi(aiPrompt, {
+          systemPrompt: 'You are an intelligent business WhatsApp follow-up assistant.',
+          maxTokens: 150,
+        });
+      } catch (aiErr) {
+        console.warn('[ai-followup] generateWithAdminAi notice, using smart fallback:', aiErr);
+      }
+
+      if (!followUpText) {
+        if (instructions) {
+          followUpText = `Namaste ${customerName}! 🙏 Just checking in regarding ${instructions}. Please let us know if you have any questions!`;
+        } else if (memory.toLowerCase().includes('fee') || memory.toLowerCase().includes('price') || memory.toLowerCase().includes('cost')) {
+          followUpText = `Hi ${customerName}! 👋 Following up on our previous discussion about pricing. We have an exclusive offer valid this week — would you like to explore?`;
+        } else if (memory.toLowerCase().includes('demo') || memory.toLowerCase().includes('trial')) {
+          followUpText = `Namaste ${customerName}! 🙏 Just checking if you would like a quick 5-minute walkthrough of our features today. Let us know what time suits you!`;
+        } else {
+          followUpText = `Namaste ${customerName}! 🙏 Hope you're having a great day. Just following up regarding your inquiry to see if you have any questions. We're here to help!`;
+        }
       }
 
       // Ensure conversation exists

@@ -20,12 +20,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing reviewer name or review text" }, { status: 400 });
     }
 
-    const openaiKey = process.env.OPENAI_API_KEY;
-    const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_AI_API_KEY;
+    const { getAdminAiCredentials } = await import('@/lib/ai/admin-ai');
+    const { openaiApiKey: openaiKey, geminiApiKey: geminiKey } = await getAdminAiCredentials();
 
     if (!openaiKey && !geminiKey) {
       return NextResponse.json(
-        { error: "Neither OPENAI_API_KEY nor GEMINI_API_KEY is configured in server environment" },
+        { error: "Neither OPENAI_API_KEY nor GEMINI_API_KEY is configured in Super Admin or server environment" },
         { status: 500 }
       );
     }

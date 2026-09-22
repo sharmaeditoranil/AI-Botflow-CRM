@@ -61,19 +61,41 @@ export async function POST(request: Request) {
     const config = await loadAiConfig(supabase, accountId).catch((err) => {
       // Decrypt failure — surface distinctly from "not configured".
       console.error('[ai/draft] loadAiConfig error:', err)
-      throw new AiError('Stored API key could not be decrypted.', {
-        code: 'key_decrypt_failed',
-        status: 400,
-      })
+      return null
     })
+
+    // If tenant has no custom key, fall back to Admin Master AI API
     if (!config) {
-      return NextResponse.json(
-        {
-          error: 'AI assistant is not set up. Enable it in Settings → AI Assistant.',
-          code: 'ai_not_configured',
-        },
-        { status: 400 },
-      )
+      const messages = await buildConversationContext(supabase, conversationId)
+      if (messages.length === 0) {
+        return NextResponse.json(
+          { error: 'No messages to draft from yet.', code: 'no_messages' },
+          { status: 400 },
+        )
+      }
+
+      const conversationText = messages
+        .map((m) => `${m.role === 'user' ? 'Customer' : 'Agent'}: ${m.content}`)
+        .join('\n')
+
+      const draftPrompt = `Read this WhatsApp conversation and suggest a professional, polite, helpful reply to the customer in the same language (Hindi/English/Hinglish):
+${conversationText}
+
+Provide only the reply text, no preamble or quotes.`
+
+      try {
+        const { generateWithAdminAi } = await import('@/lib/ai/admin-ai')
+        const draft = await generateWithAdminAi(draftPrompt, {
+          systemPrompt: 'You are a helpful customer support assistant drafting a response for a human agent.',
+          maxTokens: 250,
+        })
+        return NextResponse.json({ draft })
+      } catch (adminAiErr: any) {
+        return NextResponse.json(
+          { error: adminAiErr.message || 'AI assistant is not configured on platform.' },
+          { status: 400 },
+        )
+      }
     }
 
     const messages = await buildConversationContext(supabase, conversationId)
