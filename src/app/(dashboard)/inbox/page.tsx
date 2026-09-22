@@ -682,7 +682,7 @@ function InboxPageInner() {
             On mobile it's always hidden (the `lg:block` below), so the
             toggle — which is itself desktop-only — never affects it. */}
         {contactPanelOpen && (
-          <div className="hidden lg:flex h-full overflow-hidden">
+          <div className="hidden lg:flex h-full min-h-0 overflow-hidden shrink-0">
             <ContactSidebar contact={activeContact} conversationId={activeConversation?.id} />
           </div>
         )}

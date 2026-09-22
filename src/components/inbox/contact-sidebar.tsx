@@ -376,7 +376,7 @@ export function ContactSidebar({ contact, conversationId }: ContactSidebarProps)
 
   return (
     <div className="flex h-full w-72 flex-col overflow-hidden border-l border-border bg-card">
-      <ScrollArea className="flex-1">
+      <ScrollArea className="h-full min-h-0 flex-1">
         <div className="p-4">
           {/* Contact Info */}
           <div className="flex flex-col items-center text-center">
