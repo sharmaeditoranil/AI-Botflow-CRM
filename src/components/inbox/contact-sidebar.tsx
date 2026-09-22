@@ -38,15 +38,17 @@ import { toast } from "sonner";
 
 interface ContactSidebarProps {
   contact: Contact | null;
+  conversationId?: string;
 }
 
-export function ContactSidebar({ contact }: ContactSidebarProps) {
+export function ContactSidebar({ contact, conversationId }: ContactSidebarProps) {
   const tSidebar = useTranslations("Inbox.sidebar");
   const tThread = useTranslations("Inbox.messageThread");
 
   const { accountId } = useAuth();
   const [copied, setCopied] = useState(false);
   const [deals, setDeals] = useState<Deal[]>([]);
+  const [availableStages, setAvailableStages] = useState<{ id: string; name: string; color: string }[]>([]);
   const [notes, setNotes] = useState<ContactNote[]>([]);
   const [tags, setTags] = useState<(Tag & { contact_tag_id: string })[]>([]);
   const [newNote, setNewNote] = useState("");
@@ -93,6 +95,13 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
         }));
       setTags(mapped);
     }
+
+    // Fetch pipeline stages for default pipeline
+    const { data: stagesData } = await supabase
+      .from("pipeline_stages")
+      .select("id, name, color, position")
+      .order("position", { ascending: true });
+    if (stagesData) setAvailableStages(stagesData);
   }, [contact]);
 
   // Load on contact change. setContactData/setTags run inside async
@@ -185,12 +194,23 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
       const user = session?.user;
       if (!user) return;
 
-      const { data: pipeline } = await supabase
+      let { data: pipeline } = await supabase
         .from("pipelines")
         .select("id, stages:pipeline_stages(id, position)")
-        .eq("user_id", user.id)
+        .eq("account_id", accountId)
+        .order("created_at", { ascending: true })
         .limit(1)
         .maybeSingle();
+
+      if (!pipeline) {
+        const { data: fallbackPipe } = await supabase
+          .from("pipelines")
+          .select("id, stages:pipeline_stages(id, position)")
+          .order("created_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        pipeline = fallbackPipe;
+      }
 
       if (!pipeline || !pipeline.stages || (pipeline.stages as any[]).length === 0) {
         toast.error("Please configure a pipeline first under Pipelines.");
@@ -199,17 +219,19 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
 
       const firstStage = (pipeline.stages as any[]).sort((a, b) => a.position - b.position)[0];
       const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setDate(tomorrow.getDate() + 2);
 
       const { error } = await supabase.from("deals").insert({
         user_id: user.id,
+        account_id: accountId,
         pipeline_id: pipeline.id,
         stage_id: firstStage.id,
         contact_id: contact.id,
+        conversation_id: conversationId || null,
         title: `Deal: ${contact.name || contact.phone || "Customer"}`,
         value: 5000,
         currency: "INR",
-        status: "active",
+        status: "open",
         expected_close_date: tomorrow.toISOString().split("T")[0],
         notes: "Created from Inbox chat.",
         ai_followup_enabled: true,
@@ -223,6 +245,42 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
       }
     } catch (err: any) {
       toast.error(err.message || "Error creating deal");
+    }
+  };
+
+  const handleUpdateDealStage = async (dealId: string, stageId: string) => {
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('deals')
+        .update({ stage_id: stageId, updated_at: new Date().toISOString() })
+        .eq('id', dealId);
+      if (!error) {
+        toast.success('Deal stage updated in CRM Pipeline!');
+        fetchContactData();
+      } else {
+        toast.error(error.message);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update stage');
+    }
+  };
+
+  const handleUpdateDealDate = async (dealId: string, newDate: string) => {
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('deals')
+        .update({ expected_close_date: newDate, updated_at: new Date().toISOString() })
+        .eq('id', dealId);
+      if (!error) {
+        toast.success('Follow-up date scheduled! AI Assistant will follow up.');
+        fetchContactData();
+      } else {
+        toast.error(error.message);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update date');
     }
   };
 
@@ -246,7 +304,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
     }
   };
 
-  const handleUpdateDealStatus = async (dealId: string, status: 'won' | 'lost' | 'archived') => {
+  const handleUpdateDealStatus = async (dealId: string, status: 'won' | 'lost' | 'open') => {
     try {
       const supabase = createClient();
       const { error } = await supabase
@@ -479,45 +537,55 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                 deals.map((deal) => (
                   <div
                     key={deal.id}
-                    className="rounded-lg bg-muted px-3 py-2 space-y-1.5 border border-border/60"
+                    className="rounded-lg bg-muted px-3 py-2.5 space-y-2 border border-border/60 shadow-xs"
                   >
                     <div className="flex items-start justify-between gap-1">
                       <p className="text-xs font-bold text-foreground truncate">
                         {deal.title}
                       </p>
-                      {deal.stage && (
-                        <span
-                          className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold shrink-0"
-                          style={{
-                            backgroundColor: `${deal.stage.color}20`,
-                            color: deal.stage.color,
-                          }}
-                        >
-                          {deal.stage.name}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span className="font-semibold text-foreground">
+                      <span className="text-xs font-bold text-primary shrink-0">
                         {deal.currency ?? "₹"}
                         {deal.value.toLocaleString('en-IN')}
                       </span>
-                      {deal.expected_close_date && (
-                        <span className="text-[10px] flex items-center gap-1 text-muted-foreground">
-                          <Calendar className="h-3 w-3 text-primary" />
-                          Follow-up: {new Date(deal.expected_close_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
-                        </span>
-                      )}
+                    </div>
+
+                    {/* Stage Selector Dropdown */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-muted-foreground shrink-0 font-medium">Stage:</span>
+                      <select
+                        value={deal.stage_id}
+                        onChange={(e) => handleUpdateDealStage(deal.id, e.target.value)}
+                        className="h-6 flex-1 rounded border border-border/80 bg-background px-1.5 text-[10px] font-semibold text-foreground outline-none focus:border-primary"
+                      >
+                        {availableStages.map((st) => (
+                          <option key={st.id} value={st.id}>
+                            {st.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Follow-up Date Input */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-muted-foreground shrink-0 font-medium flex items-center gap-0.5">
+                        <Calendar className="h-2.5 w-2.5 text-primary" /> Follow-up:
+                      </span>
+                      <input
+                        type="date"
+                        value={deal.expected_close_date || ""}
+                        onChange={(e) => handleUpdateDealDate(deal.id, e.target.value)}
+                        className="h-6 flex-1 rounded border border-border/80 bg-background px-1.5 text-[10px] text-foreground outline-none focus:border-primary"
+                      />
                     </div>
 
                     {/* Deal Actions & 2-way sync controls */}
-                    <div className="pt-1.5 border-t border-border/50 flex items-center justify-between gap-1">
+                    <div className="pt-2 border-t border-border/50 flex items-center justify-between gap-1">
                       <div className="flex items-center gap-1">
                         <Button
                           size="sm"
                           variant="ghost"
                           onClick={() => handleUpdateDealStatus(deal.id, 'won')}
-                          className="h-5 px-1.5 text-[9px] text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 gap-0.5"
+                          className="h-5 px-1.5 text-[9px] text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 gap-0.5 font-medium"
                           title="Mark deal won"
                         >
                           <CheckCircle className="h-2.5 w-2.5" />
@@ -527,7 +595,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                           size="sm"
                           variant="ghost"
                           onClick={() => handleUpdateDealStatus(deal.id, 'lost')}
-                          className="h-5 px-1.5 text-[9px] text-rose-500 hover:bg-rose-500/10 gap-0.5"
+                          className="h-5 px-1.5 text-[9px] text-rose-500 hover:bg-rose-500/10 gap-0.5 font-medium"
                           title="Mark deal lost"
                         >
                           <XCircle className="h-2.5 w-2.5" />
@@ -548,7 +616,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                         size="sm"
                         variant="ghost"
                         onClick={() => handleTriggerAiFollowup(deal.id)}
-                        className="h-5 px-1.5 text-[9px] text-purple-500 hover:text-purple-400 hover:bg-purple-500/10 gap-1"
+                        className="h-5 px-1.5 text-[9px] bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 gap-1 font-semibold"
                         title="Send AI personalized follow-up message to this customer now"
                       >
                         <Bot className="h-2.5 w-2.5" />

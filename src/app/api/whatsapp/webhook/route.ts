@@ -1031,6 +1031,86 @@ async function processMessage(
     content_type: contentType,
     text: contentText,
   })
+
+  // Auto-connect chat to CRM pipeline: ensure an active pipeline deal exists for every inbound lead
+  await ensureCrmPipelineDealForInbound({
+    accountId,
+    contactRecord,
+    conversationId: conversation.id,
+    inboundText,
+    configOwnerUserId,
+  }).catch((err) => console.warn('[crm-sync] Deal auto-creation notice:', err))
+}
+
+async function ensureCrmPipelineDealForInbound(args: {
+  accountId: string;
+  contactRecord: { id: string; name?: string | null; phone?: string | null };
+  conversationId: string;
+  inboundText: string;
+  configOwnerUserId: string;
+}) {
+  try {
+    const admin = supabaseAdmin();
+    // Check if an open deal already exists
+    const { data: existingDeal } = await admin
+      .from('deals')
+      .select('id, notes')
+      .eq('contact_id', args.contactRecord.id)
+      .in('status', ['open', 'active'])
+      .limit(1)
+      .maybeSingle();
+
+    if (existingDeal) {
+      return;
+    }
+
+    // Find default pipeline & first stage
+    let { data: pipeline } = await admin
+      .from('pipelines')
+      .select('id, stages:pipeline_stages(id, position)')
+      .eq('account_id', args.accountId)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (!pipeline) {
+      const { data: fallbackPipe } = await admin
+        .from('pipelines')
+        .select('id, stages:pipeline_stages(id, position)')
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      pipeline = fallbackPipe;
+    }
+
+    if (pipeline && pipeline.stages && (pipeline.stages as any[]).length > 0) {
+      const sortedStages = (pipeline.stages as any[]).sort((a: any, b: any) => a.position - b.position);
+      const firstStage = sortedStages[0];
+
+      const followUpDate = new Date();
+      followUpDate.setDate(followUpDate.getDate() + 2);
+
+      const dealTitle = `Deal: ${args.contactRecord.name || args.contactRecord.phone || 'WhatsApp Lead'}`;
+
+      await admin.from('deals').insert({
+        account_id: args.accountId,
+        user_id: args.configOwnerUserId,
+        pipeline_id: pipeline.id,
+        stage_id: firstStage.id,
+        contact_id: args.contactRecord.id,
+        conversation_id: args.conversationId,
+        title: dealTitle,
+        value: 5000,
+        currency: 'INR',
+        status: 'open',
+        expected_close_date: followUpDate.toISOString().split('T')[0],
+        notes: `Auto-created from inbound WhatsApp chat: "${args.inboundText.slice(0, 100)}"`,
+        ai_followup_enabled: true,
+      });
+    }
+  } catch (err) {
+    console.warn('[webhook] ensureCrmPipelineDealForInbound notice:', err);
+  }
 }
 
 /**

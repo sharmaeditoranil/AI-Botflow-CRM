@@ -70,5 +70,25 @@ export async function GET(request: Request) {
     processed++
   }
 
-  return NextResponse.json({ processed })
+  // Also sweep scheduled CRM AI follow-ups due today
+  let crmFollowupsProcessed = 0;
+  try {
+    const origin = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const crmRes = await fetch(`${origin}/api/crm/ai-followup`, {
+      method: 'POST',
+      headers: {
+        'x-cron-secret': supplied,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    }).catch(() => null);
+    if (crmRes && crmRes.ok) {
+      const crmData = await crmRes.json().catch(() => ({}));
+      crmFollowupsProcessed = crmData.processed || 0;
+    }
+  } catch (crmErr) {
+    console.warn('[cron] CRM AI follow-up runner notice:', crmErr);
+  }
+
+  return NextResponse.json({ processed, crmFollowupsProcessed })
 }

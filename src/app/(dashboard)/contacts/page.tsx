@@ -365,10 +365,10 @@ export default function ContactsPage() {
             canAct={canEdit}
             gateReason="add or import contacts"
             onClick={() => setImportOpen(true)}
-            className="border-border text-muted-foreground hover:bg-muted"
+            className="border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 font-medium shadow-sm transition-all"
           >
-            <Upload className="size-4" />
-            {t('importBtn')}
+            <Upload className="size-4 mr-1 text-primary" />
+            Bulk Import (CSV / Excel)
           </GatedButton>
           <GatedButton
             canAct={canEdit}
@@ -571,17 +571,29 @@ export default function ContactsPage() {
                         : t('noContactsYet')}
                     </p>
                     {!hasActiveFilters && (
-                      <GatedButton
-                        canAct={canEdit}
-                        gateReason="add or import contacts"
-                        variant="outline"
-                        size="sm"
-                        onClick={openAddForm}
-                        className="mt-2 border-border text-muted-foreground hover:bg-muted"
-                      >
-                        <Plus className="size-3.5" />
-                        {t('addFirstContact')}
-                      </GatedButton>
+                      <div className="flex flex-wrap items-center justify-center gap-2 mt-2">
+                        <GatedButton
+                          canAct={canEdit}
+                          gateReason="add or import contacts"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setImportOpen(true)}
+                          className="border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 font-medium"
+                        >
+                          <Upload className="size-3.5 mr-1" />
+                          Bulk Import (CSV / Excel)
+                        </GatedButton>
+                        <GatedButton
+                          canAct={canEdit}
+                          gateReason="add or import contacts"
+                          size="sm"
+                          onClick={openAddForm}
+                          className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
+                        >
+                          <Plus className="size-3.5 mr-1" />
+                          {t('addFirstContact')}
+                        </GatedButton>
+                      </div>
                     )}
                   </div>
                 </TableCell>

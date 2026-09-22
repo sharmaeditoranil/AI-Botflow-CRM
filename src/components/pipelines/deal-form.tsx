@@ -30,6 +30,8 @@ import {
   MessageSquare,
   DollarSign,
   Loader2,
+  Bot,
+  Send,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
@@ -65,6 +67,9 @@ export function DealForm({
   const [assignedTo, setAssignedTo] = useState("");
   const [expectedCloseDate, setExpectedCloseDate] = useState("");
   const [notes, setNotes] = useState("");
+  const [aiFollowupEnabled, setAiFollowupEnabled] = useState(true);
+  const [followupInstructions, setFollowupInstructions] = useState("");
+  const [sendingFollowup, setSendingFollowup] = useState(false);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -94,6 +99,8 @@ export function DealForm({
       setAssignedTo(deal.assigned_to ?? "");
       setExpectedCloseDate(deal.expected_close_date ?? "");
       setNotes(deal.notes ?? "");
+      setAiFollowupEnabled((deal as any).ai_followup_enabled !== false);
+      setFollowupInstructions((deal as any).followup_instructions ?? "");
     } else {
       setTitle("");
       setValue("");
@@ -103,6 +110,8 @@ export function DealForm({
       setAssignedTo("");
       setExpectedCloseDate("");
       setNotes("");
+      setAiFollowupEnabled(true);
+      setFollowupInstructions("");
     }
   }, [open, deal, defaultStageId, stages, defaultCurrency]);
   /* eslint-enable react-hooks/set-state-in-effect */
@@ -168,6 +177,8 @@ export function DealForm({
       assigned_to: assignedTo || null,
       notes: notes.trim() || null,
       expected_close_date: expectedCloseDate || null,
+      ai_followup_enabled: aiFollowupEnabled,
+      followup_instructions: followupInstructions.trim() || null,
     };
 
     if (deal) {
@@ -202,6 +213,19 @@ export function DealForm({
         toast.error(t("toastFailedCreate"));
         setSaving(false);
         return;
+      }
+    }
+
+    // Bidirectional sync: append to contact_notes
+    if (contactId && notes.trim() && accountId) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        supabase.from("contact_notes").insert({
+          contact_id: contactId,
+          account_id: accountId,
+          user_id: session.user.id,
+          note_text: `[CRM Deal "${title.trim()}"]: ${notes.trim()}`,
+        }).then();
       }
     }
 
@@ -374,6 +398,85 @@ export function DealForm({
                 placeholder={t("notesPlaceholder")}
                 className="min-h-[100px] border-border bg-muted text-foreground"
               />
+              <p className="text-[11px] text-muted-foreground">
+                🔄 Notes automatically sync between CRM Pipeline and Inbox Chat.
+              </p>
+            </div>
+
+            {/* Smart AI Follow-up Configuration */}
+            <div className="rounded-xl border border-purple-500/30 bg-purple-500/5 p-3.5 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Bot className="h-4 w-4 text-purple-500" />
+                  <span className="text-xs font-semibold text-foreground">
+                    Smart AI Follow-up Assistant
+                  </span>
+                </div>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={aiFollowupEnabled}
+                    onChange={(e) => setAiFollowupEnabled(e.target.checked)}
+                    className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5"
+                  />
+                  <span className="text-xs text-foreground font-medium">Auto-send on Due Date</span>
+                </label>
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-[11px] text-muted-foreground">
+                  Custom AI Instruction (Optional)
+                </Label>
+                <Input
+                  value={followupInstructions}
+                  onChange={(e) => setFollowupInstructions(e.target.value)}
+                  placeholder="e.g. Offer 10% discount on web package or ask for demo timing"
+                  className="h-8 border-border bg-background text-xs text-foreground"
+                />
+              </div>
+
+              {deal && (
+                <div className="pt-1 flex items-center justify-between">
+                  <span className="text-[11px] text-muted-foreground">
+                    Send immediate WhatsApp follow-up:
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={sendingFollowup}
+                    onClick={async () => {
+                      setSendingFollowup(true);
+                      try {
+                        toast.info("AI is crafting and sending follow-up message on WhatsApp...");
+                        const res = await fetch("/api/crm/ai-followup", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ dealId: deal.id }),
+                        });
+                        const data = await res.json();
+                        if (res.ok && data.processed > 0) {
+                          toast.success("AI Follow-up message sent on WhatsApp!");
+                          onSaved();
+                        } else {
+                          toast.info("Follow-up checked.");
+                        }
+                      } catch (err: any) {
+                        toast.error(err.message || "Failed to send follow-up");
+                      } finally {
+                        setSendingFollowup(false);
+                      }
+                    }}
+                    className="h-7 px-2.5 text-xs bg-purple-600 hover:bg-purple-700 text-white gap-1 font-medium"
+                  >
+                    {sendingFollowup ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <Send className="h-3 w-3" />
+                    )}
+                    Send AI Follow-up Now
+                  </Button>
+                </div>
+              )}
             </div>
 
             {deal && (

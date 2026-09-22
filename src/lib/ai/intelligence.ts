@@ -237,7 +237,7 @@ export async function processFollowupIntelligence(args: {
   // 1. Fetch current contact data
   const { data: contact } = await db
     .from('contacts')
-    .select('id, lead_status, lead_score, ai_memory, is_opted_out')
+    .select('id, name, phone, lead_status, lead_score, ai_memory, is_opted_out')
     .eq('id', contactId)
     .maybeSingle();
 
@@ -401,18 +401,29 @@ export async function processFollowupIntelligence(args: {
       .from('deals')
       .select('id')
       .eq('contact_id', contactId)
-      .eq('status', 'active')
+      .in('status', ['open', 'active'])
       .maybeSingle();
 
     if (!existingDeal) {
-      // Find default pipeline and first stage
-      const { data: pipeline } = await db
+      // Find default pipeline and first stage (scoped by accountId or user)
+      let { data: pipeline } = await db
         .from('pipelines')
         .select('id, stages:pipeline_stages(id, position)')
-        .eq('user_id', configOwnerUserId)
+        .eq('account_id', accountId)
         .order('created_at', { ascending: true })
         .limit(1)
         .maybeSingle();
+
+      if (!pipeline) {
+        const { data: fallbackPipe } = await db
+          .from('pipelines')
+          .select('id, stages:pipeline_stages(id, position)')
+          .eq('user_id', configOwnerUserId)
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        pipeline = fallbackPipe;
+      }
 
       if (pipeline && pipeline.stages && (pipeline.stages as any[]).length > 0) {
         const sortedStages = (pipeline.stages as any[]).sort((a, b) => a.position - b.position);
@@ -422,17 +433,19 @@ export async function processFollowupIntelligence(args: {
         followUpDate.setDate(followUpDate.getDate() + (currentStatus === 'hot' ? 1 : 2));
 
         const dealValue = currentStatus === 'qualified' ? 10000 : currentStatus === 'hot' ? 5000 : 2500;
+        const dealTitle = `Deal: ${(contact as any)?.name || (contact as any)?.phone || 'WhatsApp Lead'}`;
 
         await db.from('deals').insert({
           user_id: configOwnerUserId,
+          account_id: accountId,
           pipeline_id: pipeline.id,
           stage_id: firstStage.id,
           contact_id: contactId,
           conversation_id: conversationId,
-          title: `WhatsApp Lead: ${contact.id.slice(0, 8)}`,
+          title: dealTitle,
           value: dealValue,
           currency: 'INR',
-          status: 'active',
+          status: 'open',
           expected_close_date: followUpDate.toISOString().split('T')[0],
           notes: `Auto-created from WhatsApp chat. Intent: ${currentStatus.toUpperCase()} (${currentScore} pts).`,
           ai_followup_enabled: true,
