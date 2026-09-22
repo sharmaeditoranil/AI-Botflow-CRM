@@ -79,6 +79,20 @@ export async function loadAiConfig(
     }
   }
 
+  // Fallback: If tenant has OpenAI as chat provider, reuse their OpenAI key for embeddings
+  if (!embeddingsApiKey && row.provider === 'openai' && row.api_key) {
+    try {
+      embeddingsApiKey = decrypt(row.api_key)
+    } catch {
+      // ignore
+    }
+  }
+
+  // Fallback: Use platform master OpenAI key if available
+  if (!embeddingsApiKey && process.env.OPENAI_API_KEY) {
+    embeddingsApiKey = process.env.OPENAI_API_KEY
+  }
+
   return {
     provider: row.provider,
     model: row.model,
@@ -135,16 +149,39 @@ export async function loadEmbeddingsKey(
 ): Promise<{ key: string | null; corrupt: boolean }> {
   const { data, error } = await db
     .from('ai_configs')
-    .select('embeddings_api_key')
+    .select('embeddings_api_key, api_key, provider')
     .eq('account_id', accountId)
     .maybeSingle()
-  if (error || !data?.embeddings_api_key) return { key: null, corrupt: false }
-  try {
-    return { key: decrypt(data.embeddings_api_key), corrupt: false }
-  } catch {
-    console.error(
-      `[ai config] embeddings key for account ${accountId} could not be decrypted — check ENCRYPTION_KEY.`,
-    )
-    return { key: null, corrupt: true }
+
+  if (error || !data) {
+    return { key: process.env.OPENAI_API_KEY ?? null, corrupt: false }
   }
+
+  if (data.embeddings_api_key) {
+    try {
+      return { key: decrypt(data.embeddings_api_key), corrupt: false }
+    } catch {
+      console.error(
+        `[ai config] embeddings key for account ${accountId} could not be decrypted — check ENCRYPTION_KEY.`,
+      )
+      // Attempt fallback below if corrupt
+    }
+  }
+
+  // Fallback 1: User's chat OpenAI API key
+  if (data.provider === 'openai' && data.api_key) {
+    try {
+      return { key: decrypt(data.api_key), corrupt: false }
+    } catch {
+      // ignore
+    }
+  }
+
+  // Fallback 2: Platform master OpenAI API key from server environment
+  if (process.env.OPENAI_API_KEY) {
+    return { key: process.env.OPENAI_API_KEY, corrupt: false }
+  }
+
+  return { key: null, corrupt: false }
 }
+

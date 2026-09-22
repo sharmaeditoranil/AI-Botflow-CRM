@@ -5,7 +5,7 @@ import { loadAiConfig } from '@/lib/ai/config'
 import { retrieveKnowledge } from '@/lib/ai/knowledge'
 import { generateReply } from '@/lib/ai/generate'
 import { buildSystemPrompt } from '@/lib/ai/defaults'
-import { latestUserMessage } from '@/lib/ai/query'
+import { latestUserMessage, conversationQueryContext } from '@/lib/ai/query'
 import { AiError, type ChatMessage } from '@/lib/ai/types'
 
 // Keep the tested transcript bounded, mirroring the live context window.
@@ -72,11 +72,12 @@ export async function POST(request: Request) {
       )
     }
 
+    const queryContext = conversationQueryContext(messages) || latestUserMessage(messages)
     const knowledge = await retrieveKnowledge(
       supabase,
       accountId,
       config,
-      latestUserMessage(messages),
+      queryContext,
     )
     const systemPrompt = buildSystemPrompt({
       userPrompt: config.systemPrompt,

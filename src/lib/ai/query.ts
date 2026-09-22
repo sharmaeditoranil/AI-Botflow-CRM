@@ -12,3 +12,17 @@ export function latestUserMessage(messages: ChatMessage[]): string {
   }
   return messages.length > 0 ? messages[messages.length - 1].content : ''
 }
+
+/**
+ * Composite query context across recent turns (e.g. user question + clarification).
+ * Preserves vital context like "Course fees?" -> "Offline" so retrieval matches both.
+ */
+export function conversationQueryContext(messages: ChatMessage[]): string {
+  if (!messages || messages.length === 0) return ''
+  const recent = messages
+    .slice(-4)
+    .map((m) => m.content?.trim())
+    .filter(Boolean)
+  return recent.join(' ') || latestUserMessage(messages)
+}
+

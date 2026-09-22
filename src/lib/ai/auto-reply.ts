@@ -6,7 +6,7 @@ import { generateReply } from './generate'
 import { buildSystemPrompt } from './defaults'
 import { buildHandoffSummary } from './handoff'
 import { logAiUsage } from './usage'
-import { latestUserMessage } from './query'
+import { latestUserMessage, conversationQueryContext } from './query'
 import {
   checkAndExecuteOptOut,
   formatContactMemoryForPrompt,
@@ -166,11 +166,12 @@ export async function dispatchInboundToAiReply(
     }
 
     // Ground the reply in the account's knowledge base (best-effort).
+    const queryContext = conversationQueryContext(messages) || latestMsg
     const knowledge = await retrieveKnowledge(
       db,
       accountId,
       config,
-      latestMsg,
+      queryContext,
     )
 
     const systemPrompt = buildSystemPrompt({
