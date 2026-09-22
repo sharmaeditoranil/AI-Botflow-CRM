@@ -380,28 +380,33 @@ export async function processFollowupIntelligence(args: {
     }
   }
 
-  // 3. Automated Lead Qualification & Pipeline Creation Toggle Check
-  if (config.leadQualificationEnabled === false) {
-    // User explicitly turned off automated pipeline lead creation & tagging.
-    // We do not create deals or auto-tag, preserving manual CRM control.
+  // 3. Automated Lead Qualification & Tagging Toggle Check
+  const dealsEnabled = config.leadQualificationEnabled !== false;
+  const tagsEnabled = config.autoTaggingEnabled !== false;
+
+  if (!dealsEnabled && !tagsEnabled) {
+    // Both automated pipeline deals and auto-tagging are disabled by user.
     return;
   }
 
   // 4. Zero-Duplication Check: Query all existing open deals for this contact in the account
-  const { data: existingDeals } = await db
-    .from('deals')
-    .select('id, notes, title, stage_id, status, expected_close_date')
-    .eq('account_id', accountId)
-    .eq('contact_id', contactId)
-    .in('status', ['open', 'active'])
-    .order('created_at', { ascending: false });
+  let existingDeal: any = null;
+  if (dealsEnabled) {
+    const { data: existingDeals } = await db
+      .from('deals')
+      .select('id, notes, title, stage_id, status, expected_close_date')
+      .eq('account_id', accountId)
+      .eq('contact_id', contactId)
+      .in('status', ['open', 'active'])
+      .order('created_at', { ascending: false });
 
-  // Self-heal: If multiple open deals exist for this contact, delete older duplicates
-  if (existingDeals && existingDeals.length > 1) {
-    const dupeIds = existingDeals.slice(1).map((d: any) => d.id);
-    await db.from('deals').delete().in('id', dupeIds);
+    // Self-heal: If multiple open deals exist for this contact, delete older duplicates
+    if (existingDeals && existingDeals.length > 1) {
+      const dupeIds = existingDeals.slice(1).map((d: any) => d.id);
+      await db.from('deals').delete().in('id', dupeIds);
+    }
+    existingDeal = existingDeals && existingDeals.length > 0 ? existingDeals[0] : null;
   }
-  const existingDeal = existingDeals && existingDeals.length > 0 ? existingDeals[0] : null;
 
   // 5. Smart Intent Analysis using Master Admin AI (OpenAI / Gemini from platform_settings)
   const { data: recentMsgs } = await db
@@ -430,33 +435,35 @@ export async function processFollowupIntelligence(args: {
       .map((m: any) => `${m.sender_type === 'customer' ? 'Customer' : 'Bot'}: ${m.content_text || ''}`)
       .join('\n');
 
-    const prompt = `You are an expert CRM Lead Qualification AI.
-Customer: ${(contact as any)?.name || (contact as any)?.phone || 'Customer'}
-Incoming message: "${text}"
+    const prompt = `Analyze this WhatsApp customer message in context and return JSON:
+Context of conversation:
+${historySnippet || 'None'}
 
-Recent conversation context:
-${historySnippet || text}
-
-Available CRM tags in this account: ${tagList}
+Current incoming customer message: "${text}"
+Available tags in CRM: [${tagList}]
 
 Instructions:
-1. "is_interested": boolean. Set to TRUE ONLY if customer clearly shows genuine interest in products, services, courses, pricing, admission, demo, purchasing, asking details, or requests a callback.
-Set to FALSE if this is merely a casual greeting (e.g. "hi", "hello", "namaste", "ok", "thanks", emoji), spam, wrong number, or if customer is NOT interested ("nahi chahiye", "stop", "not interested", "no").
-2. "sentiment": "interested" | "not_interested" | "neutral".
-3. "tag_to_apply": "Interested" if interested, "Not Interested" if refusing/uninterested, or null if neutral.
-4. "tag_to_remove": "Not Interested" if interested, or "Interested" if refusing, or null.
-5. "summary": A concise 1-sentence note in English/Hinglish summarizing what the customer wants or their status.
+1. Is this customer expressing genuine commercial interest, asking for price, quote, demo, details, or service? (is_interested: true/false)
+2. If customer is saying no, stop, don't message, not interested, cancel (sentiment: "not_interested", is_interested: false)
+3. If customer is asking for prices, products, service, booking, buying (sentiment: "interested", is_interested: true)
+4. Casual greeting like "hi", "hello", "ok", or questions unrelated to purchase should have is_interested: false, sentiment: "neutral"
+5. Set tag_to_apply ("Interested" or "Not Interested" or matching one from CRM tags), tag_to_remove (e.g. remove "Not Interested" if interested), and a 1-sentence summary in English/Hinglish.
 
-Respond ONLY with valid JSON in this exact structure:
-{"is_interested": boolean, "sentiment": "interested"|"not_interested"|"neutral", "tag_to_apply": string|null, "tag_to_remove": string|null, "summary": string}`;
+Return ONLY raw valid JSON:
+{
+  "is_interested": boolean,
+  "sentiment": "interested" | "not_interested" | "neutral",
+  "tag_to_apply": string | null,
+  "tag_to_remove": string | null,
+  "summary": string
+}`;
 
-    const aiRes = await generateWithAdminAi(prompt, {
-      systemPrompt: 'You are an expert CRM Lead Qualification AI. Output valid JSON only, no markdown wrapping, no explanation.',
-      maxTokens: 250,
+    const rawAi = await generateWithAdminAi(prompt, {
+      systemPrompt: 'You are an expert CRM Lead Qualification and Sentiment Analysis AI. Return only valid JSON.',
     });
 
-    const cleaned = aiRes.replace(/```json/gi, '').replace(/```/g, '').trim();
-    const parsed = JSON.parse(cleaned);
+    const cleanJson = rawAi.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const parsed = JSON.parse(cleanJson);
     if (typeof parsed.is_interested === 'boolean') isInterested = parsed.is_interested;
     if (parsed.sentiment) sentiment = parsed.sentiment;
     if (parsed.tag_to_apply) tagToApply = parsed.tag_to_apply;
@@ -484,8 +491,8 @@ Respond ONLY with valid JSON in this exact structure:
     }
   }
 
-  // 6. Execute Automatic Tagging
-  if (config.autoTaggingEnabled) {
+  // 6. Execute Automatic Tagging (Controlled by tagsEnabled toggle)
+  if (tagsEnabled) {
     if (tagToRemove) {
       await ensureTagRemoved(db, accountId, contactId, tagToRemove);
     }
@@ -495,84 +502,86 @@ Respond ONLY with valid JSON in this exact structure:
     }
   }
 
-  // 7. Deal Management (Guaranteed Single Deal per Customer)
-  const todayStr = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  // 7. Deal Management (Controlled by dealsEnabled toggle, Guaranteed Single Deal per Customer)
+  if (dealsEnabled) {
+    const todayStr = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 
-  if (existingDeal) {
-    // 1-Customer 1-Deal Guarantee: Update existing deal, never create a duplicate!
-    if (isInterested) {
-      const updatedNotes = existingDeal.notes
-        ? `${existingDeal.notes}\n[AI Update ${todayStr}]: ${summary}`
-        : `[AI Lead]: ${summary}`;
-      await db
-        .from('deals')
-        .update({
-          notes: updatedNotes,
-          conversation_id: conversationId,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existingDeal.id);
-    } else if (sentiment === 'not_interested') {
-      const updatedNotes = existingDeal.notes
-        ? `${existingDeal.notes}\n[AI Note ${todayStr}]: Customer indicated not interested (${summary})`
-        : `Customer indicated not interested (${summary})`;
-      await db
-        .from('deals')
-        .update({
-          notes: updatedNotes,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existingDeal.id);
-    }
-  } else {
-    // No existing deal exists. ONLY create a deal if customer is genuinely interested!
-    if (isInterested) {
-      let { data: pipeline } = await db
-        .from('pipelines')
-        .select('id, stages:pipeline_stages(id, position)')
-        .eq('account_id', accountId)
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-
-      if (!pipeline) {
-        const { data: fallbackPipe } = await db
+    if (existingDeal) {
+      // 1-Customer 1-Deal Guarantee: Update existing deal, never create a duplicate!
+      if (isInterested) {
+        const updatedNotes = existingDeal.notes
+          ? `${existingDeal.notes}\n[AI Update ${todayStr}]: ${summary}`
+          : `[AI Lead]: ${summary}`;
+        await db
+          .from('deals')
+          .update({
+            notes: updatedNotes,
+            conversation_id: conversationId,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingDeal.id);
+      } else if (sentiment === 'not_interested') {
+        const updatedNotes = existingDeal.notes
+          ? `${existingDeal.notes}\n[AI Note ${todayStr}]: Customer indicated not interested (${summary})`
+          : `Customer indicated not interested (${summary})`;
+        await db
+          .from('deals')
+          .update({
+            notes: updatedNotes,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingDeal.id);
+      }
+    } else {
+      // No existing deal exists. ONLY create a deal if customer is genuinely interested!
+      if (isInterested) {
+        let { data: pipeline } = await db
           .from('pipelines')
           .select('id, stages:pipeline_stages(id, position)')
-          .eq('user_id', configOwnerUserId)
+          .eq('account_id', accountId)
           .order('created_at', { ascending: true })
           .limit(1)
           .maybeSingle();
-        pipeline = fallbackPipe;
+
+        if (!pipeline) {
+          const { data: fallbackPipe } = await db
+            .from('pipelines')
+            .select('id, stages:pipeline_stages(id, position)')
+            .eq('user_id', configOwnerUserId)
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          pipeline = fallbackPipe;
+        }
+
+        if (pipeline && pipeline.stages && (pipeline.stages as any[]).length > 0) {
+          const sortedStages = (pipeline.stages as any[]).sort((a: any, b: any) => a.position - b.position);
+          const firstStage = sortedStages[0];
+
+          const followUpDate = new Date();
+          followUpDate.setDate(followUpDate.getDate() + 2);
+
+          const dealTitle = `Deal: ${(contact as any)?.name || (contact as any)?.phone || 'Inbound Lead'}`;
+
+          await db.from('deals').insert({
+            user_id: configOwnerUserId,
+            account_id: accountId,
+            pipeline_id: pipeline.id,
+            stage_id: firstStage.id,
+            contact_id: contactId,
+            conversation_id: conversationId,
+            title: dealTitle,
+            value: 5000,
+            currency: 'INR',
+            status: 'open',
+            expected_close_date: followUpDate.toISOString().split('T')[0],
+            notes: `[AI Qualified Lead]: ${summary}`,
+            ai_followup_enabled: true,
+          });
+        }
       }
-
-      if (pipeline && pipeline.stages && (pipeline.stages as any[]).length > 0) {
-        const sortedStages = (pipeline.stages as any[]).sort((a: any, b: any) => a.position - b.position);
-        const firstStage = sortedStages[0];
-
-        const followUpDate = new Date();
-        followUpDate.setDate(followUpDate.getDate() + 2);
-
-        const dealTitle = `Deal: ${(contact as any)?.name || (contact as any)?.phone || 'Inbound Lead'}`;
-
-        await db.from('deals').insert({
-          user_id: configOwnerUserId,
-          account_id: accountId,
-          pipeline_id: pipeline.id,
-          stage_id: firstStage.id,
-          contact_id: contactId,
-          conversation_id: conversationId,
-          title: dealTitle,
-          value: 5000,
-          currency: 'INR',
-          status: 'open',
-          expected_close_date: followUpDate.toISOString().split('T')[0],
-          notes: `[AI Qualified Lead]: ${summary}`,
-          ai_followup_enabled: true,
-        });
-      }
+      // If isInterested is false (casual greeting, spam, etc.), DO NOT insert any deal!
     }
-    // If isInterested is false (casual greeting, spam, etc.), DO NOT insert any deal!
   }
 
   // 8. Update Contact AI Memory, Status, and Score

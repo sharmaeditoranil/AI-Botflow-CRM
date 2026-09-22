@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { GitBranch, Plus, ChevronDown, Settings, Sparkles } from "lucide-react";
+import { GitBranch, Plus, ChevronDown, Settings, Sparkles, Tag } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { useCan } from "@/hooks/use-can";
@@ -71,45 +71,79 @@ export default function PipelinesPage() {
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
   const [defaultStageId, setDefaultStageId] = useState<string>("");
 
-  // Smart AI Lead Automation toggle state
-  const [aiAutomationEnabled, setAiAutomationEnabled] = useState(true);
-  const [togglingAiAutomation, setTogglingAiAutomation] = useState(false);
+  // Smart AI Lead Automation toggle states
+  const [dealsEnabled, setDealsEnabled] = useState(true);
+  const [tagsEnabled, setTagsEnabled] = useState(true);
+  const [togglingDeals, setTogglingDeals] = useState(false);
+  const [togglingTags, setTogglingTags] = useState(false);
 
   useEffect(() => {
     fetch('/api/pipelines/ai-automation')
       .then((r) => r.json())
       .then((data) => {
-        if (typeof data.enabled === 'boolean') {
-          setAiAutomationEnabled(data.enabled);
+        if (typeof data.deals_enabled === 'boolean') {
+          setDealsEnabled(data.deals_enabled);
+        } else if (typeof data.enabled === 'boolean') {
+          setDealsEnabled(data.enabled);
+        }
+        if (typeof data.tags_enabled === 'boolean') {
+          setTagsEnabled(data.tags_enabled);
         }
       })
       .catch((err) => console.error('Failed to load AI automation status:', err));
   }, []);
 
-  const handleToggleAiAutomation = async (checked: boolean) => {
-    setTogglingAiAutomation(true);
-    setAiAutomationEnabled(checked);
+  const handleToggleDeals = async (checked: boolean) => {
+    setTogglingDeals(true);
+    setDealsEnabled(checked);
     try {
       const res = await fetch('/api/pipelines/ai-automation', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: checked }),
+        body: JSON.stringify({ deals_enabled: checked }),
       });
       if (res.ok) {
         toast.success(
           checked
-            ? 'Smart AI Lead Capture is now ON: AI will qualify interested chats & manage single pipeline deals.'
-            : 'Smart AI Lead Capture is now OFF: Leads will only be added manually.'
+            ? 'Auto Pipeline Deals is ON: AI will qualify interested chats & manage single pipeline deals.'
+            : 'Auto Pipeline Deals is OFF: Deals will only be added manually.'
         );
       } else {
-        setAiAutomationEnabled(!checked);
-        toast.error('Failed to update AI automation setting');
+        setDealsEnabled(!checked);
+        toast.error('Failed to update deal automation setting');
       }
     } catch {
-      setAiAutomationEnabled(!checked);
-      toast.error('Failed to update AI automation setting');
+      setDealsEnabled(!checked);
+      toast.error('Failed to update deal automation setting');
     } finally {
-      setTogglingAiAutomation(false);
+      setTogglingDeals(false);
+    }
+  };
+
+  const handleToggleTags = async (checked: boolean) => {
+    setTogglingTags(true);
+    setTagsEnabled(checked);
+    try {
+      const res = await fetch('/api/pipelines/ai-automation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags_enabled: checked }),
+      });
+      if (res.ok) {
+        toast.success(
+          checked
+            ? 'Auto AI Tagging is ON: AI will automatically assign tags like Interested / Not Interested.'
+            : 'Auto AI Tagging is OFF: Contact tags will not be automatically modified.'
+        );
+      } else {
+        setTagsEnabled(!checked);
+        toast.error('Failed to update tag automation setting');
+      }
+    } catch {
+      setTagsEnabled(!checked);
+      toast.error('Failed to update tag automation setting');
+    } finally {
+      setTogglingTags(false);
     }
   };
 
@@ -433,46 +467,92 @@ export default function PipelinesPage() {
         </div>
       </div>
 
-      {/* Smart AI Lead Capture & Qualification Toggle Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 p-3.5 rounded-xl border border-border/80 bg-gradient-to-r from-card via-card to-primary/5 shadow-xs">
-        <div className="flex items-center gap-3">
-          <div
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
-              aiAutomationEnabled
-                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                : "bg-muted text-muted-foreground"
-            }`}
-          >
-            <Sparkles className="h-5 w-5" />
-          </div>
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-foreground">
-                Smart AI Lead Capture & Qualification
-              </span>
-              <span
-                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
-                  aiAutomationEnabled
-                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
-                    : "bg-muted text-muted-foreground"
-                }`}
-              >
-                {aiAutomationEnabled ? "● Active (Auto-Qualify & Single Deal)" : "○ Paused (Manual Mode)"}
-              </span>
+      {/* Smart AI Lead Automation Dual Controls */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        {/* Toggle 1: Auto Pipeline Deals */}
+        <div className="flex items-center justify-between gap-3 p-3.5 rounded-xl border border-border/80 bg-gradient-to-r from-card via-card to-primary/5 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+                dealsEnabled
+                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                  : "bg-muted text-muted-foreground"
+              }`}
+            >
+              <Sparkles className="h-5 w-5" />
             </div>
-            <p className="text-xs text-muted-foreground">
-              {aiAutomationEnabled
-                ? "Platform AI analyzes incoming WhatsApp, Facebook & Instagram chats, tags Interested / Not Interested, and creates or updates pipeline deals without duplicates."
-                : "Automatic pipeline deal creation is paused. Leads will only be added when you manually click '+ Add Deal'."}
-            </p>
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-foreground">
+                  Auto Pipeline Deals
+                </span>
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                    dealsEnabled
+                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {dealsEnabled ? "● Active (1 Deal / Customer)" : "○ Manual Only"}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground line-clamp-2">
+                {dealsEnabled
+                  ? "AI qualifies high-intent WhatsApp/IG chats & adds or updates deals in pipeline."
+                  : "Automatic deals disabled. Leads are only added when you click '+ Add Deal'."}
+              </p>
+            </div>
+          </div>
+          <div className="shrink-0 pl-2">
+            <Switch
+              checked={dealsEnabled}
+              onCheckedChange={handleToggleDeals}
+              disabled={togglingDeals}
+            />
           </div>
         </div>
-        <div className="flex items-center gap-3 self-end sm:self-auto shrink-0">
-          <Switch
-            checked={aiAutomationEnabled}
-            onCheckedChange={handleToggleAiAutomation}
-            disabled={togglingAiAutomation}
-          />
+
+        {/* Toggle 2: Auto AI Tagging */}
+        <div className="flex items-center justify-between gap-3 p-3.5 rounded-xl border border-border/80 bg-gradient-to-r from-card via-card to-amber-500/5 shadow-xs">
+          <div className="flex items-center gap-3">
+            <div
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+                tagsEnabled
+                  ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                  : "bg-muted text-muted-foreground"
+              }`}
+            >
+              <Tag className="h-5 w-5" />
+            </div>
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-foreground">
+                  Auto AI Tagging
+                </span>
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                    tagsEnabled
+                      ? "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300"
+                      : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {tagsEnabled ? "● Active" : "○ Off"}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground line-clamp-2">
+                {tagsEnabled
+                  ? "AI automatically tags chats with 'Interested' or 'Not Interested'."
+                  : "Auto-tagging is off. Contact tags will not be modified by AI."}
+              </p>
+            </div>
+          </div>
+          <div className="shrink-0 pl-2">
+            <Switch
+              checked={tagsEnabled}
+              onCheckedChange={handleToggleTags}
+              disabled={togglingTags}
+            />
+          </div>
         </div>
       </div>
 

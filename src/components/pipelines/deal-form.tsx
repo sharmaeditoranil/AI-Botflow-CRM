@@ -32,9 +32,69 @@ import {
   Loader2,
   Bot,
   Send,
+  Sparkles,
+  History,
+  Plus,
+  FileText,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
+
+interface NoteEntry {
+  id: string;
+  type: "followup" | "ai" | "general";
+  badge: string;
+  date?: string;
+  text: string;
+}
+
+function parseNotesTimeline(rawNotes: string): NoteEntry[] {
+  if (!rawNotes || !rawNotes.trim()) return [];
+  const lines = rawNotes.split(/\n(?=\[)/g);
+  const entries: NoteEntry[] = [];
+
+  lines.forEach((chunk, index) => {
+    const trimmed = chunk.trim();
+    if (!trimmed) return;
+
+    // Pattern 1: [Follow-up #N - DD MMM YYYY]: Text
+    const followupMatch = trimmed.match(/^\[Follow-up\s*(#\d+)?\s*-?\s*([^\]]*)\]:\s*([\s\S]*)$/i);
+    if (followupMatch) {
+      entries.push({
+        id: `entry-${index}`,
+        type: "followup",
+        badge: followupMatch[1] ? `Follow-up ${followupMatch[1]}` : "Follow-up",
+        date: followupMatch[2]?.trim(),
+        text: followupMatch[3]?.trim(),
+      });
+      return;
+    }
+
+    // Pattern 2: [AI ...]: Text
+    const aiMatch = trimmed.match(/^\[AI\s*([^\]]*)\]:\s*([\s\S]*)$/i);
+    if (aiMatch) {
+      entries.push({
+        id: `entry-${index}`,
+        type: "ai",
+        badge: "✨ AI " + (aiMatch[1] ? aiMatch[1].trim() : "Note"),
+        text: aiMatch[2]?.trim(),
+      });
+      return;
+    }
+
+    // Pattern 3: General note
+    entries.push({
+      id: `entry-${index}`,
+      type: "general",
+      badge: "Note",
+      text: trimmed,
+    });
+  });
+
+  return entries;
+}
 
 interface DealFormProps {
   open: boolean;
@@ -70,6 +130,11 @@ export function DealForm({
   const [aiFollowupEnabled, setAiFollowupEnabled] = useState(true);
   const [followupInstructions, setFollowupInstructions] = useState("");
   const [sendingFollowup, setSendingFollowup] = useState(false);
+
+  // Follow-up Timeline & AI Summarizer states
+  const [newFollowupText, setNewFollowupText] = useState("");
+  const [summarizingChat, setSummarizingChat] = useState(false);
+  const [showRawNotes, setShowRawNotes] = useState(false);
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -160,12 +225,77 @@ export function DealForm({
     };
   }, [open, contactId, supabase]);
 
+  const timelineEntries = parseNotesTimeline(notes);
+  const followUpCount = timelineEntries.filter((e) => e.type === "followup").length;
+  const nextFollowUpNumber = followUpCount + 1;
+
+  const handleAddFollowup = () => {
+    if (!newFollowupText.trim()) {
+      toast.error("Please enter a note before adding.");
+      return;
+    }
+    const todayStr = new Date().toLocaleDateString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+    const formatted = `[Follow-up #${nextFollowUpNumber} - ${todayStr}]: ${newFollowupText.trim()}`;
+    const updated = notes.trim() ? `${notes.trim()}\n${formatted}` : formatted;
+    setNotes(updated);
+    setNewFollowupText("");
+    toast.success(`Follow-up #${nextFollowUpNumber} added! Remember to save deal.`);
+  };
+
+  const handleAiSummarizeChat = async () => {
+    const targetContactId = contactId || deal?.contact_id;
+    if (!targetContactId) {
+      toast.error("Select a contact first to summarize chat.");
+      return;
+    }
+    setSummarizingChat(true);
+    try {
+      const res = await fetch("/api/crm/ai-summarize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contactId: targetContactId,
+          conversationId: deal?.conversation_id,
+          dealId: deal?.id,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.summary) {
+        setNewFollowupText(data.summary);
+        toast.success(`✨ Chat summarized (${data.messageCount ?? 0} messages analyzed)!`);
+      } else {
+        toast.error(data.error || "Failed to summarize chat.");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error connecting to AI summarizer.");
+    } finally {
+      setSummarizingChat(false);
+    }
+  };
+
   async function handleSave() {
     if (!title.trim() || !contactId || !stageId) {
       toast.error(t("toastRequired"));
       return;
     }
     setSaving(true);
+
+    let finalNotes = notes.trim();
+    if (newFollowupText.trim()) {
+      const todayStr = new Date().toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+      const formatted = `[Follow-up #${nextFollowUpNumber} - ${todayStr}]: ${newFollowupText.trim()}`;
+      finalNotes = finalNotes ? `${finalNotes}\n${formatted}` : formatted;
+      setNotes(finalNotes);
+      setNewFollowupText("");
+    }
 
     const payload = {
       title: title.trim(),
@@ -175,7 +305,7 @@ export function DealForm({
       pipeline_id: pipelineId,
       stage_id: stageId,
       assigned_to: assignedTo || null,
-      notes: notes.trim() || null,
+      notes: finalNotes || null,
       expected_close_date: expectedCloseDate || null,
       ai_followup_enabled: aiFollowupEnabled,
       followup_instructions: followupInstructions.trim() || null,
@@ -390,17 +520,131 @@ export function DealForm({
               </select>
             </div>
 
-            <div className="grid gap-2">
-              <Label className="text-muted-foreground">{t("notes")}</Label>
-              <Textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder={t("notesPlaceholder")}
-                className="min-h-[100px] border-border bg-muted text-foreground"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                🔄 Notes automatically sync between CRM Pipeline and Inbox Chat.
-              </p>
+            {/* Structured Follow-ups & Notes History Timeline */}
+            <div className="space-y-3 rounded-xl border border-border/80 bg-card/60 p-3.5 shadow-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <History className="h-4 w-4 text-primary" />
+                  <span className="text-xs font-semibold text-foreground">
+                    Follow-ups & Notes History
+                  </span>
+                  {timelineEntries.length > 0 && (
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                      {timelineEntries.length} {timelineEntries.length === 1 ? "entry" : "entries"}
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowRawNotes(!showRawNotes)}
+                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                >
+                  <FileText className="h-3 w-3" />
+                  {showRawNotes ? "Hide Raw Notes" : "Edit Raw Notes"}
+                  {showRawNotes ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                </button>
+              </div>
+
+              {/* Timeline Entries List */}
+              {timelineEntries.length > 0 ? (
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {timelineEntries.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="rounded-lg border border-border/60 bg-muted/40 p-2.5 text-xs space-y-1 transition-colors hover:bg-muted/70"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span
+                          className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                            entry.type === "followup"
+                              ? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
+                              : entry.type === "ai"
+                              ? "bg-purple-500/15 text-purple-600 dark:text-purple-400"
+                              : "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {entry.badge}
+                        </span>
+                        {entry.date && (
+                          <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                            <Clock className="h-2.5 w-2.5" />
+                            {entry.date}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-foreground leading-relaxed whitespace-pre-wrap text-[11.5px]">
+                        {entry.text}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-border/70 p-3 text-center text-xs text-muted-foreground">
+                  No notes or follow-ups logged yet. Add your first note below or let AI summarize the WhatsApp conversation.
+                </div>
+              )}
+
+              {/* Add Next Follow-up Note Box */}
+              <div className="pt-2 border-t border-border/60 space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-[11px] font-medium text-foreground flex items-center gap-1">
+                    <Plus className="h-3 w-3 text-primary" />
+                    Add Follow-up #{nextFollowUpNumber}
+                  </Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={summarizingChat || (!contactId && !deal?.contact_id)}
+                    onClick={handleAiSummarizeChat}
+                    className="h-6 px-2 text-[10px] gap-1 border-purple-500/30 text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 cursor-pointer"
+                    title="Read recent WhatsApp messages and generate follow-up note using Master AI"
+                  >
+                    {summarizingChat ? (
+                      <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-2.5 w-2.5" />
+                    )}
+                    ✨ AI Summarize Chat
+                  </Button>
+                </div>
+                <Textarea
+                  value={newFollowupText}
+                  onChange={(e) => setNewFollowupText(e.target.value)}
+                  placeholder={`Write details for Follow-up #${nextFollowUpNumber}, or click 'AI Summarize Chat'...`}
+                  className="min-h-[70px] text-xs border-border bg-background text-foreground"
+                />
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[10px] text-muted-foreground">
+                    🔄 Notes automatically sync between CRM Pipeline & Inbox.
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!newFollowupText.trim()}
+                    onClick={handleAddFollowup}
+                    className="h-7 px-3 text-xs bg-primary text-primary-foreground hover:bg-primary/90 gap-1 font-medium shrink-0"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Add Note #{nextFollowUpNumber}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Raw Notes Direct Editor (Collapsible) */}
+              {showRawNotes && (
+                <div className="pt-2 border-t border-border/60 space-y-1.5">
+                  <Label className="text-[10px] uppercase font-semibold text-muted-foreground">
+                    Full Raw Notes (Advanced Direct Edit)
+                  </Label>
+                  <Textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder={t("notesPlaceholder")}
+                    className="min-h-[90px] text-xs border-border bg-muted/60 font-mono text-foreground"
+                  />
+                </div>
+              )}
             </div>
 
             {/* Smart AI Follow-up Configuration */}

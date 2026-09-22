@@ -32,9 +32,20 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
   const contactLabel = deal.contact?.name || deal.contact?.phone || t("noContact");
   const assigneeLabel = deal.assignee?.full_name || null;
 
-  const todayStr = new Date().toISOString().split("T")[0];
   const isOverdue = !!(deal.expected_close_date && deal.expected_close_date < todayStr && deal.status === "open");
   const isDueToday = !!(deal.expected_close_date && deal.expected_close_date === todayStr && deal.status === "open");
+
+  const rawNotes = deal.notes || "";
+  const followUpCount = (rawNotes.match(/\[Follow-up/gi) || []).length;
+
+  let lastSnippet = "";
+  if (rawNotes.trim()) {
+    const lines = rawNotes.split(/\n+/).filter((l) => l.trim().length > 0);
+    if (lines.length > 0) {
+      const lastLine = lines[lines.length - 1].trim();
+      lastSnippet = lastLine.replace(/^\[[^\]]+\]:\s*/, "");
+    }
+  }
 
   return (
     <button
@@ -119,6 +130,26 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
           </span>
         ) : null}
       </div>
+
+      {/* Follow-up count and latest note snippet preview */}
+      {(followUpCount > 0 || lastSnippet) && (
+        <div className="mt-2 rounded-md bg-background/60 border border-border/40 p-1.5 text-[11px] space-y-1">
+          <div className="flex items-center justify-between text-[10px]">
+            {followUpCount > 0 ? (
+              <span className="inline-flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400">
+                🔄 {followUpCount} Follow-up{followUpCount > 1 ? "s" : ""}
+              </span>
+            ) : (
+              <span className="text-muted-foreground font-medium">Latest Note</span>
+            )}
+          </div>
+          {lastSnippet && (
+            <p className="line-clamp-1 text-muted-foreground text-[10.5px] italic">
+              &ldquo;{lastSnippet}&rdquo;
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Quick Action Footer: AI Follow-up & Assignee */}
       <div className="mt-2.5 pt-2 border-t border-border/40 flex items-center justify-between">
