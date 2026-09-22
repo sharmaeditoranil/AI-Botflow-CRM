@@ -8,6 +8,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AiConfig } from './types';
 import { engineSendText } from '@/lib/flows/meta-send';
+import { generateWithAdminAi } from './admin-ai';
 
 export interface OptOutCheckResult {
   optedOut: boolean;
@@ -214,9 +215,91 @@ const QUALIFIED_REGEX =
 const GENERAL_INTEREST_REGEX =
   /\b(syllabus|details|timing|batch|duration|address|location|certificate|course|demo|information)\b/i;
 
+/** Helper to assign a tag idempotently to a contact */
+async function ensureTagAssigned(
+  db: SupabaseClient,
+  accountId: string,
+  contactId: string,
+  configOwnerUserId: string,
+  tagName: string,
+  color: string = '#f59e0b'
+) {
+  try {
+    let tagId: string | null = null;
+    const { data: existingTag } = await db
+      .from('tags')
+      .select('id')
+      .eq('account_id', accountId)
+      .ilike('name', tagName)
+      .limit(1);
+
+    if (existingTag && existingTag.length > 0) {
+      tagId = existingTag[0].id;
+    } else {
+      const { data: newTag } = await db
+        .from('tags')
+        .insert({
+          account_id: accountId,
+          user_id: configOwnerUserId,
+          name: tagName,
+          color,
+        })
+        .select('id')
+        .limit(1);
+      tagId = newTag && newTag.length > 0 ? newTag[0].id : null;
+    }
+
+    if (tagId) {
+      const { data: existingLink } = await db
+        .from('contact_tags')
+        .select('id')
+        .eq('contact_id', contactId)
+        .eq('tag_id', tagId)
+        .limit(1);
+
+      if (!existingLink || existingLink.length === 0) {
+        await db.from('contact_tags').insert({
+          contact_id: contactId,
+          tag_id: tagId,
+        });
+      }
+    }
+  } catch (err) {
+    console.warn(`[ai-intelligence] Failed to assign tag "${tagName}":`, err);
+  }
+}
+
+/** Helper to remove a tag from a contact */
+async function ensureTagRemoved(
+  db: SupabaseClient,
+  accountId: string,
+  contactId: string,
+  tagName: string
+) {
+  try {
+    const { data: existingTag } = await db
+      .from('tags')
+      .select('id')
+      .eq('account_id', accountId)
+      .ilike('name', tagName)
+      .limit(1);
+
+    if (existingTag && existingTag.length > 0) {
+      await db
+        .from('contact_tags')
+        .delete()
+        .eq('contact_id', contactId)
+        .eq('tag_id', existingTag[0].id);
+    }
+  } catch (err) {
+    console.warn(`[ai-intelligence] Failed to remove tag "${tagName}":`, err);
+  }
+}
+
 /**
- * Analyzes customer message for lead qualification and follow-up intelligence,
- * updates lead status/score, auto-assigns tags, and updates AI memory.
+ * Analyzes customer message with Master Admin AI for smart lead qualification,
+ * auto-assigns Interested / Not Interested tags, and guarantees exactly 1 Deal
+ * per customer in the CRM Pipeline (updates existing deal instead of duplicating).
  */
 export async function processFollowupIntelligence(args: {
   db: SupabaseClient;
@@ -243,110 +326,14 @@ export async function processFollowupIntelligence(args: {
 
   if (!contact || contact.is_opted_out) return;
 
-  let currentScore = contact.lead_score || 0;
-  let currentStatus = contact.lead_status || 'new';
-  const tagsToAdd: string[] = [];
-
-  // 2. Evaluate intent & criteria
-  if (QUALIFIED_REGEX.test(text)) {
-    currentStatus = 'qualified';
-    currentScore = Math.max(currentScore, 95);
-    tagsToAdd.push(config.qualifiedTagName || 'Qualified Lead');
-  } else if (HIGH_INTENT_REGEX.test(text)) {
-    if (currentStatus !== 'qualified') currentStatus = 'hot';
-    currentScore = Math.max(currentScore, 85);
-    if (config.autoTaggingEnabled) {
-      tagsToAdd.push('High Intent');
-    }
-  } else if (CALLBACK_REGEX.test(text)) {
-    if (currentStatus === 'new') currentStatus = 'warm';
-    currentScore = Math.max(currentScore, 75);
-    if (config.autoTaggingEnabled) {
-      tagsToAdd.push('Callback Requested');
-    }
-  } else if (GENERAL_INTEREST_REGEX.test(text)) {
-    if (currentStatus === 'new') currentStatus = 'warm';
-    currentScore = Math.max(currentScore, 55);
-    if (config.autoTaggingEnabled) {
-      tagsToAdd.push('Interested');
-    }
-  }
-
-  // 3. Update AI Memory with running summary (keeping under 400 chars)
-  let updatedMemory = contact.ai_memory || '';
-  if (text.length > 5 && !updatedMemory.toLowerCase().includes(text.toLowerCase().slice(0, 30))) {
-    const memorySnippet = `Customer asked: "${text.slice(0, 80)}"`;
-    if (!updatedMemory) {
-      updatedMemory = memorySnippet;
-    } else {
-      updatedMemory = `${updatedMemory} | ${memorySnippet}`.slice(-400);
-    }
-  }
-
-  // 4. Update contact row
-  await db
-    .from('contacts')
-    .update({
-      lead_status: currentStatus,
-      lead_score: currentScore,
-      ai_memory: updatedMemory,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', contactId);
-
-  // 5. Auto-assign tags
-  for (const tagName of tagsToAdd) {
-    try {
-      let tagId: string | null = null;
-      const { data: existingTag } = await db
-        .from('tags')
-        .select('id')
-        .eq('account_id', accountId)
-        .ilike('name', tagName)
-        .maybeSingle();
-
-      if (existingTag) {
-        tagId = existingTag.id;
-      } else {
-        const color =
-          tagName.includes('High') || tagName.includes('Hot')
-            ? '#f97316' // orange
-            : tagName.includes('Qualified')
-            ? '#10b981' // green
-            : '#3b82f6'; // blue
-        const { data: newTag } = await db
-          .from('tags')
-          .insert({
-            account_id: accountId,
-            user_id: configOwnerUserId,
-            name: tagName,
-            color,
-          })
-          .select('id')
-          .maybeSingle();
-        tagId = newTag?.id ?? null;
-      }
-
-      if (tagId) {
-        await db
-          .from('contact_tags')
-          .insert({ contact_id: contactId, tag_id: tagId })
-          .select('id')
-          .maybeSingle();
-      }
-    } catch (err) {
-      console.warn(`[ai-intelligence] Failed to auto-assign tag "${tagName}":`, err);
-    }
-  }
-
-  // 6. CSAT Survey Response Auto-Handler
-  const ratingMatch = text.match(/^(?:⭐|rating|rate)?\s*([1-5])\s*(?:⭐|stars?|star)?$/i) ||
-                      text.match(/^([1-5])$/);
+  // 2. CSAT Survey Response Auto-Handler
+  const ratingMatch =
+    text.match(/^(?:⭐|rating|rate)?\s*([1-5])\s*(?:⭐|stars?|star)?$/i) ||
+    text.match(/^([1-5])$/);
 
   if (ratingMatch) {
     const ratingValue = parseInt(ratingMatch[1], 10);
     try {
-      // Check if account has CSAT enabled
       const { data: account } = await db
         .from('accounts')
         .select('csat_enabled, google_review_url')
@@ -354,7 +341,6 @@ export async function processFollowupIntelligence(args: {
         .maybeSingle();
 
       if (account?.csat_enabled) {
-        // Record CSAT response
         await db.from('csat_responses').insert({
           account_id: accountId,
           contact_id: contactId,
@@ -363,7 +349,6 @@ export async function processFollowupIntelligence(args: {
           feedback: text,
         });
 
-        // Auto-reply based on rating
         if (ratingValue >= 4 && account.google_review_url) {
           const reviewMsg =
             `Thank you so much for the ${'⭐'.repeat(ratingValue)} rating! 🥰 It truly means the world to our team.\n\n` +
@@ -395,17 +380,153 @@ export async function processFollowupIntelligence(args: {
     }
   }
 
-  // 7. Auto Pipeline Deal Creation & 2-Way CRM Sync
-  try {
-    const { data: existingDeal } = await db
-      .from('deals')
-      .select('id')
-      .eq('contact_id', contactId)
-      .in('status', ['open', 'active'])
-      .maybeSingle();
+  // 3. Automated Lead Qualification & Pipeline Creation Toggle Check
+  if (config.leadQualificationEnabled === false) {
+    // User explicitly turned off automated pipeline lead creation & tagging.
+    // We do not create deals or auto-tag, preserving manual CRM control.
+    return;
+  }
 
-    if (!existingDeal) {
-      // Find default pipeline and first stage (scoped by accountId or user)
+  // 4. Zero-Duplication Check: Query all existing open deals for this contact in the account
+  const { data: existingDeals } = await db
+    .from('deals')
+    .select('id, notes, title, stage_id, status, expected_close_date')
+    .eq('account_id', accountId)
+    .eq('contact_id', contactId)
+    .in('status', ['open', 'active'])
+    .order('created_at', { ascending: false });
+
+  // Self-heal: If multiple open deals exist for this contact, delete older duplicates
+  if (existingDeals && existingDeals.length > 1) {
+    const dupeIds = existingDeals.slice(1).map((d: any) => d.id);
+    await db.from('deals').delete().in('id', dupeIds);
+  }
+  const existingDeal = existingDeals && existingDeals.length > 0 ? existingDeals[0] : null;
+
+  // 5. Smart Intent Analysis using Master Admin AI (OpenAI / Gemini from platform_settings)
+  const { data: recentMsgs } = await db
+    .from('messages')
+    .select('sender_type, content_text')
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: false })
+    .limit(5);
+
+  const { data: accountTags } = await db
+    .from('tags')
+    .select('name')
+    .eq('account_id', accountId);
+
+  const tagList = accountTags?.map((t: any) => t.name).join(', ') || 'Interested, Not Interested, High Intent, New Lead';
+
+  let isInterested = false;
+  let sentiment: 'interested' | 'not_interested' | 'neutral' = 'neutral';
+  let tagToApply: string | null = null;
+  let tagToRemove: string | null = null;
+  let summary = `Inquiry: "${text.slice(0, 100)}"`;
+
+  try {
+    const historySnippet = (recentMsgs || [])
+      .reverse()
+      .map((m: any) => `${m.sender_type === 'customer' ? 'Customer' : 'Bot'}: ${m.content_text || ''}`)
+      .join('\n');
+
+    const prompt = `You are an expert CRM Lead Qualification AI.
+Customer: ${(contact as any)?.name || (contact as any)?.phone || 'Customer'}
+Incoming message: "${text}"
+
+Recent conversation context:
+${historySnippet || text}
+
+Available CRM tags in this account: ${tagList}
+
+Instructions:
+1. "is_interested": boolean. Set to TRUE ONLY if customer clearly shows genuine interest in products, services, courses, pricing, admission, demo, purchasing, asking details, or requests a callback.
+Set to FALSE if this is merely a casual greeting (e.g. "hi", "hello", "namaste", "ok", "thanks", emoji), spam, wrong number, or if customer is NOT interested ("nahi chahiye", "stop", "not interested", "no").
+2. "sentiment": "interested" | "not_interested" | "neutral".
+3. "tag_to_apply": "Interested" if interested, "Not Interested" if refusing/uninterested, or null if neutral.
+4. "tag_to_remove": "Not Interested" if interested, or "Interested" if refusing, or null.
+5. "summary": A concise 1-sentence note in English/Hinglish summarizing what the customer wants or their status.
+
+Respond ONLY with valid JSON in this exact structure:
+{"is_interested": boolean, "sentiment": "interested"|"not_interested"|"neutral", "tag_to_apply": string|null, "tag_to_remove": string|null, "summary": string}`;
+
+    const aiRes = await generateWithAdminAi(prompt, {
+      systemPrompt: 'You are an expert CRM Lead Qualification AI. Output valid JSON only, no markdown wrapping, no explanation.',
+      maxTokens: 250,
+    });
+
+    const cleaned = aiRes.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const parsed = JSON.parse(cleaned);
+    if (typeof parsed.is_interested === 'boolean') isInterested = parsed.is_interested;
+    if (parsed.sentiment) sentiment = parsed.sentiment;
+    if (parsed.tag_to_apply) tagToApply = parsed.tag_to_apply;
+    if (parsed.tag_to_remove) tagToRemove = parsed.tag_to_remove;
+    if (parsed.summary) summary = parsed.summary;
+  } catch (aiErr) {
+    console.warn('[ai-intelligence] Admin AI qualification notice, using rule fallback:', aiErr);
+    if (
+      QUALIFIED_REGEX.test(text) ||
+      HIGH_INTENT_REGEX.test(text) ||
+      GENERAL_INTEREST_REGEX.test(text) ||
+      CALLBACK_REGEX.test(text)
+    ) {
+      isInterested = true;
+      sentiment = 'interested';
+      tagToApply = 'Interested';
+      tagToRemove = 'Not Interested';
+      summary = `Customer interested: "${text.slice(0, 80)}"`;
+    } else if (DEFAULT_OPTOUT_REGEXES.some((rx) => rx.test(text))) {
+      isInterested = false;
+      sentiment = 'not_interested';
+      tagToApply = 'Not Interested';
+      tagToRemove = 'Interested';
+      summary = `Customer indicated not interested: "${text.slice(0, 80)}"`;
+    }
+  }
+
+  // 6. Execute Automatic Tagging
+  if (config.autoTaggingEnabled) {
+    if (tagToRemove) {
+      await ensureTagRemoved(db, accountId, contactId, tagToRemove);
+    }
+    if (tagToApply) {
+      const tagColor = tagToApply.toLowerCase().includes('not') ? '#ef4444' : '#f59e0b';
+      await ensureTagAssigned(db, accountId, contactId, configOwnerUserId, tagToApply, tagColor);
+    }
+  }
+
+  // 7. Deal Management (Guaranteed Single Deal per Customer)
+  const todayStr = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+
+  if (existingDeal) {
+    // 1-Customer 1-Deal Guarantee: Update existing deal, never create a duplicate!
+    if (isInterested) {
+      const updatedNotes = existingDeal.notes
+        ? `${existingDeal.notes}\n[AI Update ${todayStr}]: ${summary}`
+        : `[AI Lead]: ${summary}`;
+      await db
+        .from('deals')
+        .update({
+          notes: updatedNotes,
+          conversation_id: conversationId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingDeal.id);
+    } else if (sentiment === 'not_interested') {
+      const updatedNotes = existingDeal.notes
+        ? `${existingDeal.notes}\n[AI Note ${todayStr}]: Customer indicated not interested (${summary})`
+        : `Customer indicated not interested (${summary})`;
+      await db
+        .from('deals')
+        .update({
+          notes: updatedNotes,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existingDeal.id);
+    }
+  } else {
+    // No existing deal exists. ONLY create a deal if customer is genuinely interested!
+    if (isInterested) {
       let { data: pipeline } = await db
         .from('pipelines')
         .select('id, stages:pipeline_stages(id, position)')
@@ -426,14 +547,13 @@ export async function processFollowupIntelligence(args: {
       }
 
       if (pipeline && pipeline.stages && (pipeline.stages as any[]).length > 0) {
-        const sortedStages = (pipeline.stages as any[]).sort((a, b) => a.position - b.position);
+        const sortedStages = (pipeline.stages as any[]).sort((a: any, b: any) => a.position - b.position);
         const firstStage = sortedStages[0];
 
         const followUpDate = new Date();
-        followUpDate.setDate(followUpDate.getDate() + (currentStatus === 'hot' ? 1 : 2));
+        followUpDate.setDate(followUpDate.getDate() + 2);
 
-        const dealValue = currentStatus === 'qualified' ? 10000 : currentStatus === 'hot' ? 5000 : 2500;
-        const dealTitle = `Deal: ${(contact as any)?.name || (contact as any)?.phone || 'WhatsApp Lead'}`;
+        const dealTitle = `Deal: ${(contact as any)?.name || (contact as any)?.phone || 'Inbound Lead'}`;
 
         await db.from('deals').insert({
           user_id: configOwnerUserId,
@@ -443,16 +563,42 @@ export async function processFollowupIntelligence(args: {
           contact_id: contactId,
           conversation_id: conversationId,
           title: dealTitle,
-          value: dealValue,
+          value: 5000,
           currency: 'INR',
           status: 'open',
           expected_close_date: followUpDate.toISOString().split('T')[0],
-          notes: `Auto-created from WhatsApp chat. Intent: ${currentStatus.toUpperCase()} (${currentScore} pts).`,
+          notes: `[AI Qualified Lead]: ${summary}`,
           ai_followup_enabled: true,
         });
       }
     }
-  } catch (dealErr) {
-    console.warn('[ai-intelligence] Auto pipeline deal creation notice:', dealErr);
+    // If isInterested is false (casual greeting, spam, etc.), DO NOT insert any deal!
   }
+
+  // 8. Update Contact AI Memory, Status, and Score
+  let currentStatus = contact.lead_status || 'new';
+  let currentScore = contact.lead_score || 0;
+  if (isInterested) {
+    currentStatus = 'hot';
+    currentScore = Math.max(currentScore, 85);
+  } else if (sentiment === 'not_interested') {
+    currentStatus = 'lost';
+    currentScore = Math.min(currentScore, 10);
+  }
+
+  let updatedMemory = contact.ai_memory || '';
+  if (text.length > 5 && !updatedMemory.toLowerCase().includes(text.toLowerCase().slice(0, 30))) {
+    const memorySnippet = `Customer inquiry: "${summary}"`;
+    updatedMemory = updatedMemory ? `${updatedMemory} | ${memorySnippet}`.slice(-400) : memorySnippet;
+  }
+
+  await db
+    .from('contacts')
+    .update({
+      lead_status: currentStatus,
+      lead_score: currentScore,
+      ai_memory: updatedMemory,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', contactId);
 }

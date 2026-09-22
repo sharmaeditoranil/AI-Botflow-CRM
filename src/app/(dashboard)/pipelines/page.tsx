@@ -23,8 +23,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { GitBranch, Plus, ChevronDown, Settings } from "lucide-react";
+import { GitBranch, Plus, ChevronDown, Settings, Sparkles } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { useCan } from "@/hooks/use-can";
 import { useAuth } from "@/hooks/use-auth";
@@ -69,6 +69,48 @@ export default function PipelinesPage() {
   const [dealFormOpen, setDealFormOpen] = useState(false);
   const [editingDeal, setEditingDeal] = useState<Deal | null>(null);
   const [defaultStageId, setDefaultStageId] = useState<string>("");
+
+  // Smart AI Lead Automation toggle state
+  const [aiAutomationEnabled, setAiAutomationEnabled] = useState(true);
+  const [togglingAiAutomation, setTogglingAiAutomation] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/pipelines/ai-automation')
+      .then((r) => r.json())
+      .then((data) => {
+        if (typeof data.enabled === 'boolean') {
+          setAiAutomationEnabled(data.enabled);
+        }
+      })
+      .catch((err) => console.error('Failed to load AI automation status:', err));
+  }, []);
+
+  const handleToggleAiAutomation = async (checked: boolean) => {
+    setTogglingAiAutomation(true);
+    setAiAutomationEnabled(checked);
+    try {
+      const res = await fetch('/api/pipelines/ai-automation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: checked }),
+      });
+      if (res.ok) {
+        toast.success(
+          checked
+            ? 'Smart AI Lead Capture is now ON: AI will qualify interested chats & manage single pipeline deals.'
+            : 'Smart AI Lead Capture is now OFF: Leads will only be added manually.'
+        );
+      } else {
+        setAiAutomationEnabled(!checked);
+        toast.error('Failed to update AI automation setting');
+      }
+    } catch {
+      setAiAutomationEnabled(!checked);
+      toast.error('Failed to update AI automation setting');
+    } finally {
+      setTogglingAiAutomation(false);
+    }
+  };
 
   // Guard against double-seeding (React StrictMode double-effect in dev).
   const seedAttempted = useRef(false);
@@ -387,6 +429,49 @@ export default function PipelinesPage() {
             <Plus className="mr-1 h-4 w-4" />
             {t("addDeal")}
           </GatedButton>
+        </div>
+      </div>
+
+      {/* Smart AI Lead Capture & Qualification Toggle Section */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 p-3.5 rounded-xl border border-border/80 bg-gradient-to-r from-card via-card to-primary/5 shadow-xs">
+        <div className="flex items-center gap-3">
+          <div
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+              aiAutomationEnabled
+                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                : "bg-muted text-muted-foreground"
+            }`}
+          >
+            <Sparkles className="h-5 w-5" />
+          </div>
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-foreground">
+                Smart AI Lead Capture & Qualification
+              </span>
+              <span
+                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                  aiAutomationEnabled
+                    ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {aiAutomationEnabled ? "● Active (Auto-Qualify & Single Deal)" : "○ Paused (Manual Mode)"}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {aiAutomationEnabled
+                ? "Platform AI analyzes incoming WhatsApp, Facebook & Instagram chats, tags Interested / Not Interested, and creates or updates pipeline deals without duplicates."
+                : "Automatic pipeline deal creation is paused. Leads will only be added when you manually click '+ Add Deal'."}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 self-end sm:self-auto shrink-0">
+          <Switch
+            checked={aiAutomationEnabled}
+            onCheckedChange={handleToggleAiAutomation}
+            disabled={togglingAiAutomation}
+          />
         </div>
       </div>
 
