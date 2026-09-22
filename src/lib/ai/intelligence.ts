@@ -227,7 +227,7 @@ export async function processFollowupIntelligence(args: {
   config: AiConfig;
   configOwnerUserId: string;
 }): Promise<void> {
-  const { db, accountId, contactId, customerMessage, config, configOwnerUserId } = args;
+  const { db, accountId, contactId, conversationId, customerMessage, config, configOwnerUserId } = args;
 
   if (!config.followupIntelligenceEnabled) return;
 

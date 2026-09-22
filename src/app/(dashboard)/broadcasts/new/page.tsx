@@ -238,6 +238,7 @@ export default function NewBroadcastPage() {
             selectedTemplate={template}
             onSelect={setTemplate}
             onNext={() => setCurrentStep(1)}
+            onBack={() => router.push('/broadcasts')}
           />
         )}
         {currentStep === 1 && (
