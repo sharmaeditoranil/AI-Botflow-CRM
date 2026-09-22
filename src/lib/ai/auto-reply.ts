@@ -18,6 +18,11 @@ import {
 } from '@/lib/flows/meta-send'
 import { sendTypingIndicator } from '@/lib/whatsapp/meta-api'
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
+import {
+  sendFacebookMessage,
+  sendInstagramMessage,
+} from '@/lib/social/meta-social'
+import { decrypt } from '@/lib/whatsapp/encryption'
 
 interface DispatchArgs {
   /** Tenancy key — drives config, contact, and whatsapp_config lookups. */
@@ -99,7 +104,7 @@ export async function dispatchInboundToAiReply(
 
     const { data: conv, error: convErr } = await db
       .from('conversations')
-      .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count')
+      .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count, channel')
       .eq('id', conversationId)
       .maybeSingle()
     if (convErr || !conv) return
@@ -148,11 +153,9 @@ export async function dispatchInboundToAiReply(
 
     // Every gate has passed — we're committed to attempting a reply, so
     // show the customer "typing…" (and mark their message read) while the
-    // retrieval + LLM round trips run. Meta clears the indicator after
-    // 25 s or when our reply lands, whichever is first, so there's
-    // nothing to undo on the handoff / no-text path. Strictly
-    // best-effort: a failed indicator must never cost us the reply.
-    if (inboundMessageId) {
+    // retrieval + LLM round trips run (WhatsApp only).
+    const convChannel = (conv as { channel?: string })?.channel || 'whatsapp'
+    if (inboundMessageId && convChannel === 'whatsapp') {
       await showTypingIndicator(db, accountId, inboundMessageId)
     }
 
@@ -261,14 +264,82 @@ export async function dispatchInboundToAiReply(
     }
     if (claimed !== true) return // lost the per-conversation cap race
 
-    await engineSendText({
-      accountId,
-      userId: configOwnerUserId,
-      conversationId,
-      contactId,
-      text,
-      aiGenerated: true,
-    })
+    if (convChannel === 'facebook' || convChannel === 'instagram') {
+      const isFb = convChannel === 'facebook'
+      const { data: contact } = await db
+        .from('contacts')
+        .select('id, fb_user_id, ig_user_id')
+        .eq('id', contactId)
+        .eq('account_id', accountId)
+        .maybeSingle()
+
+      const recipientId = isFb ? contact?.fb_user_id : contact?.ig_user_id
+
+      if (!recipientId) {
+        console.error(
+          `[ai auto-reply] Contact ${contactId} missing ${
+            isFb ? 'fb_user_id' : 'ig_user_id'
+          } for ${convChannel} reply`,
+        )
+        return
+      }
+
+      const { data: socialConfig } = await db
+        .from('meta_social_config')
+        .select('facebook_page_access_token')
+        .eq('account_id', accountId)
+        .maybeSingle()
+
+      if (!socialConfig?.facebook_page_access_token) {
+        console.error(
+          `[ai auto-reply] No facebook_page_access_token configured for account ${accountId}`,
+        )
+        return
+      }
+
+      const pageAccessToken = decrypt(socialConfig.facebook_page_access_token)
+
+      const result = isFb
+        ? await sendFacebookMessage({
+            pageAccessToken,
+            recipientId,
+            text,
+          })
+        : await sendInstagramMessage({
+            pageAccessToken,
+            recipientId,
+            text,
+          })
+
+      await db.from('messages').insert({
+        conversation_id: conversationId,
+        channel: convChannel,
+        sender_type: 'agent',
+        content_type: 'text',
+        content_text: text,
+        message_id: result.messageId,
+        status: 'delivered',
+        ai_generated: true,
+      })
+
+      await db
+        .from('conversations')
+        .update({
+          last_message_text: text,
+          last_message_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', conversationId)
+    } else {
+      await engineSendText({
+        accountId,
+        userId: configOwnerUserId,
+        conversationId,
+        contactId,
+        text,
+        aiGenerated: true,
+      })
+    }
 
     // Asynchronously process follow-up intelligence (scoring, status, auto-tags, learned memory)
     if (latestMsg && config.followupIntelligenceEnabled) {

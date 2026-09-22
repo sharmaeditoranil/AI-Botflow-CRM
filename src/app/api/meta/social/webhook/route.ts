@@ -5,6 +5,7 @@ import {
   getFacebookUserProfile,
   getInstagramUserProfile,
 } from '@/lib/social/meta-social';
+import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply';
 
 export const maxDuration = 60;
 
@@ -328,6 +329,19 @@ export async function POST(request: Request) {
           message_id: metaMessageId,
           status: 'delivered',
         });
+
+        // 5. Dispatch AI Auto-reply for incoming message (Facebook Messenger & Instagram DMs)
+        if (contentText.trim()) {
+          void dispatchInboundToAiReply({
+            accountId,
+            conversationId,
+            contactId,
+            configOwnerUserId: userId,
+            inboundMessageId: metaMessageId,
+          }).catch((err) => {
+            console.error(`[Social Webhook] AI auto-reply error for ${channel}:`, err);
+          });
+        }
       }
     }
 
