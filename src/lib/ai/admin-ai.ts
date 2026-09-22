@@ -47,22 +47,57 @@ export async function generateWithAdminAi(
   // 1. Try OpenAI if API key is present
   if (openaiApiKey) {
     try {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      const isLegacy =
+        model.startsWith('gpt-3.5') ||
+        model === 'gpt-4' ||
+        model.startsWith('gpt-4-0') ||
+        model.startsWith('gpt-4-turbo');
+      const reqBody: Record<string, unknown> = {
+        model: model || 'gpt-4o-mini',
+        messages: [
+          ...(options?.systemPrompt ? [{ role: 'system', content: options.systemPrompt }] : []),
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.7,
+      };
+      if (isLegacy) {
+        reqBody.max_tokens = options?.maxTokens || 300;
+      } else {
+        reqBody.max_completion_tokens = options?.maxTokens || 300;
+      }
+
+      let res = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${openaiApiKey}`,
         },
-        body: JSON.stringify({
-          model: model || 'gpt-4o-mini',
-          messages: [
-            ...(options?.systemPrompt ? [{ role: 'system', content: options.systemPrompt }] : []),
-            { role: 'user', content: prompt },
-          ],
-          max_tokens: options?.maxTokens || 300,
-          temperature: 0.7,
-        }),
+        body: JSON.stringify(reqBody),
       });
+
+      if (!res.ok && res.status === 400) {
+        const errJson = (await res.clone().json().catch(() => null)) as {
+          error?: { message?: string };
+        } | null;
+        const msg = errJson?.error?.message || '';
+        if (msg.includes('max_tokens') || msg.includes('max_completion_tokens')) {
+          if (isLegacy) {
+            delete reqBody.max_tokens;
+            reqBody.max_completion_tokens = options?.maxTokens || 300;
+          } else {
+            delete reqBody.max_completion_tokens;
+            reqBody.max_tokens = options?.maxTokens || 300;
+          }
+          res = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${openaiApiKey}`,
+            },
+            body: JSON.stringify(reqBody),
+          });
+        }
+      }
 
       if (res.ok) {
         const json = await res.json();
@@ -80,7 +115,7 @@ export async function generateWithAdminAi(
   // 2. Try Gemini if API key is present
   if (geminiApiKey) {
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${geminiApiKey}`;
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
