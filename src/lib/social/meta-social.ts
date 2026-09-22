@@ -5,6 +5,7 @@
 // Messenger and Instagram Messaging Graph API.
 // ============================================================
 
+import crypto from 'crypto';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 
 const META_GRAPH_VERSION = 'v21.0';
@@ -223,6 +224,16 @@ export async function sendInstagramMessage(
   }
 }
 
+function computeAppSecretProof(accessToken: string): string | null {
+  const secret = (process.env.META_APP_SECRET || process.env.FACEBOOK_APP_SECRET || '')?.trim();
+  if (!secret || !accessToken) return null;
+  try {
+    return crypto.createHmac('sha256', secret).update(accessToken).digest('hex');
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Fetch a Facebook user's public profile (PSID-scoped).
  */
@@ -231,22 +242,31 @@ export async function getFacebookUserProfile(
   pageAccessToken: string,
 ): Promise<SocialUserProfile | null> {
   if (!psid || !pageAccessToken) return null;
-  const url = `${META_GRAPH_BASE_URL}/${encodeURIComponent(psid)}?fields=first_name,last_name,profile_pic&access_token=${encodeURIComponent(pageAccessToken)}`;
+  const proof = computeAppSecretProof(pageAccessToken);
+  const proofParam = proof ? `&appsecret_proof=${proof}` : '';
+  const url = `${META_GRAPH_BASE_URL}/${encodeURIComponent(psid)}?fields=name,first_name,last_name,profile_pic&access_token=${encodeURIComponent(pageAccessToken)}${proofParam}`;
 
   try {
     const res = await fetch(url);
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      console.warn('[meta-social] Facebook profile request non-200:', res.status, errText);
+      return null;
+    }
     const data = (await res.json()) as {
+      name?: string;
       first_name?: string;
       last_name?: string;
       profile_pic?: string;
     };
-    const fullName = [data.first_name, data.last_name].filter(Boolean).join(' ').trim();
+    const resolvedName = (data.name || [data.first_name, data.last_name].filter(Boolean).join(' ')).trim();
+    if (!resolvedName) return null;
     return {
-      name: fullName || 'Facebook User',
+      name: resolvedName,
       avatarUrl: data.profile_pic,
     };
-  } catch {
+  } catch (err) {
+    console.warn('[meta-social] Facebook profile fetch error:', err);
     return null;
   }
 }
@@ -259,22 +279,34 @@ export async function getInstagramUserProfile(
   pageAccessToken: string,
 ): Promise<SocialUserProfile | null> {
   if (!igsid || !pageAccessToken) return null;
-  const url = `${META_GRAPH_BASE_URL}/${encodeURIComponent(igsid)}?fields=name,username,profile_pic&access_token=${encodeURIComponent(pageAccessToken)}`;
+  const proof = computeAppSecretProof(pageAccessToken);
+  const proofParam = proof ? `&appsecret_proof=${proof}` : '';
+  const url = `${META_GRAPH_BASE_URL}/${encodeURIComponent(igsid)}?fields=name,username,profile_pic&access_token=${encodeURIComponent(pageAccessToken)}${proofParam}`;
 
   try {
     const res = await fetch(url);
-    if (!res.ok) return null;
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      console.warn('[meta-social] Instagram profile request non-200:', res.status, errText);
+      return null;
+    }
     const data = (await res.json()) as {
       name?: string;
       username?: string;
       profile_pic?: string;
     };
+    const cleanName = data.name?.trim();
+    const cleanUsername = data.username?.trim();
+    const resolvedName = cleanName || (cleanUsername ? `@${cleanUsername}` : null);
+    if (!resolvedName) return null;
+
     return {
-      name: data.name || (data.username ? `@${data.username}` : 'Instagram User'),
-      username: data.username,
+      name: resolvedName,
+      username: cleanUsername,
       avatarUrl: data.profile_pic,
     };
-  } catch {
+  } catch (err) {
+    console.warn('[meta-social] Instagram profile fetch error:', err);
     return null;
   }
 }

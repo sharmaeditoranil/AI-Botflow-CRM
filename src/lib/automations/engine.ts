@@ -577,7 +577,7 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         stage_id: cfg.stage_id,
         contact_id: args.contactId,
         title: interpolate(cfg.title, args),
-        value: cfg.value ?? 0,
+        value: typeof cfg.value === 'number' ? cfg.value : null,
         currency: acct?.default_currency ?? 'USD',
         status: 'open',
       })

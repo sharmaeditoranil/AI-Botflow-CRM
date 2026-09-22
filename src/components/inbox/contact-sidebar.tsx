@@ -34,6 +34,7 @@ import { format } from "date-fns";
 import { useTranslations } from "next-intl";
 import { contactHandle } from "@/lib/whatsapp/wa-identity";
 import { ContactTagBar } from "./contact-tag-bar";
+import { AssignAutomationWidget } from "@/components/automations/assign-automation-widget";
 import { toast } from "sonner";
 
 interface ContactSidebarProps {
@@ -229,7 +230,7 @@ export function ContactSidebar({ contact, conversationId }: ContactSidebarProps)
         contact_id: contact.id,
         conversation_id: conversationId || null,
         title: `Deal: ${contact.name || contact.phone || "Customer"}`,
-        value: 5000,
+        value: null,
         currency: "INR",
         status: "open",
         expected_close_date: tomorrow.toISOString().split("T")[0],
@@ -543,10 +544,16 @@ export function ContactSidebar({ contact, conversationId }: ContactSidebarProps)
                       <p className="text-xs font-bold text-foreground truncate">
                         {deal.title}
                       </p>
-                      <span className="text-xs font-bold text-primary shrink-0">
-                        {deal.currency ?? "₹"}
-                        {deal.value.toLocaleString('en-IN')}
-                      </span>
+                      {typeof deal.value === "number" && deal.value > 0 ? (
+                        <span className="text-xs font-bold text-primary shrink-0">
+                          {deal.currency ?? "₹"}
+                          {deal.value.toLocaleString("en-IN")}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground/80 italic shrink-0">
+                          No value set
+                        </span>
+                      )}
                     </div>
 
                     {/* Stage Selector Dropdown */}
@@ -628,6 +635,15 @@ export function ContactSidebar({ contact, conversationId }: ContactSidebarProps)
               )}
             </div>
           </div>
+
+          {/* Divider */}
+          <div className="my-4 border-t border-border" />
+
+          {/* Manual Automation Assignment */}
+          <AssignAutomationWidget
+            contactId={contact.id}
+            conversationId={conversationId}
+          />
 
           {/* Divider */}
           <div className="my-4 border-t border-border" />

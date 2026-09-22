@@ -42,6 +42,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
+import { AssignAutomationWidget } from "@/components/automations/assign-automation-widget";
 
 interface NoteEntry {
   id: string;
@@ -156,7 +157,7 @@ export function DealForm({
     setConfirmDelete(false);
     if (deal) {
       setTitle(deal.title);
-      setValue(String(deal.value ?? ""));
+      setValue(deal.value !== null && deal.value !== undefined ? String(deal.value) : "");
       setCurrency(deal.currency || defaultCurrency);
       // contact_id is nullable when the contact has been deleted
       // (migration 004: ON DELETE SET NULL). "" means "no selection".
@@ -300,7 +301,7 @@ export function DealForm({
 
     const payload = {
       title: title.trim(),
-      value: parseFloat(value) || 0,
+      value: value.trim() && !isNaN(parseFloat(value)) ? parseFloat(value) : null,
       currency,
       contact_id: contactId,
       pipeline_id: pipelineId,
@@ -459,7 +460,7 @@ export function DealForm({
                     type="number"
                     value={value}
                     onChange={(e) => setValue(e.target.value)}
-                    placeholder="0"
+                    placeholder="Optional (e.g. 5000)"
                     className="border-border bg-muted pl-7 text-foreground"
                   />
                 </div>
@@ -723,6 +724,14 @@ export function DealForm({
                 </div>
               )}
             </div>
+
+            {/* Manual Automation Assignment */}
+            {(contactId || deal?.contact_id) && (
+              <AssignAutomationWidget
+                contactId={contactId || deal?.contact_id}
+                conversationId={deal?.conversation_id}
+              />
+            )}
 
             {deal && (
               <div className="space-y-2 rounded-lg border border-border bg-muted/50 p-3">

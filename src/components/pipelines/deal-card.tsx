@@ -112,9 +112,15 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
 
       {/* Value & Due Date status */}
       <div className="mt-2 flex items-center justify-between gap-1">
-        <span className="text-sm font-bold text-primary">
-          {formatCurrency(deal.value, deal.currency)}
-        </span>
+        {typeof deal.value === "number" && deal.value > 0 ? (
+          <span className="text-sm font-bold text-primary">
+            {formatCurrency(deal.value, deal.currency)}
+          </span>
+        ) : (
+          <span className="text-[11px] text-muted-foreground/80 italic font-normal">
+            No value set
+          </span>
+        )}
         {isOverdue && deal.expected_close_date ? (
           <span className="inline-flex items-center gap-1 rounded-full bg-red-500/15 px-1.5 py-0.5 text-[10px] font-medium text-red-500">
             <Clock className="h-2.5 w-2.5" />

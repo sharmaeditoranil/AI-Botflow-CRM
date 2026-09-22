@@ -195,42 +195,71 @@ export async function POST(request: Request) {
 
         // 1. Find or create Contact
         let contactId: string | null = null;
-        let contactName = isInstagram ? 'Instagram User' : 'Facebook User';
+        let contactName: string | null = null;
+        let avatarUrl: string | undefined = undefined;
 
         const userColumn = isInstagram ? 'ig_user_id' : 'fb_user_id';
         const { data: existingContacts } = await supabase
           .from('contacts')
-          .select('id, name')
+          .select('id, name, avatar_url')
           .eq('account_id', accountId)
           .eq(userColumn, senderId)
           .limit(1);
 
         if (existingContacts && existingContacts.length > 0) {
           contactId = existingContacts[0].id;
-          if (existingContacts[0].name) {
-            contactName = existingContacts[0].name;
-          }
-        } else {
-          // Fetch user profile from Meta Graph API if token available
-          let avatarUrl: string | undefined = undefined;
-          if (pageAccessToken) {
+          contactName = existingContacts[0].name || null;
+          avatarUrl = existingContacts[0].avatar_url;
+
+          // If existing contact has generic/default name or missing name, fetch real profile
+          const isGeneric = !contactName ||
+            contactName === 'Facebook User' ||
+            contactName === 'Instagram User' ||
+            contactName.startsWith('Facebook User') ||
+            contactName.startsWith('Instagram User');
+
+          if (isGeneric && pageAccessToken) {
             try {
-              if (isInstagram) {
-                const profile = await getInstagramUserProfile(senderId, pageAccessToken);
-                if (profile) {
-                  contactName = profile.name;
-                  avatarUrl = profile.avatarUrl;
-                }
-              } else {
-                const profile = await getFacebookUserProfile(senderId, pageAccessToken);
-                if (profile) {
-                  contactName = profile.name;
-                  avatarUrl = profile.avatarUrl;
-                }
+              const profile = isInstagram
+                ? await getInstagramUserProfile(senderId, pageAccessToken)
+                : await getFacebookUserProfile(senderId, pageAccessToken);
+
+              if (profile && profile.name) {
+                contactName = profile.name;
+                avatarUrl = profile.avatarUrl || avatarUrl;
+                await supabase
+                  .from('contacts')
+                  .update({
+                    name: contactName,
+                    avatar_url: avatarUrl,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq('id', contactId);
               }
             } catch (err) {
-              console.warn('Could not fetch social user profile:', err);
+              console.warn('[social-webhook] Error updating contact profile:', err);
             }
+          }
+        } else {
+          // New contact: Fetch verified profile from Meta Graph API
+          if (pageAccessToken) {
+            try {
+              const profile = isInstagram
+                ? await getInstagramUserProfile(senderId, pageAccessToken)
+                : await getFacebookUserProfile(senderId, pageAccessToken);
+
+              if (profile && profile.name) {
+                contactName = profile.name;
+                avatarUrl = profile.avatarUrl;
+              }
+            } catch (err) {
+              console.warn('[social-webhook] Could not fetch social user profile:', err);
+            }
+          }
+
+          // If no verified platform name available, use clear identifier fallback without fake names
+          if (!contactName) {
+            contactName = isInstagram ? `IG: ${senderId.slice(-6)}` : `FB: ${senderId.slice(-6)}`;
           }
 
           const insertPayload: Record<string, unknown> = {
