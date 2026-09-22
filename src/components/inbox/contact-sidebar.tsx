@@ -222,6 +222,14 @@ export function ContactSidebar({ contact, conversationId }: ContactSidebarProps)
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 2);
 
+      let initialNotes = "Created from Inbox chat.";
+      if (notes && notes.length > 0) {
+        const existingNotesCompiled = notes
+          .map((n) => `[Note ${new Date(n.created_at).toLocaleDateString()}]: ${n.note_text}`)
+          .join("\n");
+        initialNotes = `${existingNotesCompiled}\n[Note ${new Date().toLocaleDateString()}]: Created from Inbox chat.`;
+      }
+
       const { error } = await supabase.from("deals").insert({
         user_id: user.id,
         account_id: accountId,
@@ -234,7 +242,7 @@ export function ContactSidebar({ contact, conversationId }: ContactSidebarProps)
         currency: "INR",
         status: "open",
         expected_close_date: tomorrow.toISOString().split("T")[0],
-        notes: "Created from Inbox chat.",
+        notes: initialNotes,
         ai_followup_enabled: true,
       });
 
