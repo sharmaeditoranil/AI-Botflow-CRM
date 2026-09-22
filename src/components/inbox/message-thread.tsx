@@ -872,24 +872,35 @@ export function MessageThread({
   // Empty state — same WhatsApp-style doodle background as the active
   // thread below, so swapping between empty/selected doesn't change the
   // pattern under the user's eye.
-  if (!conversation || !contact) {
+  if (!conversation) {
     return (
-      <div className={cn("flex flex-1 flex-col items-center justify-center", DOODLE_BG_CLASSES)}>
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+      <div className={cn("flex h-full w-full flex-1 flex-col items-center justify-center p-6 text-center", DOODLE_BG_CLASSES)}>
+        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted border border-border shadow-xs">
           <MessageSquare className="h-8 w-8 text-muted-foreground" />
         </div>
-        <h3 className="mt-4 text-sm font-medium text-muted-foreground">
+        <h3 className="mt-4 text-base font-semibold text-foreground">
           {t("selectConversation")}
         </h3>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mt-1 text-xs text-muted-foreground max-w-xs">
           {t("selectConversationHint")}
         </p>
       </div>
     );
   }
 
+  const effectiveContact: Partial<Contact> = contact || {
+    id: conversation.contact_id || conversation.id,
+    name: (conversation as unknown as { contact_name?: string }).contact_name || "",
+    phone: (conversation as unknown as { contact_phone?: string; phone_number?: string }).contact_phone ||
+           (conversation as unknown as { contact_phone?: string; phone_number?: string }).phone_number || "",
+  };
+
   const channel = conversation.channel || "whatsapp";
-  const displayName = contact.name || contactHandle(contact);
+  const displayName =
+    effectiveContact.name ||
+    contactHandle(effectiveContact as Contact) ||
+    effectiveContact.phone ||
+    t("customer");
   const messageGroups = groupMessagesByDate(messages);
   const currentStatus = STATUS_OPTIONS.find(
     (s) => s.value === conversation.status
@@ -901,7 +912,7 @@ export function MessageThread({
     : t("assign");
 
   const phoneToCall =
-    contact?.phone ||
+    effectiveContact?.phone ||
     (conversation as unknown as { contact_phone?: string })?.contact_phone ||
     (conversation as unknown as { phone?: string })?.phone ||
     (displayName && /^[+0-9\s\-()]+$/.test(displayName) ? displayName.replace(/\s+/g, "") : null);
@@ -1121,9 +1132,9 @@ export function MessageThread({
     </div>
 
       {/* Customer Tags Bar: Directly accessible in Inbox (Desktop only to match Screenshot 1) */}
-      {contact && (
+      {effectiveContact?.id && (
         <div className="hidden lg:block border-b border-border/60 bg-card/60 px-3 py-1.5 sm:px-4">
-          <ContactTagBar contactId={contact.id} />
+          <ContactTagBar contactId={effectiveContact.id} />
         </div>
       )}
 
