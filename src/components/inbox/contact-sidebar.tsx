@@ -375,7 +375,7 @@ export function ContactSidebar({ contact, conversationId }: ContactSidebarProps)
   const aiMemory = liveContact?.ai_memory ?? contact.ai_memory;
 
   return (
-    <div className="flex h-full w-70 flex-col border-l border-border bg-card">
+    <div className="flex h-full w-72 flex-col overflow-hidden border-l border-border bg-card">
       <ScrollArea className="flex-1">
         <div className="p-4">
           {/* Contact Info */}
