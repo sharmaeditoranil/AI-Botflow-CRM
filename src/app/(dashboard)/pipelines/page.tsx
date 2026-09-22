@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { GitBranch, Plus, ChevronDown, Settings, Sparkles } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
