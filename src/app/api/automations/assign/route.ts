@@ -185,8 +185,10 @@ export async function POST(request: Request) {
       contactId,
       context: {
         conversation_id: targetConvId || undefined,
-        manual_assignment: true,
-        assigned_by_user_id: userId,
+        vars: {
+          manual_assignment: true,
+          assigned_by_user_id: userId,
+        },
       },
     });
 
