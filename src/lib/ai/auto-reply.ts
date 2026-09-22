@@ -23,6 +23,7 @@ import {
   sendInstagramMessage,
 } from '@/lib/social/meta-social'
 import { decrypt } from '@/lib/whatsapp/encryption'
+import { triggerMatches } from '@/lib/automations/engine'
 
 interface DispatchArgs {
   /** Tenancy key — drives config, contact, and whatsapp_config lookups. */
@@ -74,23 +75,6 @@ export async function dispatchInboundToAiReply(
     const config = await loadAiConfig(db, accountId)
     if (!config || !config.autoReplyEnabled) return
 
-    // Deterministic, user-configured responders win over the LLM — the
-    // caller already excludes messages a Flow consumed. Message-level
-    // automations (`new_message_received` / `keyword_match`) are
-    // dispatched independently for this same inbound and may send their
-    // own reply, so if the account has any active one we stand down to
-    // avoid double-texting the customer. (Relationship triggers like
-    // `first_inbound_message` don't count — they're not per-message
-    // auto-responders.)
-    const { data: autoResponders } = await db
-      .from('automations')
-      .select('id')
-      .eq('account_id', accountId)
-      .eq('is_active', true)
-      .in('trigger_type', ['new_message_received', 'keyword_match'])
-      .limit(1)
-    if (autoResponders && autoResponders.length > 0) return
-
     // Check if the contact has already opted out
     const { data: contactRow } = await db
       .from('contacts')
@@ -118,6 +102,47 @@ export async function dispatchInboundToAiReply(
     if (messages.length === 0) return
 
     const latestMsg = latestUserMessage(messages)
+
+    const convChannel = (conv as { channel?: string })?.channel || 'whatsapp'
+
+    // Deterministic automations only send outbound messages on WhatsApp.
+    // If inbound is on WhatsApp, check if an active automation will actually send a response
+    // for this inbound (e.g. matched keywords or new_message_received with a message action).
+    if (convChannel === 'whatsapp') {
+      const { data: autoResponders } = await db
+        .from('automations')
+        .select('id, trigger_type, trigger_config, steps')
+        .eq('account_id', accountId)
+        .eq('is_active', true)
+        .in('trigger_type', ['new_message_received', 'keyword_match'])
+
+      if (autoResponders && autoResponders.length > 0) {
+        const willAutomationReply = autoResponders.some((auto: any) => {
+          // If steps are specified, check if it sends a message
+          const steps = (auto.steps as Array<{ step_type: string }>) || []
+          if (steps.length > 0) {
+            const sendsMessage = steps.some((s) =>
+              ['send_message', 'send_buttons', 'send_list', 'send_template'].includes(s.step_type),
+            )
+            if (!sendsMessage) return false
+          }
+
+          if (!auto.trigger_type || auto.trigger_type === 'new_message_received') return true
+
+          if (auto.trigger_type === 'keyword_match' && latestMsg) {
+            return triggerMatches(auto, { message_text: latestMsg })
+          }
+          return false
+        })
+
+        if (willAutomationReply) {
+          console.log(
+            `[ai auto-reply] Active automation will respond to WhatsApp inbound for account ${accountId} — AI stepping aside.`,
+          )
+          return
+        }
+      }
+    }
 
     // Check for customer opt-out / unsubscribe refusal (e.g. "stop", "nahi chahiye", "cancel")
     if (latestMsg && config.followupIntelligenceEnabled && config.autoUnsubscribeEnabled) {
@@ -154,7 +179,6 @@ export async function dispatchInboundToAiReply(
     // Every gate has passed — we're committed to attempting a reply, so
     // show the customer "typing…" (and mark their message read) while the
     // retrieval + LLM round trips run (WhatsApp only).
-    const convChannel = (conv as { channel?: string })?.channel || 'whatsapp'
     if (inboundMessageId && convChannel === 'whatsapp') {
       await showTypingIndicator(db, accountId, inboundMessageId)
     }
@@ -254,15 +278,18 @@ export async function dispatchInboundToAiReply(
         max_replies: config.autoReplyMaxPerConversation,
       },
     )
+    let isClaimed = claimed === true
     if (claimErr) {
-      // A real error here (vs. losing the cap race) is almost always a
-      // deploy issue — e.g. `claim_ai_reply_slot` not EXECUTE-able by the
-      // service role, or the migration not applied. Log it loudly: a
-      // silent return makes "auto-reply never fires" undiagnosable.
-      console.error('[ai auto-reply] claim_ai_reply_slot failed:', claimErr)
-      return
+      console.warn('[ai auto-reply] claim_ai_reply_slot RPC failed, attempting fallback update:', claimErr)
+      const { data: fallbackConv } = await db
+        .from('conversations')
+        .update({ ai_reply_count: (conv.ai_reply_count ?? 0) + 1 })
+        .eq('id', conversationId)
+        .lt('ai_reply_count', config.autoReplyMaxPerConversation)
+        .select('id')
+      isClaimed = Boolean(fallbackConv && fallbackConv.length > 0)
     }
-    if (claimed !== true) return // lost the per-conversation cap race
+    if (!isClaimed) return // lost the per-conversation cap race
 
     if (convChannel === 'facebook' || convChannel === 'instagram') {
       const isFb = convChannel === 'facebook'

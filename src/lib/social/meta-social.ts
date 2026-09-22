@@ -122,7 +122,9 @@ export async function sendFacebookMessage(
     };
   }
 
-  const url = `${META_GRAPH_BASE_URL}/me/messages?access_token=${encodeURIComponent(pageAccessToken)}`;
+  const proof = computeAppSecretProof(pageAccessToken);
+  const proofParam = proof ? `&appsecret_proof=${proof}` : '';
+  const url = `${META_GRAPH_BASE_URL}/me/messages?access_token=${encodeURIComponent(pageAccessToken)}${proofParam}`;
 
   try {
     const response = await fetch(url, {
@@ -192,7 +194,9 @@ export async function sendInstagramMessage(
     };
   }
 
-  const url = `${META_GRAPH_BASE_URL}/me/messages?access_token=${encodeURIComponent(pageAccessToken)}`;
+  const igProof = computeAppSecretProof(pageAccessToken);
+  const igProofParam = igProof ? `&appsecret_proof=${igProof}` : '';
+  const url = `${META_GRAPH_BASE_URL}/me/messages?access_token=${encodeURIComponent(pageAccessToken)}${igProofParam}`;
 
   try {
     const response = await fetch(url, {
