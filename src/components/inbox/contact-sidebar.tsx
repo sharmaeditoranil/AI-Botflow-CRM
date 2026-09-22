@@ -24,6 +24,9 @@ import {
   Star,
   Bot,
   Calendar,
+  Trash2,
+  CheckCircle,
+  XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -243,6 +246,51 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
     }
   };
 
+  const handleUpdateDealStatus = async (dealId: string, status: 'won' | 'lost' | 'archived') => {
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from('deals')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', dealId);
+      if (!error) {
+        toast.success(`Deal marked as ${status.toUpperCase()}`);
+        fetchContactData();
+      } else {
+        toast.error(error.message);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update deal');
+    }
+  };
+
+  const handleRemoveDeal = async (dealId: string) => {
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.from('deals').delete().eq('id', dealId);
+      if (!error) {
+        toast.success('Deal removed from pipeline');
+        fetchContactData();
+      } else {
+        toast.error(error.message);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to remove deal');
+    }
+  };
+
+  const handleTagsUpdated = useCallback(async () => {
+    fetchContactData();
+    if (deals.length > 0) {
+      const activeDeal = deals[0];
+      const supabase = createClient();
+      const updatedNote =
+        ((activeDeal as any).notes || '') +
+        `\n[Tags Synced]: ${new Date().toLocaleDateString('en-IN')} ${new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
+      await supabase.from('deals').update({ notes: updatedNote }).eq('id', activeDeal.id);
+    }
+  }, [fetchContactData, deals]);
+
   if (!contact) {
     return (
       <div className="flex h-full w-70 items-center justify-center border-l border-border bg-card">
@@ -367,7 +415,7 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
             <div className="mt-2">
               <ContactTagBar
                 contactId={contact.id}
-                onTagsUpdated={fetchContactData}
+                onTagsUpdated={handleTagsUpdated}
               />
             </div>
           </div>
@@ -462,17 +510,49 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                       )}
                     </div>
 
-                    {/* AI Follow-up action */}
-                    <div className="pt-1 border-t border-border/50 flex justify-end">
+                    {/* Deal Actions & 2-way sync controls */}
+                    <div className="pt-1.5 border-t border-border/50 flex items-center justify-between gap-1">
+                      <div className="flex items-center gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleUpdateDealStatus(deal.id, 'won')}
+                          className="h-5 px-1.5 text-[9px] text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 gap-0.5"
+                          title="Mark deal won"
+                        >
+                          <CheckCircle className="h-2.5 w-2.5" />
+                          Won
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleUpdateDealStatus(deal.id, 'lost')}
+                          className="h-5 px-1.5 text-[9px] text-rose-500 hover:bg-rose-500/10 gap-0.5"
+                          title="Mark deal lost"
+                        >
+                          <XCircle className="h-2.5 w-2.5" />
+                          Lost
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleRemoveDeal(deal.id)}
+                          className="h-5 px-1.5 text-[9px] text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 gap-0.5"
+                          title="Remove deal from pipeline"
+                        >
+                          <Trash2 className="h-2.5 w-2.5" />
+                        </Button>
+                      </div>
+
                       <Button
                         size="sm"
                         variant="ghost"
                         onClick={() => handleTriggerAiFollowup(deal.id)}
-                        className="h-6 px-2 text-[10px] text-purple-500 hover:text-purple-400 hover:bg-purple-500/10 gap-1"
+                        className="h-5 px-1.5 text-[9px] text-purple-500 hover:text-purple-400 hover:bg-purple-500/10 gap-1"
                         title="Send AI personalized follow-up message to this customer now"
                       >
-                        <Bot className="h-3 w-3" />
-                        Send AI Follow-up Now
+                        <Bot className="h-2.5 w-2.5" />
+                        AI Follow-up
                       </Button>
                     </div>
                   </div>

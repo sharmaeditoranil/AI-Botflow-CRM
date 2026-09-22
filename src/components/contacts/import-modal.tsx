@@ -259,19 +259,21 @@ export function ImportModal({
       //    generated `phone_normalized` column (migration 022) → Set.
       const { data: existingRows } = await supabase
         .from('contacts')
-        .select('phone_normalized')
+        .select('id, phone_normalized')
         .eq('account_id', accountId);
-      const existing = new Set(
-        (existingRows ?? [])
-          .map(
-            (r) => (r as { phone_normalized: string | null }).phone_normalized
-          )
-          .filter((p): p is string => !!p)
-      );
+      const existingMap = new Map<string, string>();
+      for (const r of existingRows ?? []) {
+        if (r.phone_normalized) existingMap.set(r.phone_normalized, r.id);
+      }
+
+      const existingToTag: string[] = [];
 
       const toInsert = unique.filter((row) => {
-        if (existing.has(normalizeKey(row.phone))) {
+        const norm = normalizeKey(row.phone);
+        if (existingMap.has(norm)) {
           skipped++;
+          const existId = existingMap.get(norm);
+          if (existId) existingToTag.push(existId);
           return false;
         }
         return true;
@@ -289,7 +291,12 @@ export function ImportModal({
 
       // 3) Resolve tag names → ids (admin+ may auto-create missing tags).
       //    Skip the round-trip when the import carries no tag names.
-      const allTagNames = toInsert.flatMap((row) => row.tagNames);
+      const allTagNames = Array.from(
+        new Set([
+          ...toInsert.flatMap((row) => row.tagNames),
+          ...(targetTag ? [targetTag] : []),
+        ])
+      );
       let tagIdByKey = new Map<string, string>();
       let skippedNames: string[] = [];
       if (allTagNames.length > 0) {
@@ -302,6 +309,16 @@ export function ImportModal({
       }
 
       const tagAssignments: ContactTagAssignment[] = [];
+
+      // If targetTag was selected, also assign it to existing contacts from this file
+      if (targetTag && existingToTag.length > 0) {
+        existingToTag.forEach((cId) => {
+          tagAssignments.push({
+            contactId: cId,
+            tagNames: [targetTag],
+          });
+        });
+      }
 
       // 4) Batch insert the genuinely-new rows in chunks of 50. The DB
       //    unique index is the backstop: a 23505 (race, or a format
