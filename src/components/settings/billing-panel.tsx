@@ -28,6 +28,7 @@ import { Input } from '@/components/ui/input';
 import { SettingsPanelHead } from './settings-panel-head';
 import type { AccountUsageInfo } from '@/lib/billing/limits';
 import { BrandLogo } from '@/components/brand/brand-logo';
+import { GstInvoiceModal, type InvoiceRecord } from './gst-invoice-modal';
 
 declare global {
   interface Window {
@@ -46,6 +47,8 @@ export function BillingPanel() {
   const [loading, setLoading] = useState(true);
   const [usageInfo, setUsageInfo] = useState<AccountUsageInfo | null>(null);
   const [plans, setPlans] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<InvoiceRecord[]>([]);
+  const [accountDetails, setAccountDetails] = useState<any>({});
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
   const [couponCode, setCouponCode] = useState('');
@@ -53,12 +56,21 @@ export function BillingPanel() {
   const [appliedCoupon, setAppliedCoupon] = useState<AppliedCoupon | null>(null);
   const [upgradingPlanId, setUpgradingPlanId] = useState<string | null>(null);
 
+  // GST & Business details for invoicing
+  const [businessName, setBusinessName] = useState('');
+  const [gstNumber, setGstNumber] = useState('');
+  const [billingAddress, setBillingAddress] = useState('');
+  const [billingState, setBillingState] = useState('');
+  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(null);
+  const [gstModalOpen, setGstModalOpen] = useState(false);
+
   const fetchUsageAndPlans = async () => {
     try {
       setLoading(true);
-      const [usageRes, plansRes] = await Promise.all([
+      const [usageRes, plansRes, invoicesRes] = await Promise.all([
         fetch('/api/billing/usage'),
         fetch('/api/billing/plans'),
+        fetch('/api/billing/invoices'),
       ]);
 
       if (usageRes.ok) {
@@ -69,6 +81,18 @@ export function BillingPanel() {
       if (plansRes.ok) {
         const pData = await plansRes.json();
         setPlans(pData.plans || []);
+      }
+
+      if (invoicesRes.ok) {
+        const iData = await invoicesRes.json();
+        setInvoices(iData.invoices || []);
+        if (iData.account) {
+          setAccountDetails(iData.account);
+          if (iData.account.business_name) setBusinessName(iData.account.business_name);
+          if (iData.account.gst_number) setGstNumber(iData.account.gst_number);
+          if (iData.account.billing_address) setBillingAddress(iData.account.billing_address);
+          if (iData.account.billing_state) setBillingState(iData.account.billing_state);
+        }
       }
     } catch (err) {
       console.error('Error loading billing data:', err);
@@ -150,6 +174,10 @@ export function BillingPanel() {
           planId,
           billingCycle,
           couponCode: appliedCoupon?.code || couponCode.trim(),
+          businessName: businessName.trim(),
+          gstNumber: gstNumber.trim().toUpperCase(),
+          billingAddress: billingAddress.trim(),
+          billingState: billingState.trim(),
         }),
       });
 
@@ -177,16 +205,20 @@ export function BillingPanel() {
         amount: data.amount,
         currency: data.currency,
         name: 'Aibotflow',
-        description: `Upgrade to ${data.planName} (${billingCycle})`,
+        description: `Upgrade to ${data.planName} (${billingCycle}) + 18% GST`,
         order_id: data.orderId,
         prefill: {
           email: data.userEmail || '',
+        },
+        notes: {
+          gstNumber: gstNumber.trim().toUpperCase(),
+          businessName: businessName.trim(),
         },
         theme: {
           color: '#7c3aed',
         },
         handler: async function (response: any) {
-          toast.info('Verifying payment...');
+          toast.info('Verifying payment and generating GST invoice...');
           const verifyRes = await fetch('/api/billing/verify-payment', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -197,12 +229,19 @@ export function BillingPanel() {
               planId,
               billingCycle,
               amount: data.amount,
+              taxableAmount: data.taxableAmount,
+              gstAmount: data.gstAmount,
+              gstRate: 18,
+              businessName: businessName.trim(),
+              gstNumber: gstNumber.trim().toUpperCase(),
+              billingAddress: billingAddress.trim(),
+              billingState: billingState.trim(),
             }),
           });
 
           const verifyData = await verifyRes.json();
           if (verifyRes.ok && verifyData.success) {
-            toast.success('Payment verified and plan activated!');
+            toast.success(`Payment verified! GST Invoice ${verifyData.invoiceNumber || ''} generated.`);
             setUpgradeModalOpen(false);
             fetchUsageAndPlans();
           } else {
@@ -523,6 +562,11 @@ export function BillingPanel() {
                         </span>
                       )}
                     </div>
+                    {/* 18% GST indicator */}
+                    <div className="mt-2 pt-2 border-t border-border/50 text-[11px] text-muted-foreground flex items-center justify-between">
+                      <span>+18% GST: <strong className="text-foreground">₹{Math.round(displayPrice * 0.18).toLocaleString('en-IN')}</strong></span>
+                      <span className="font-bold text-foreground">Total: ₹{(displayPrice + Math.round(displayPrice * 0.18)).toLocaleString('en-IN')}</span>
+                    </div>
                     {billingCycle === 'yearly' ? (
                       <div className="mt-1.5 flex items-center gap-1 text-[11px] font-medium text-emerald-500">
                         <CheckCircle2 className="h-3 w-3 shrink-0" />
@@ -700,6 +744,108 @@ export function BillingPanel() {
             </div>
           </div>
         </div>
+
+        {/* Payment History & GST Tax Invoices Section */}
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/60 pb-4">
+            <div>
+              <h3 className="text-lg font-bold tracking-tight text-foreground flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" />
+                Payment History & GST Invoices
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Review all your past subscription payments and download official GST tax invoices with 18% GST breakdown.
+              </p>
+            </div>
+            {accountDetails.gst_number && (
+              <div className="text-xs bg-purple-500/10 text-purple-400 border border-purple-500/20 px-3 py-1.5 rounded-lg flex items-center gap-2">
+                <span className="font-semibold">Registered GSTIN:</span>
+                <span className="font-mono font-bold">{accountDetails.gst_number}</span>
+              </div>
+            )}
+          </div>
+
+          {invoices.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground text-xs">
+              <Clock className="h-8 w-8 mx-auto mb-2 opacity-40" />
+              No past payments recorded yet. Your invoices will appear here immediately after subscribing.
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-border/70 text-muted-foreground font-semibold uppercase text-[11px]">
+                    <th className="py-2.5 px-3">Date</th>
+                    <th className="py-2.5 px-3">Invoice No</th>
+                    <th className="py-2.5 px-3">Plan / Description</th>
+                    <th className="py-2.5 px-3 text-right">Taxable (₹)</th>
+                    <th className="py-2.5 px-3 text-right">18% GST (₹)</th>
+                    <th className="py-2.5 px-3 text-right">Total Paid (₹)</th>
+                    <th className="py-2.5 px-3 text-center">Status</th>
+                    <th className="py-2.5 px-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50">
+                  {invoices.map((inv) => {
+                    const invTotal = Number(inv.amount) || 0;
+                    const invTaxable = inv.taxable_amount ? Number(inv.taxable_amount) : Math.round((invTotal / 1.18) * 100) / 100;
+                    const invGst = inv.gst_amount ? Number(inv.gst_amount) : Math.round((invTotal - invTaxable) * 100) / 100;
+                    const invNum = inv.invoice_number || `INV-${inv.id.slice(0, 8).toUpperCase()}`;
+
+                    return (
+                      <tr key={inv.id} className="hover:bg-muted/30 transition-colors">
+                        <td className="py-3 px-3 text-muted-foreground whitespace-nowrap">
+                          {new Date(inv.created_at).toLocaleDateString('en-IN', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                          })}
+                        </td>
+                        <td className="py-3 px-3 font-mono font-medium text-foreground whitespace-nowrap">
+                          {invNum}
+                        </td>
+                        <td className="py-3 px-3 font-medium text-foreground">
+                          {inv.subscription?.plan?.name || 'Aibotflow Plan'}
+                          <span className="text-[10px] text-muted-foreground ml-1.5 capitalize">
+                            ({inv.subscription?.billing_cycle || 'monthly'})
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-right text-muted-foreground font-medium whitespace-nowrap">
+                          ₹{invTaxable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-3 text-right text-emerald-500 font-medium whitespace-nowrap">
+                          +₹{invGst.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-3 text-right font-bold text-foreground whitespace-nowrap">
+                          ₹{invTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20 text-[10px] uppercase font-bold">
+                            {inv.status || 'PAID'}
+                          </Badge>
+                        </td>
+                        <td className="py-3 px-3 text-right whitespace-nowrap">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedInvoice(inv);
+                              setGstModalOpen(true);
+                            }}
+                            className="h-7 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10"
+                          >
+                            <FileText className="h-3 w-3" />
+                            GST Invoice
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Redesigned Upgrade Modal (Triggered via "Upgrade Plan" buttons) */}
@@ -813,6 +959,11 @@ export function BillingPanel() {
                             </span>
                           )}
                         </div>
+                        {/* 18% GST display */}
+                        <div className="mt-2 pt-2 border-t border-border/60 text-xs text-muted-foreground flex items-center justify-between">
+                          <span>+18% GST: <strong className="text-foreground">₹{Math.round(displayPrice * 0.18).toLocaleString('en-IN')}</strong></span>
+                          <span className="font-bold text-foreground">Total: ₹{(displayPrice + Math.round(displayPrice * 0.18)).toLocaleString('en-IN')}</span>
+                        </div>
                         {billingCycle === 'yearly' ? (
                           <div className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-emerald-500">
                             <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
@@ -911,7 +1062,7 @@ export function BillingPanel() {
                           </span>
                         ) : (
                           <span className="flex items-center justify-center gap-2">
-                            Upgrade to {p.name} <ArrowRight className="h-4 w-4" />
+                            Pay ₹{(displayPrice + Math.round(displayPrice * 0.18)).toLocaleString('en-IN')} • {p.name} <ArrowRight className="h-4 w-4" />
                           </span>
                         )}
                       </Button>
@@ -969,6 +1120,71 @@ export function BillingPanel() {
                 )}
               </div>
             </div>
+
+            {/* GST & Business Name Input Section for Tax Invoice */}
+            <div className="rounded-xl border border-border/80 bg-muted/20 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-purple-500" />
+                  <span className="text-xs font-bold text-foreground">
+                    Business Name & GST Details (Optional for Input Tax Credit)
+                  </span>
+                </div>
+                <span className="text-[11px] text-muted-foreground">18% GST Applicable (SAC 998313)</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground block mb-1">
+                    Company / Trade Name
+                  </label>
+                  <Input
+                    placeholder="e.g. Acme Tech Solutions"
+                    value={businessName}
+                    onChange={(e) => setBusinessName(e.target.value)}
+                    className="h-8 text-xs bg-card border-border"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground block mb-1">
+                    GSTIN Number (15-digit)
+                  </label>
+                  <Input
+                    placeholder="e.g. 07AAAAA0000A1Z5"
+                    value={gstNumber}
+                    onChange={(e) => setGstNumber(e.target.value.toUpperCase())}
+                    maxLength={15}
+                    className="h-8 text-xs font-mono uppercase bg-card border-border"
+                  />
+                </div>
+                <div className="sm:col-span-2 flex flex-col sm:flex-row gap-3">
+                  <div className="flex-1">
+                    <label className="text-[11px] font-medium text-muted-foreground block mb-1">
+                      Billing Address
+                    </label>
+                    <Input
+                      placeholder="e.g. Suite 402, Cyber Tower, Noida"
+                      value={billingAddress}
+                      onChange={(e) => setBillingAddress(e.target.value)}
+                      className="h-8 text-xs bg-card border-border"
+                    />
+                  </div>
+                  <div className="w-full sm:w-48">
+                    <label className="text-[11px] font-medium text-muted-foreground block mb-1">
+                      State / State Code
+                    </label>
+                    <Input
+                      placeholder="e.g. Uttar Pradesh (09)"
+                      value={billingState}
+                      onChange={(e) => setBillingState(e.target.value)}
+                      className="h-8 text-xs bg-card border-border"
+                    />
+                  </div>
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground italic">
+                * Entering your GST number will print your company details on the official GST invoice, allowing you to claim full 18% Input Tax Credit (ITC).
+              </p>
+            </div>
           </div>
 
           {/* Modal Trust Footer */}
@@ -991,6 +1207,14 @@ export function BillingPanel() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* GST Tax Invoice Viewer & Printable Modal */}
+      <GstInvoiceModal
+        open={gstModalOpen}
+        onOpenChange={setGstModalOpen}
+        invoice={selectedInvoice}
+        account={accountDetails}
+      />
     </section>
   );
 }

@@ -129,6 +129,54 @@ export default function NewBroadcastPage() {
     router.push('/broadcasts');
   }
 
+  async function handleSchedule(scheduledDate: Date) {
+    if (!template || !name.trim()) {
+      toast.error('Please enter a broadcast name.');
+      return;
+    }
+    const supabase = createClient();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const user = session?.user;
+    if (!user || !accountId) {
+      toast.error(t('toastNotSignedIn'));
+      return;
+    }
+
+    const { error } = await supabase.from('broadcasts').insert({
+      user_id: user.id,
+      account_id: accountId,
+      name: name.trim(),
+      template_name: template.name,
+      template_language: template.language ?? 'en_US',
+      template_variables: variables,
+      audience_filter: {
+        type: audience.type,
+        tagIds: audience.tagIds,
+        customField: audience.customField,
+        csvContacts: audience.csvContacts,
+        excludeTagIds: audience.excludeTagIds,
+      },
+      scheduled_at: scheduledDate.toISOString(),
+      status: 'scheduled',
+      total_recipients: 0,
+      sent_count: 0,
+      delivered_count: 0,
+      read_count: 0,
+      replied_count: 0,
+      failed_count: 0,
+    });
+
+    if (error) {
+      toast.error('Failed to schedule broadcast: ' + error.message);
+      return;
+    }
+
+    toast.success(`Broadcast scheduled for ${scheduledDate.toLocaleString('en-IN')}!`);
+    router.push('/broadcasts');
+  }
+
   return (
     <div className="mx-auto max-w-3xl space-y-8">
       {/* Header */}
@@ -160,8 +208,12 @@ export default function NewBroadcastPage() {
                   {isCompleted ? <Check className="h-4 w-4" /> : index + 1}
                 </div>
                 <span
-                  className={`hidden text-sm font-medium sm:block ${
-                    isActive ? 'text-foreground' : isCompleted ? 'text-primary' : 'text-muted-foreground'
+                  className={`text-xs font-medium hidden sm:inline ${
+                    isActive
+                      ? 'text-foreground font-semibold'
+                      : isCompleted
+                        ? 'text-muted-foreground'
+                        : 'text-muted-foreground/60'
                   }`}
                 >
                   {t(`steps.${step.label}`)}
@@ -169,8 +221,8 @@ export default function NewBroadcastPage() {
               </div>
               {index < steps.length - 1 && (
                 <div
-                  className={`mx-3 h-px flex-1 ${
-                    index < currentStep ? 'bg-primary' : 'bg-muted'
+                  className={`mx-3 h-0.5 flex-1 transition-all ${
+                    index < currentStep ? 'bg-primary' : 'bg-border'
                   }`}
                 />
               )}
@@ -180,57 +232,49 @@ export default function NewBroadcastPage() {
       </div>
 
       {/* Step Content */}
-      <div className="relative min-h-[400px]">
-        <div
-          className="transition-all duration-300 ease-in-out"
-          style={{
-            opacity: isProcessing ? 0.6 : 1,
-            pointerEvents: isProcessing ? 'none' : 'auto',
-          }}
-        >
-          {currentStep === 0 && (
-            <Step1ChooseTemplate
-              selectedTemplate={template}
-              onSelect={setTemplate}
-              onNext={() => setCurrentStep(1)}
-              onBack={() => router.push('/broadcasts')}
-            />
-          )}
-          {currentStep === 1 && (
-            <Step2SelectAudience
-              audience={audience}
-              onUpdate={setAudience}
-              onNext={() => setCurrentStep(2)}
-              onBack={() => setCurrentStep(0)}
-            />
-          )}
-          {currentStep === 2 && template && (
-            <Step3Personalize
-              template={template}
-              variables={variables}
-              onUpdate={setVariables}
-              headerMediaUrl={headerMediaUrl}
-              onHeaderMediaUrlChange={setHeaderMediaUrl}
-              onNext={() => setCurrentStep(3)}
-              onBack={() => setCurrentStep(1)}
-            />
-          )}
-          {currentStep === 3 && template && (
-            <Step4ScheduleSend
-              name={name}
-              onNameChange={setName}
-              template={template}
-              audience={audience}
-              variables={variables}
-              headerMediaUrl={headerMediaUrl}
-              onSend={handleSend}
-              onSaveDraft={handleSaveDraft}
-              onBack={() => setCurrentStep(2)}
-              isProcessing={isProcessing}
-              progress={progress}
-            />
-          )}
-        </div>
+      <div className="rounded-xl border border-border bg-card p-6">
+        {currentStep === 0 && (
+          <Step1ChooseTemplate
+            selectedTemplate={template}
+            onSelect={setTemplate}
+            onNext={() => setCurrentStep(1)}
+          />
+        )}
+        {currentStep === 1 && (
+          <Step2SelectAudience
+            audience={audience}
+            onUpdate={setAudience}
+            onNext={() => setCurrentStep(2)}
+            onBack={() => setCurrentStep(0)}
+          />
+        )}
+        {currentStep === 2 && template && (
+          <Step3Personalize
+            template={template}
+            variables={variables}
+            onUpdate={setVariables}
+            headerMediaUrl={headerMediaUrl}
+            onHeaderMediaUrlChange={setHeaderMediaUrl}
+            onNext={() => setCurrentStep(3)}
+            onBack={() => setCurrentStep(1)}
+          />
+        )}
+        {currentStep === 3 && template && (
+          <Step4ScheduleSend
+            name={name}
+            onNameChange={setName}
+            template={template}
+            audience={audience}
+            variables={variables}
+            headerMediaUrl={headerMediaUrl}
+            onSend={handleSend}
+            onSchedule={handleSchedule}
+            onSaveDraft={handleSaveDraft}
+            onBack={() => setCurrentStep(2)}
+            isProcessing={isProcessing}
+            progress={progress}
+          />
+        )}
       </div>
     </div>
   );

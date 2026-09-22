@@ -70,16 +70,39 @@ export async function POST(req: NextRequest) {
   const periodEnd = new Date(now);
   periodEnd.setDate(periodEnd.getDate() + (billingCycle === 'yearly' ? 365 : 30));
 
-  // 1. Update account
+  const {
+    businessName = '',
+    gstNumber = '',
+    billingAddress = '',
+    billingState = '',
+    taxableAmount,
+    gstAmount,
+    gstRate = 18,
+  } = body;
+
+  const totalPaid = amount ? amount / 100 : 0;
+  const calculatedTaxable = taxableAmount !== undefined ? taxableAmount : Math.round((totalPaid / 1.18) * 100) / 100;
+  const calculatedGst = gstAmount !== undefined ? gstAmount : Math.round((totalPaid - calculatedTaxable) * 100) / 100;
+
+  const invoiceNumber = `INV-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+  // 1. Update account (including GST details if provided)
+  const accountUpdate: Record<string, any> = {
+    plan_id: planId,
+    subscription_status: 'active',
+    current_period_end: periodEnd.toISOString(),
+    trial_ends_at: null,
+    gateway_subscription_id: razorpay_payment_id,
+  };
+
+  if (businessName) accountUpdate.business_name = businessName;
+  if (gstNumber) accountUpdate.gst_number = gstNumber;
+  if (billingAddress) accountUpdate.billing_address = billingAddress;
+  if (billingState) accountUpdate.billing_state = billingState;
+
   await adminSupabase
     .from('accounts')
-    .update({
-      plan_id: planId,
-      subscription_status: 'active',
-      current_period_end: periodEnd.toISOString(),
-      trial_ends_at: null,
-      gateway_subscription_id: razorpay_payment_id,
-    })
+    .update(accountUpdate)
     .eq('id', profile.account_id);
 
   // 2. Record subscription
@@ -98,19 +121,44 @@ export async function POST(req: NextRequest) {
     .select('id')
     .single();
 
-  // 3. Create invoice record
-  await adminSupabase.from('invoices').insert({
+  // 3. Create invoice record with full GST details
+  const invoiceData: Record<string, any> = {
     account_id: profile.account_id,
     subscription_id: sub?.id || null,
-    amount: amount ? amount / 100 : 0,
+    amount: totalPaid,
     currency: 'INR',
     status: 'paid',
     gateway_payment_id: razorpay_payment_id,
     gateway_invoice_id: razorpay_order_id,
-  });
+    invoice_number: invoiceNumber,
+    taxable_amount: calculatedTaxable,
+    gst_rate: gstRate,
+    gst_amount: calculatedGst,
+    business_name: businessName || null,
+    gst_number: gstNumber || null,
+    billing_address: billingAddress || null,
+    billing_state: billingState || null,
+  };
+
+  // Safe insert in case columns are not yet migrated
+  try {
+    await adminSupabase.from('invoices').insert(invoiceData);
+  } catch (invErr) {
+    console.warn('Fallback invoice insert without extended columns:', invErr);
+    await adminSupabase.from('invoices').insert({
+      account_id: profile.account_id,
+      subscription_id: sub?.id || null,
+      amount: totalPaid,
+      currency: 'INR',
+      status: 'paid',
+      gateway_payment_id: razorpay_payment_id,
+      gateway_invoice_id: razorpay_order_id,
+    });
+  }
 
   return NextResponse.json({
     success: true,
+    invoiceNumber,
     message: 'Payment verified and plan activated successfully!',
   });
 }

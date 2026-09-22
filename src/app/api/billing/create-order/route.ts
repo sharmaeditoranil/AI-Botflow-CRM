@@ -74,8 +74,14 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Calculate 18% GST
+  const taxableAmount = price;
+  const gstRate = 18;
+  const gstAmount = Math.round(taxableAmount * (gstRate / 100));
+  const totalAmount = taxableAmount + gstAmount;
+
   // If price is 0 (e.g. Trial or full coupon), activate immediately without Razorpay
-  if (price <= 0) {
+  if (totalAmount <= 0) {
     const periodEnd = new Date();
     periodEnd.setDate(periodEnd.getDate() + (billingCycle === 'yearly' ? 365 : 30));
 
@@ -91,10 +97,12 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  const { gstNumber = '', businessName = '', billingAddress = '', billingState = '' } = body;
+
   const { keyId } = await getRazorpayCredentials();
 
   // Razorpay takes amounts in paise (1 INR = 100 paise)
-  const amountInPaise = Math.round(price * 100);
+  const amountInPaise = Math.round(totalAmount * 100);
 
   const orderRes = await createRazorpayOrder({
     amount: amountInPaise,
@@ -105,6 +113,13 @@ export async function POST(req: NextRequest) {
       userId: user.id,
       planId: plan.id,
       billingCycle,
+      taxableAmount: taxableAmount.toString(),
+      gstAmount: gstAmount.toString(),
+      totalAmount: totalAmount.toString(),
+      gstNumber: gstNumber.slice(0, 20),
+      businessName: businessName.slice(0, 100),
+      billingAddress: billingAddress.slice(0, 200),
+      billingState: billingState.slice(0, 50),
     },
   });
 
@@ -119,5 +134,8 @@ export async function POST(req: NextRequest) {
     keyId,
     planName: plan.name,
     userEmail: user.email,
+    taxableAmount,
+    gstAmount,
+    totalAmount,
   });
 }

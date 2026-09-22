@@ -338,4 +338,108 @@ export async function processFollowupIntelligence(args: {
       console.warn(`[ai-intelligence] Failed to auto-assign tag "${tagName}":`, err);
     }
   }
+
+  // 6. CSAT Survey Response Auto-Handler
+  const ratingMatch = text.match(/^(?:⭐|rating|rate)?\s*([1-5])\s*(?:⭐|stars?|star)?$/i) ||
+                      text.match(/^([1-5])$/);
+
+  if (ratingMatch) {
+    const ratingValue = parseInt(ratingMatch[1], 10);
+    try {
+      // Check if account has CSAT enabled
+      const { data: account } = await db
+        .from('accounts')
+        .select('csat_enabled, google_review_url')
+        .eq('id', accountId)
+        .maybeSingle();
+
+      if (account?.csat_enabled) {
+        // Record CSAT response
+        await db.from('csat_responses').insert({
+          account_id: accountId,
+          contact_id: contactId,
+          conversation_id: conversationId,
+          rating: ratingValue,
+          feedback: text,
+        });
+
+        // Auto-reply based on rating
+        if (ratingValue >= 4 && account.google_review_url) {
+          const reviewMsg =
+            `Thank you so much for the ${'⭐'.repeat(ratingValue)} rating! 🥰 It truly means the world to our team.\n\n` +
+            `Could you please take 30 seconds to support us by leaving a review on Google?\n` +
+            `👉 ${account.google_review_url}\n\n` +
+            `We really appreciate your time and support! 🙏`;
+
+          await db.from('messages').insert({
+            conversation_id: conversationId,
+            sender_type: 'bot',
+            content: reviewMsg,
+            status: 'sent',
+          });
+        } else if (ratingValue <= 3) {
+          const apologyMsg =
+            `Thank you for your honest feedback. 🙏 We're truly sorry that your experience wasn't 5-star quality today.\n\n` +
+            `Our support lead has been notified and will reach out to ensure your concerns are resolved.`;
+
+          await db.from('messages').insert({
+            conversation_id: conversationId,
+            sender_type: 'bot',
+            content: apologyMsg,
+            status: 'sent',
+          });
+        }
+      }
+    } catch (csatErr) {
+      console.warn('[ai-intelligence] CSAT handler notice:', csatErr);
+    }
+  }
+
+  // 7. Auto Pipeline Deal Creation & 2-Way CRM Sync
+  try {
+    const { data: existingDeal } = await db
+      .from('deals')
+      .select('id')
+      .eq('contact_id', contactId)
+      .eq('status', 'active')
+      .maybeSingle();
+
+    if (!existingDeal) {
+      // Find default pipeline and first stage
+      const { data: pipeline } = await db
+        .from('pipelines')
+        .select('id, stages:pipeline_stages(id, position)')
+        .eq('user_id', configOwnerUserId)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (pipeline && pipeline.stages && (pipeline.stages as any[]).length > 0) {
+        const sortedStages = (pipeline.stages as any[]).sort((a, b) => a.position - b.position);
+        const firstStage = sortedStages[0];
+
+        const followUpDate = new Date();
+        followUpDate.setDate(followUpDate.getDate() + (currentStatus === 'hot' ? 1 : 2));
+
+        const dealValue = currentStatus === 'qualified' ? 10000 : currentStatus === 'hot' ? 5000 : 2500;
+
+        await db.from('deals').insert({
+          user_id: configOwnerUserId,
+          pipeline_id: pipeline.id,
+          stage_id: firstStage.id,
+          contact_id: contactId,
+          conversation_id: conversationId,
+          title: `WhatsApp Lead: ${contact.id.slice(0, 8)}`,
+          value: dealValue,
+          currency: 'INR',
+          status: 'active',
+          expected_close_date: followUpDate.toISOString().split('T')[0],
+          notes: `Auto-created from WhatsApp chat. Intent: ${currentStatus.toUpperCase()} (${currentScore} pts).`,
+          ai_followup_enabled: true,
+        });
+      }
+    }
+  } catch (dealErr) {
+    console.warn('[ai-intelligence] Auto pipeline deal creation notice:', dealErr);
+  }
 }

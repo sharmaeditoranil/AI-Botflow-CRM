@@ -49,6 +49,7 @@ interface Step4Props {
   >;
   headerMediaUrl?: string;
   onSend: () => void;
+  onSchedule?: (scheduledDate: Date) => void;
   onSaveDraft?: () => void;
   onBack: () => void;
   isProcessing: boolean;
@@ -63,6 +64,7 @@ export function Step4ScheduleSend({
   variables = {},
   headerMediaUrl,
   onSend,
+  onSchedule,
   onSaveDraft,
   onBack,
   isProcessing,
@@ -72,6 +74,15 @@ export function Step4ScheduleSend({
   const [showConfirm, setShowConfirm] = useState(false);
   const [estimatedReach, setEstimatedReach] = useState<number>(0);
   const [loadingReach, setLoadingReach] = useState(true);
+
+  // Scheduling options
+  const [sendMode, setSendMode] = useState<'now' | 'schedule'>('now');
+  const [scheduleDate, setScheduleDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  });
+  const [scheduleTime, setScheduleTime] = useState('10:00');
 
   useEffect(() => {
     async function calculateReach() {
@@ -271,6 +282,93 @@ export function Step4ScheduleSend({
         )}
       </div>
 
+      {/* Delivery Schedule Options */}
+      <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <Calendar className="h-4 w-4 text-primary" />
+          <h3 className="text-sm font-semibold text-foreground">Delivery Schedule</h3>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => setSendMode('now')}
+            className={`flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all ${
+              sendMode === 'now'
+                ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                : 'border-border bg-muted/40 hover:bg-muted/70'
+            }`}
+          >
+            <div className={`mt-0.5 flex h-4 w-4 rounded-full border items-center justify-center ${sendMode === 'now' ? 'border-primary' : 'border-muted-foreground'}`}>
+              {sendMode === 'now' && <div className="h-2 w-2 rounded-full bg-primary" />}
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-foreground">Send Immediately</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Broadcast starts sending right now to all {estimatedReach} recipients.
+              </p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSendMode('schedule')}
+            className={`flex items-start gap-3 p-3.5 rounded-xl border text-left transition-all ${
+              sendMode === 'schedule'
+                ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                : 'border-border bg-muted/40 hover:bg-muted/70'
+            }`}
+          >
+            <div className={`mt-0.5 flex h-4 w-4 rounded-full border items-center justify-center ${sendMode === 'schedule' ? 'border-primary' : 'border-muted-foreground'}`}>
+              {sendMode === 'schedule' && <div className="h-2 w-2 rounded-full bg-primary" />}
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-foreground">Schedule for Later</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Set a future date and time for automatic delivery.
+              </p>
+            </div>
+          </button>
+        </div>
+
+        {sendMode === 'schedule' && (
+          <div className="p-4 rounded-xl border border-primary/20 bg-primary/[0.03] space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-medium text-foreground block mb-1">
+                  Select Date
+                </label>
+                <Input
+                  type="date"
+                  min={new Date().toISOString().split('T')[0]}
+                  value={scheduleDate}
+                  onChange={(e) => setScheduleDate(e.target.value)}
+                  className="text-xs bg-card border-border h-9"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-foreground block mb-1">
+                  Select Time
+                </label>
+                <Input
+                  type="time"
+                  value={scheduleTime}
+                  onChange={(e) => setScheduleTime(e.target.value)}
+                  className="text-xs bg-card border-border h-9"
+                />
+              </div>
+            </div>
+            <p className="text-[11px] text-primary font-medium flex items-center gap-1.5">
+              <Sparkles className="h-3 w-3" />
+              Will be scheduled for: {new Date(`${scheduleDate}T${scheduleTime}`).toLocaleString('en-IN', {
+                dateStyle: 'full',
+                timeStyle: 'short',
+              })}
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* Processing overlay */}
       {isProcessing && (
         <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
@@ -314,73 +412,87 @@ export function Step4ScheduleSend({
             </Button>
           )}
 
-          <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
-            <DialogTrigger
-              render={
-                <Button
-                  disabled={!name.trim() || isProcessing}
-                  className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 shadow-md"
-                />
-              }
+          {sendMode === 'schedule' ? (
+            <Button
+              onClick={() => {
+                const target = new Date(`${scheduleDate}T${scheduleTime}`);
+                onSchedule?.(target);
+              }}
+              disabled={!name.trim() || isProcessing}
+              className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-md gap-1.5"
             >
-              <Send className="h-4 w-4" />
-              {t('scheduleSend.sendNow')}
-            </DialogTrigger>
-            <DialogContent className="border-border bg-popover sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle className="text-popover-foreground">{t('scheduleSend.confirmTitle')}</DialogTitle>
-                <DialogDescription className="text-muted-foreground">
-                  {t.rich('scheduleSend.confirmDesc', {
-                    count: estimatedReach,
-                    template: template.name,
-                    b: (chunks) => (
-                      <span className="font-medium text-popover-foreground">{chunks}</span>
-                    ),
-                  })}
-                </DialogDescription>
-              </DialogHeader>
+              <Calendar className="h-4 w-4" />
+              Schedule Broadcast
+            </Button>
+          ) : (
+            <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
+              <DialogTrigger
+                render={
+                  <Button
+                    disabled={!name.trim() || isProcessing}
+                    className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 shadow-md"
+                  />
+                }
+              >
+                <Send className="h-4 w-4" />
+                {t('scheduleSend.sendNow')}
+              </DialogTrigger>
+              <DialogContent className="border-border bg-popover sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="text-popover-foreground">{t('scheduleSend.confirmTitle')}</DialogTitle>
+                  <DialogDescription className="text-muted-foreground">
+                    {t.rich('scheduleSend.confirmDesc', {
+                      count: estimatedReach,
+                      template: template.name,
+                      b: (chunks) => (
+                        <span className="font-medium text-popover-foreground">{chunks}</span>
+                      ),
+                    })}
+                  </DialogDescription>
+                </DialogHeader>
 
-              {/* Extra check details in confirm modal */}
-              <div className="my-2 p-3 rounded-lg border border-border bg-card/60 text-xs space-y-1.5">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Broadcast Name:</span>
-                  <span className="font-medium text-foreground">{name}</span>
+                {/* Extra check details in confirm modal */}
+                <div className="my-2 p-3 rounded-lg border border-border bg-card/60 text-xs space-y-1.5">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Broadcast Name:</span>
+                    <span className="font-medium text-foreground">{name}</span>
+                  </div>
+                  {headerMediaUrl && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Header Media:</span>
+                      <span className="font-medium text-emerald-400">Attached ({template.header_type})</span>
+                    </div>
+                  )}
+                  {uniqueVars.length > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Variables:</span>
+                      <span className="font-medium text-foreground">{uniqueVars.length} mapped</span>
+                    </div>
+                  )}
                 </div>
-                {headerMediaUrl && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Header Media:</span>
-                    <span className="font-medium text-emerald-400">Attached ({template.header_type})</span>
-                  </div>
-                )}
-                {uniqueVars.length > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Variables:</span>
-                    <span className="font-medium text-foreground">{uniqueVars.length} mapped</span>
-                  </div>
-                )}
-              </div>
 
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowConfirm(false)}
-                  className="border-border text-muted-foreground"
-                >
-                  {t('cancel')}
-                </Button>
-                <Button
-                  onClick={() => {
-                    setShowConfirm(false);
-                    onSend();
-                  }}
-                  className="bg-primary text-primary-foreground hover:bg-primary/90"
-                >
-                  <Send className="h-4 w-4" />
-                  {t('scheduleSend.sendNow')}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowConfirm(false)}
+                    className="border-border text-muted-foreground"
+                  >
+                    {t('cancel')}
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setShowConfirm(false);
+                      onSend();
+                    }}
+                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                  >
+                    <Send className="h-4 w-4" />
+                    {t('scheduleSend.sendNow')}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
       </div>
     </div>

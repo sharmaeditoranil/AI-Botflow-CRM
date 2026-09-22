@@ -138,6 +138,9 @@ export function ImportModal({
   const [tagColorByKey, setTagColorByKey] = useState<Map<string, string>>(
     new Map()
   );
+  const [availableTags, setAvailableTags] = useState<{ id: string; name: string; color: string }[]>([]);
+  const [selectedImportTag, setSelectedImportTag] = useState('');
+  const [customNewTag, setCustomNewTag] = useState('');
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<{
     imported: number;
@@ -148,12 +151,27 @@ export function ImportModal({
     tagsAssigned: number;
   } | null>(null);
 
+  // Fetch account tags on modal open
+  useEffect(() => {
+    if (open && accountId) {
+      supabase
+        .from('tags')
+        .select('id, name, color')
+        .eq('account_id', accountId)
+        .then(({ data }) => {
+          if (data) setAvailableTags(data);
+        });
+    }
+  }, [open, accountId]);
+
   function reset() {
     setFile(null);
     setParsedRows([]);
     setHasTagsColumn(false);
     setHasCompanyColumn(false);
     setTagColorByKey(new Map());
+    setSelectedImportTag('');
+    setCustomNewTag('');
     setResult(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }
@@ -258,6 +276,16 @@ export function ImportModal({
         }
         return true;
       });
+
+      // Apply the user-selected tag (if any) to every genuinely new contact being imported
+      const targetTag = customNewTag.trim() || selectedImportTag.trim();
+      if (targetTag) {
+        toInsert.forEach((row) => {
+          if (!row.tagNames.some((t) => t.toLowerCase() === targetTag.toLowerCase())) {
+            row.tagNames.push(targetTag);
+          }
+        });
+      }
 
       // 3) Resolve tag names → ids (admin+ may auto-create missing tags).
       //    Skip the round-trip when the import carries no tag names.
@@ -493,10 +521,57 @@ export function ImportModal({
             )}
           </div>
 
+          {/* Tag Selection for Import */}
+          <div className="rounded-xl border border-border bg-card/60 p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                <Tag className="h-3.5 w-3.5 text-primary" />
+                <span>Assign Tag to Imported Contacts</span>
+              </div>
+              <span className="text-[10px] text-muted-foreground">Select or create a tag</span>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center gap-2">
+              <select
+                value={selectedImportTag}
+                onChange={(e) => {
+                  setSelectedImportTag(e.target.value);
+                  if (e.target.value) setCustomNewTag('');
+                }}
+                className="w-full sm:flex-1 h-8 rounded-lg border border-border bg-muted/40 px-2.5 text-xs text-foreground outline-none focus:border-primary"
+              >
+                <option value="">-- Choose Existing Tag --</option>
+                {availableTags.map((t) => (
+                  <option key={t.id} value={t.name}>
+                    🏷️ {t.name}
+                  </option>
+                ))}
+              </select>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <span className="text-[11px] text-muted-foreground hidden sm:inline">or</span>
+                <input
+                  type="text"
+                  placeholder="Type new tag name..."
+                  value={customNewTag}
+                  onChange={(e) => {
+                    setCustomNewTag(e.target.value);
+                    if (e.target.value) setSelectedImportTag('');
+                  }}
+                  className="w-full sm:w-44 h-8 px-2.5 rounded-lg border border-border bg-muted/40 text-xs text-foreground outline-none focus:border-primary"
+                />
+              </div>
+            </div>
+            {(selectedImportTag || customNewTag) && (
+              <p className="text-[11px] text-emerald-500 font-medium flex items-center gap-1">
+                ✓ All imported contacts will automatically get tag: <strong className="underline font-bold">{customNewTag || selectedImportTag}</strong>
+              </p>
+            )}
+          </div>
+
           <input
             ref={fileInputRef}
             type="file"
-            accept=".csv,text/csv"
+            accept=".csv,.txt,.tsv,.xlsx,.xls,text/csv,text/tab-separated-values,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
             onChange={handleFileChange}
             className="hidden"
           />

@@ -21,6 +21,9 @@ import {
   Zap,
   Target,
   ThumbsUp,
+  Star,
+  Bot,
+  Calendar,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -28,6 +31,7 @@ import { format } from "date-fns";
 import { useTranslations } from "next-intl";
 import { contactHandle } from "@/lib/whatsapp/wa-identity";
 import { ContactTagBar } from "./contact-tag-bar";
+import { toast } from "sonner";
 
 interface ContactSidebarProps {
   contact: Contact | null;
@@ -132,10 +136,112 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
 
     if (!error && data) {
       setNotes((prev) => [data, ...prev]);
+      const addedText = newNote.trim();
       setNewNote("");
+
+      // 2-Way Sync: Append note to active CRM Pipeline Deal
+      if (deals.length > 0) {
+        const activeDeal = deals[0];
+        const updatedDealNotes = ((activeDeal as any).notes || "") + `\n[Note ${new Date().toLocaleDateString()}]: ${addedText}`;
+        supabase
+          .from("deals")
+          .update({ notes: updatedDealNotes })
+          .eq("id", activeDeal.id)
+          .then();
+      }
     }
     setAddingNote(false);
-  }, [contact, newNote, accountId]);
+  }, [contact, newNote, accountId, deals]);
+
+  const handleSendCsat = async () => {
+    if (!contact) return;
+    try {
+      toast.info("Sending CSAT Survey to customer...");
+      const res = await fetch("/api/csat/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contactId: contact.id }),
+      });
+      if (res.ok) {
+        toast.success("1-5 Star CSAT Survey sent to WhatsApp!");
+      } else {
+        toast.error("Failed to send survey.");
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Error sending CSAT");
+    }
+  };
+
+  const handleCreateDeal = async () => {
+    if (!contact || !accountId) return;
+    const supabase = createClient();
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const user = session?.user;
+      if (!user) return;
+
+      const { data: pipeline } = await supabase
+        .from("pipelines")
+        .select("id, stages:pipeline_stages(id, position)")
+        .eq("user_id", user.id)
+        .limit(1)
+        .maybeSingle();
+
+      if (!pipeline || !pipeline.stages || (pipeline.stages as any[]).length === 0) {
+        toast.error("Please configure a pipeline first under Pipelines.");
+        return;
+      }
+
+      const firstStage = (pipeline.stages as any[]).sort((a, b) => a.position - b.position)[0];
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      const { error } = await supabase.from("deals").insert({
+        user_id: user.id,
+        pipeline_id: pipeline.id,
+        stage_id: firstStage.id,
+        contact_id: contact.id,
+        title: `Deal: ${contact.name || contact.phone || "Customer"}`,
+        value: 5000,
+        currency: "INR",
+        status: "active",
+        expected_close_date: tomorrow.toISOString().split("T")[0],
+        notes: "Created from Inbox chat.",
+        ai_followup_enabled: true,
+      });
+
+      if (!error) {
+        toast.success("New deal created in Pipeline!");
+        fetchContactData();
+      } else {
+        toast.error(error.message);
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error creating deal");
+    }
+  };
+
+  const handleTriggerAiFollowup = async (dealId: string) => {
+    try {
+      toast.info("AI is crafting and sending follow-up message...");
+      const res = await fetch("/api/crm/ai-followup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dealId }),
+      });
+      const data = await res.json();
+      if (res.ok && data.processed > 0) {
+        toast.success("AI Follow-up message sent on WhatsApp!");
+        fetchContactData();
+      } else {
+        toast.info("Follow-up checked.");
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Error triggering AI follow-up");
+    }
+  };
 
   if (!contact) {
     return (
@@ -269,32 +375,71 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
           {/* Divider */}
           <div className="my-4 border-t border-border" />
 
-          {/* Active Deals */}
+          {/* Quick CSAT Survey Trigger */}
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
+                Customer Satisfaction
+              </span>
+              <span className="text-[10px] text-muted-foreground">Google Review</span>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleSendCsat}
+              className="w-full h-8 text-xs gap-1.5 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
+            >
+              <Star className="h-3 w-3 fill-amber-500" />
+              Send 1-5 ⭐ CSAT Survey
+            </Button>
+          </div>
+
+          {/* Divider */}
+          <div className="my-4 border-t border-border" />
+
+          {/* Active Deals / CRM Pipeline Sync */}
           <div>
-            <div className="flex items-center gap-2 px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              <DollarSign className="h-3 w-3" />
-              {tSidebar("deals")}
+            <div className="flex items-center justify-between px-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              <span className="flex items-center gap-2">
+                <DollarSign className="h-3 w-3" />
+                {tSidebar("deals")}
+              </span>
+              <button
+                type="button"
+                onClick={handleCreateDeal}
+                className="text-[11px] text-primary hover:underline flex items-center gap-1 lowercase font-normal"
+              >
+                <Plus className="h-3 w-3" /> Add Deal
+              </button>
             </div>
             <div className="mt-2 space-y-2">
               {deals.length === 0 ? (
-                <p className="px-1 text-xs text-muted-foreground">{tSidebar("noDeals")}</p>
+                <div className="rounded-lg border border-dashed border-border p-3 text-center space-y-2">
+                  <p className="text-xs text-muted-foreground">{tSidebar("noDeals")}</p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleCreateDeal}
+                    className="text-xs h-7 gap-1 border-primary/30 text-primary hover:bg-primary/10"
+                  >
+                    <Plus className="h-3 w-3" />
+                    + Add to Pipeline
+                  </Button>
+                </div>
               ) : (
                 deals.map((deal) => (
                   <div
                     key={deal.id}
-                    className="rounded-lg bg-muted px-3 py-2"
+                    className="rounded-lg bg-muted px-3 py-2 space-y-1.5 border border-border/60"
                   >
-                    <p className="text-sm font-medium text-foreground">
-                      {deal.title}
-                    </p>
-                    <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
-                      <span>
-                        {deal.currency ?? "$"}
-                        {deal.value.toLocaleString()}
-                      </span>
+                    <div className="flex items-start justify-between gap-1">
+                      <p className="text-xs font-bold text-foreground truncate">
+                        {deal.title}
+                      </p>
                       {deal.stage && (
                         <span
-                          className="rounded-full px-1.5 py-0.5 text-[10px]"
+                          className="rounded-full px-1.5 py-0.5 text-[10px] font-semibold shrink-0"
                           style={{
                             backgroundColor: `${deal.stage.color}20`,
                             color: deal.stage.color,
@@ -303,6 +448,32 @@ export function ContactSidebar({ contact }: ContactSidebarProps) {
                           {deal.stage.name}
                         </span>
                       )}
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span className="font-semibold text-foreground">
+                        {deal.currency ?? "₹"}
+                        {deal.value.toLocaleString('en-IN')}
+                      </span>
+                      {deal.expected_close_date && (
+                        <span className="text-[10px] flex items-center gap-1 text-muted-foreground">
+                          <Calendar className="h-3 w-3 text-primary" />
+                          Follow-up: {new Date(deal.expected_close_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* AI Follow-up action */}
+                    <div className="pt-1 border-t border-border/50 flex justify-end">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleTriggerAiFollowup(deal.id)}
+                        className="h-6 px-2 text-[10px] text-purple-500 hover:text-purple-400 hover:bg-purple-500/10 gap-1"
+                        title="Send AI personalized follow-up message to this customer now"
+                      >
+                        <Bot className="h-3 w-3" />
+                        Send AI Follow-up Now
+                      </Button>
                     </div>
                   </div>
                 ))

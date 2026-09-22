@@ -74,6 +74,12 @@ export function useBrowserNotifications(): void {
   const seenRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch((err) => {
+        console.warn('[PWA] Service worker registration notice:', err);
+      });
+    }
+
     if (!enabled) return;
     if (getNotificationPermission() === "unsupported") return;
 
@@ -100,12 +106,24 @@ export function useBrowserNotifications(): void {
       );
 
       try {
+        if ('serviceWorker' in navigator) {
+          const reg = await navigator.serviceWorker.ready;
+          if (reg && 'showNotification' in reg) {
+            await reg.showNotification(title, {
+              body,
+              tag: msg.conversation_id,
+              icon: "/brand/app-icon-192.png",
+              badge: "/brand/app-icon-64.png",
+              data: { url: conversationHref(msg.conversation_id) },
+            });
+            return;
+          }
+        }
+
         const notification = new Notification(title, {
           body,
-          // One alert per conversation: a second message from the same
-          // customer replaces the first instead of stacking.
           tag: msg.conversation_id,
-          icon: "/icon",
+          icon: "/brand/app-icon-192.png",
         });
         notification.onclick = () => {
           window.focus();
@@ -113,8 +131,7 @@ export function useBrowserNotifications(): void {
           notification.close();
         };
       } catch (err) {
-        // Some browsers throw from the constructor (e.g. Android Chrome
-        // requires a service worker). Non-fatal.
+        // Fallback for non-compliant browser environments
         console.error("[useBrowserNotifications] failed to show:", err);
       }
     };

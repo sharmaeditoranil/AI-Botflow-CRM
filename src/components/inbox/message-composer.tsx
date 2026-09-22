@@ -22,6 +22,8 @@ import {
   Plus,
   MessageSquareDashed,
   Zap,
+  CreditCard,
+  ShoppingBag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GatedButton } from "@/components/ui/gated-button";
@@ -56,6 +58,8 @@ import {
 import { validateInteractivePayload } from "@/lib/whatsapp/interactive";
 import type { InteractiveMessagePayload, QuickReply } from "@/types";
 import { QuickReplyPicker } from "./quick-reply-picker";
+import { PaymentLinkModal } from "./payment-link-modal";
+import { ProductCatalogModal } from "./product-catalog-modal";
 
 /** Media content types an agent can send from the composer. */
 export type ComposerMediaKind = "image" | "video" | "document" | "audio";
@@ -157,6 +161,8 @@ export function MessageComposer({
     useState<InteractiveMessagePayload>(blankButtonsPayload);
   const [savingQuickReply, setSavingQuickReply] = useState(false);
   const [quickReplyOpen, setQuickReplyOpen] = useState(false);
+  const [paymentLinkOpen, setPaymentLinkOpen] = useState(false);
+  const [catalogOpen, setCatalogOpen] = useState(false);
 
   // Media attachment state. `draft` holds an uploaded-but-not-yet-sent
   // attachment; `busy` covers the upload/transcode window.
@@ -693,6 +699,14 @@ export function MessageComposer({
                   <Zap className="mr-2 h-4 w-4 text-amber-400" />
                   {t("quickReplies")}
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setPaymentLinkOpen(true)}>
+                  <CreditCard className="mr-2 h-4 w-4 text-emerald-400" />
+                  Send Payment Link
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setCatalogOpen(true)}>
+                  <ShoppingBag className="mr-2 h-4 w-4 text-purple-400" />
+                  Send Catalog Product
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={onOpenTemplates}>
                   <LayoutTemplate className="mr-2 h-4 w-4 text-purple-400" />
                   {t("sendTemplate")}
@@ -790,6 +804,31 @@ export function MessageComposer({
         open={quickReplyOpen}
         onOpenChange={setQuickReplyOpen}
         onPick={handlePickQuickReply}
+      />
+
+      {/* Payment Link generator modal */}
+      <PaymentLinkModal
+        open={paymentLinkOpen}
+        onOpenChange={setPaymentLinkOpen}
+        onSendLink={(msg) => onSend(msg)}
+      />
+
+      {/* WhatsApp Product Catalog modal */}
+      <ProductCatalogModal
+        open={catalogOpen}
+        onOpenChange={setCatalogOpen}
+        onSendProduct={(msg, imgUrl) => {
+          if (imgUrl) {
+            onSendMedia({
+              kind: "image",
+              mediaUrl: imgUrl,
+              path: "",
+              caption: msg,
+            });
+          } else {
+            onSend(msg);
+          }
+        }}
       />
     </div>
   );
