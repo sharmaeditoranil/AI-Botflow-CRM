@@ -42,7 +42,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     { href: '/super-admin', label: 'Overview', icon: Sliders, exact: true },
     { href: '/super-admin/tenants', label: 'Tenants / Customers', icon: Users },
     { href: '/super-admin/plans', label: 'Plans & Limits', icon: CreditCard },
-    { href: '/super-admin/settings', label: 'Gateway & Meta Settings', icon: Settings },
+    { href: '/super-admin/settings', label: 'Gateway, Wallet & Rates', icon: Settings },
   ];
 
   return (
