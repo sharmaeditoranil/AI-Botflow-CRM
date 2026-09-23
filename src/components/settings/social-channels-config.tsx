@@ -23,6 +23,8 @@ import {
   ChevronDown,
   ChevronUp,
   AlertCircle,
+  RefreshCw,
+  UserCheck,
 } from "lucide-react";
 import {
   MessengerIcon,
@@ -47,6 +49,7 @@ export function SocialChannelsConfig() {
   const [showManualConfig, setShowManualConfig] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [metaAppConfigured, setMetaAppConfigured] = useState<boolean | null>(null);
+  const [repairingContacts, setRepairingContacts] = useState(false);
 
   // Form states
   const [fbPageId, setFbPageId] = useState("");
@@ -173,6 +176,34 @@ export function SocialChannelsConfig() {
       toast.error(msg);
     } finally {
       setSwitchingPage(false);
+    }
+  };
+
+  const handleRepairContacts = async () => {
+    try {
+      setRepairingContacts(true);
+      const res = await fetch("/api/meta/social/repair-contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Contact repair failed");
+      }
+      if (data.fixed > 0) {
+        toast.success(`✅ ${data.fixed} contact(s) ka naam update ho gaya!`);
+      } else {
+        toast.info("Koi generic naam wala contact nahi mila, ya Meta API se naam nahi aaya.");
+      }
+      if (data.failed > 0) {
+        toast.warning(`⚠️ ${data.failed} contact(s) update nahi ho sake. Token ya Meta API permissions check karein.`);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Contact repair failed";
+      toast.error(msg);
+    } finally {
+      setRepairingContacts(false);
     }
   };
 
@@ -385,6 +416,38 @@ export function SocialChannelsConfig() {
           </Badge>
         </div>
       </div>
+
+      {/* Fix Contact Names Card */}
+      {(fbConnected || igConnected) && (
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-500">
+              <UserCheck className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-foreground">Contact Names Fix करें</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Agar inbox mein &ldquo;Facebook User&rdquo; / &ldquo;Instagram User&rdquo; dikh raha hai to yeh button dabayein — Meta API se asli naam fetch ho jayenge.
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleRepairContacts}
+            disabled={repairingContacts}
+            className="shrink-0 gap-2 border-amber-500/30 hover:bg-amber-500/10 hover:text-amber-600 text-amber-700 dark:text-amber-400"
+          >
+            {repairingContacts ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+            {repairingContacts ? "Fix ho raha hai..." : "Fix Contact Names"}
+          </Button>
+        </div>
+      )}
 
       {/* Webhook Configuration Card */}
       <Card className="border-border bg-card shadow-2xs">
