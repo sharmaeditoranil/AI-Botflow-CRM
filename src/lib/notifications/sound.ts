@@ -2,9 +2,11 @@
  * Web Audio API based notification sound player.
  * Generates a clean, pleasant, WhatsApp-style incoming message chime
  * without requiring any external mp3 asset downloads.
+ * Supports Desktop, Mobile Browsers (Chrome, Safari, PWA), and Android App Bridge.
  */
 
 import { useSyncExternalStore } from 'react';
+import { playMobileNotificationSound } from '@/lib/mobile-notify';
 
 export const NOTIFICATION_SOUND_STORAGE_KEY = 'wacrm:notification-sound';
 export const NOTIFICATION_SOUND_CHANGE_EVENT = 'wacrm:notification-sound-change';
@@ -75,7 +77,7 @@ export function getAudioContext(): AudioContext | null {
   }
 }
 
-// Automatically unlock the AudioContext on the first user interaction (click, keydown, tap)
+// Automatically unlock the AudioContext on the first user interaction (click, keydown, touch)
 if (typeof window !== 'undefined') {
   const unlockAudio = () => {
     try {
@@ -92,12 +94,24 @@ if (typeof window !== 'undefined') {
   window.addEventListener('touchstart', unlockAudio, { passive: true, once: true });
 }
 
+let lastPlayedAt = 0;
+
 /**
  * Plays a pleasant 2-tone chime (WhatsApp/Slack-like friendly ring) for incoming messages.
+ * Also triggers native mobile notification sound if running in Android app wrapper.
  */
 export function playNotificationSound(): void {
   if (!isNotificationSoundEnabled()) return;
 
+  const nowTs = Date.now();
+  // Prevent double sound if triggered simultaneously from multiple hooks
+  if (nowTs - lastPlayedAt < 400) return;
+  lastPlayedAt = nowTs;
+
+  // 1. Android App Bridge (native notification tone on Android APK / WebView)
+  playMobileNotificationSound();
+
+  // 2. Web Audio API (works on Mobile Chrome, Mobile Safari, Desktop, and PWA)
   try {
     const ctx = getAudioContext();
     if (!ctx) return;

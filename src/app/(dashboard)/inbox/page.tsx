@@ -16,8 +16,8 @@ import { ContactSidebar } from "@/components/inbox/contact-sidebar";
 import { WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDashboardShell } from "../dashboard-shell";
-import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
-import { triggerMobileNotification, playMobileNotificationSound } from "@/lib/mobile-notify";
+import { triggerMobileNotification } from "@/lib/mobile-notify";
+import { playNotificationSound } from "@/lib/notifications/sound";
 
 // Remembers the agent's show/hide choice for the desktop contact panel
 // across reloads and sessions (device-scoped, like the theme prefs).
@@ -243,8 +243,8 @@ function InboxPageInner() {
           (newMsg as unknown as { direction?: string }).direction === "inbound" ||
           (newMsg as unknown as { sender_type?: string }).sender_type !== "agent";
         if (isInbound) {
-          // Play sound immediately
-          playMobileNotificationSound();
+          // Play sound chime immediately
+          playNotificationSound();
           // Show push notification when app is not the focused conversation
           const isCurrentConv = activeConversation?.id === newMsg.conversation_id;
           if (!isCurrentConv || document.visibilityState !== "visible") {
