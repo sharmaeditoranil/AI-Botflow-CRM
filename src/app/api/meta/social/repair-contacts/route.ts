@@ -177,6 +177,66 @@ export async function POST(request: Request) {
           }
         }
       }
+
+      // 4. Fallback: For any social contacts that still have generic or missing names, try direct Graph API query
+      try {
+        const { data: genericContacts } = await supabase
+          .from('contacts')
+          .select('id, name, fb_user_id, ig_user_id')
+          .eq('account_id', acctId)
+          .or('name.eq.Facebook User,name.eq.Instagram User,name.ilike.FB: %,name.ilike.IG: %,name.is.null')
+          .limit(30);
+
+        if (genericContacts && genericContacts.length > 0) {
+          for (const gc of genericContacts) {
+            if (gc.ig_user_id && !idToNameMap.has(gc.ig_user_id)) {
+              try {
+                const igRes = await fetch(
+                  `https://graph.facebook.com/v21.0/${encodeURIComponent(gc.ig_user_id)}?fields=name,username,profile_pic&access_token=${encodeURIComponent(token)}`
+                );
+                if (igRes.ok) {
+                  const igData = await igRes.json();
+                  const foundName = igData.name?.trim() || (igData.username ? `@${igData.username.trim()}` : null);
+                  if (foundName) {
+                    await supabase.from('contacts').update({
+                      name: foundName,
+                      avatar_url: igData.profile_pic || undefined,
+                      updated_at: new Date().toISOString(),
+                    }).eq('id', gc.id);
+                    totalFixed++;
+                  }
+                }
+              } catch (igErr) {
+                console.warn('[repair-contacts] Direct IG lookup error:', igErr);
+              }
+            }
+
+            if (gc.fb_user_id && !idToNameMap.has(gc.fb_user_id)) {
+              try {
+                const fbRes = await fetch(
+                  `https://graph.facebook.com/v21.0/${encodeURIComponent(gc.fb_user_id)}?fields=name,first_name,last_name,profile_pic&access_token=${encodeURIComponent(token)}`
+                );
+                if (fbRes.ok) {
+                  const fbData = await fbRes.json();
+                  const foundName = (fbData.name || [fbData.first_name, fbData.last_name].filter(Boolean).join(' ')).trim();
+                  if (foundName) {
+                    await supabase.from('contacts').update({
+                      name: foundName,
+                      avatar_url: fbData.profile_pic || undefined,
+                      updated_at: new Date().toISOString(),
+                    }).eq('id', gc.id);
+                    totalFixed++;
+                  }
+                }
+              } catch (fbErr) {
+                console.warn('[repair-contacts] Direct FB lookup error:', fbErr);
+              }
+            }
+          }
+        }
+      } catch (directErr) {
+        console.warn('[repair-contacts] Direct profile lookup loop error:', directErr);
+      }
     }
 
     return NextResponse.json({

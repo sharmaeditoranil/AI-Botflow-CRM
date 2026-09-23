@@ -63,6 +63,7 @@ export async function GET(req: NextRequest) {
     oauthUrl.searchParams.set('scope', scope);
     oauthUrl.searchParams.set('response_type', 'code');
     oauthUrl.searchParams.set('auth_type', 'rerequest');
+    oauthUrl.searchParams.set('return_scopes', 'true');
 
     return NextResponse.json({
       configured: true,

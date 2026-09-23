@@ -125,7 +125,6 @@ export async function DELETE(request: Request) {
         instagram_account_id: null,
         instagram_username: null,
         instagram_status: 'disconnected',
-        metadata: {},
       };
     } else if (channel === 'instagram') {
       updatePayload = {

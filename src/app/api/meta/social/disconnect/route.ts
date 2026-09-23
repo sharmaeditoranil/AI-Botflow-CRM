@@ -56,7 +56,6 @@ export async function POST(request: Request) {
         instagram_account_id: null,
         instagram_username: null,
         instagram_status: 'disconnected',
-        metadata: {},
       };
     } else if (channel === 'facebook') {
       // Disconnecting Facebook also disconnects Instagram (since IG relies on FB Page token)

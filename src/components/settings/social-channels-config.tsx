@@ -413,6 +413,16 @@ export function SocialChannelsConfig() {
             </span>
           </div>
 
+          <div className="rounded-xl border border-blue-500/25 bg-blue-500/5 p-3 text-xs text-blue-900 dark:text-blue-200 space-y-1">
+            <p className="font-semibold flex items-center gap-1.5 text-foreground text-xs">
+              <Info className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+              Customer ke asli naam dekhne ke liye zaroori tip:
+            </p>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Jab Facebook ka popup khule, agar <strong>&ldquo;Continue as...&rdquo;</strong> dikhe to <strong>&ldquo;Edit settings&rdquo;</strong> ya <strong>&ldquo;Choose what you allow&rdquo;</strong> par click karke <strong>All Pages aur All Instagram accounts</strong> tick karein. Isse Meta inbox me real names aur usernames access karne ki permission de deta hai.
+            </p>
+          </div>
+
           {availablePages.length > 1 && (
             <div className="pt-3 border-t border-border/40 flex flex-wrap items-center gap-3">
               <Label className="text-xs text-muted-foreground whitespace-nowrap">Switch Active Facebook Page:</Label>
