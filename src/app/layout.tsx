@@ -81,16 +81,17 @@ export const metadata: Metadata = {
     description: "Scale your sales with autonomous AI agents, WhatsApp broadcasts, and direct Meta Cloud API integration.",
     images: ["/brand/logo-512.png"],
   },
+  manifest: "/manifest.webmanifest",
   icons: {
     icon: [
-      { url: "/brand/logo-32.png", sizes: "32x32", type: "image/png" },
-      { url: "/brand/logo-192.png", sizes: "192x192", type: "image/png" },
-      { url: "/brand/logo-512.png", sizes: "512x512", type: "image/png" },
-      { url: "/icon" },
+      { url: "/brand/logo-32.png?v=6", sizes: "32x32", type: "image/png" },
+      { url: "/brand/logo-192.png?v=6", sizes: "192x192", type: "image/png" },
+      { url: "/brand/logo-512.png?v=6", sizes: "512x512", type: "image/png" },
+      { url: "/icon?v=6" },
     ],
-    shortcut: "/favicon.ico",
+    shortcut: "/favicon.ico?v=6",
     apple: [
-      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+      { url: "/apple-touch-icon.png?v=6", sizes: "180x180", type: "image/png" },
     ],
   },
   formatDetection: {
