@@ -16,6 +16,7 @@ import { ContactSidebar } from "@/components/inbox/contact-sidebar";
 import { WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDashboardShell } from "../dashboard-shell";
+import { MobileBottomNav } from "@/components/layout/mobile-bottom-nav";
 import { triggerMobileNotification } from "@/lib/mobile-notify";
 import { playNotificationSound } from "@/lib/notifications/sound";
 
