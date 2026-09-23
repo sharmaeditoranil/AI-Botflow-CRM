@@ -88,15 +88,52 @@ export async function dispatchInboundToAiReply(
 
     const { data: conv, error: convErr } = await db
       .from('conversations')
-      .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count, channel')
+      .select('assigned_agent_id, ai_autoreply_disabled, ai_reply_count, channel, updated_at')
       .eq('id', conversationId)
       .maybeSingle()
     if (convErr || !conv) return
     if (conv.assigned_agent_id) return // a human owns this thread
     if (conv.ai_autoreply_disabled) return // handed off / turned off here
+
+    // 24-Hour Auto-Reset:
+    // If the conversation already has replies, check if the last AI reply was sent >= 24 hours ago.
+    // If so, reset the reply count to 0 so the customer gets a fresh quota for the new session.
+    let currentReplyCount = conv.ai_reply_count ?? 0
+    if (currentReplyCount > 0) {
+      const { data: lastAiMsg } = await db
+        .from('messages')
+        .select('created_at')
+        .eq('conversation_id', conversationId)
+        .eq('ai_generated', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      let lastAiTimestamp: number | null = null
+      if (lastAiMsg?.created_at) {
+        lastAiTimestamp = new Date(lastAiMsg.created_at).getTime()
+      } else if (conv.updated_at) {
+        lastAiTimestamp = new Date(conv.updated_at).getTime()
+      }
+
+      if (lastAiTimestamp) {
+        const hoursPassed = (Date.now() - lastAiTimestamp) / (1000 * 60 * 60)
+        if (hoursPassed >= 24) {
+          console.log(
+            `[ai auto-reply] Conversation ${conversationId}: last AI reply was ${hoursPassed.toFixed(1)}h ago (>= 24h). Auto-resetting ai_reply_count from ${currentReplyCount} to 0.`
+          )
+          currentReplyCount = 0
+          await db
+            .from('conversations')
+            .update({ ai_reply_count: 0 })
+            .eq('id', conversationId)
+        }
+      }
+    }
+
     // Cheap early-out; the authoritative cap check is the atomic claim
     // below (this read can race a concurrent inbound).
-    if (conv.ai_reply_count >= config.autoReplyMaxPerConversation) return
+    if (currentReplyCount >= config.autoReplyMaxPerConversation) return
 
     const messages = await buildConversationContext(db, conversationId)
     if (messages.length === 0) return
@@ -283,7 +320,7 @@ export async function dispatchInboundToAiReply(
       console.warn('[ai auto-reply] claim_ai_reply_slot RPC failed, attempting fallback update:', claimErr)
       const { data: fallbackConv } = await db
         .from('conversations')
-        .update({ ai_reply_count: (conv.ai_reply_count ?? 0) + 1 })
+        .update({ ai_reply_count: currentReplyCount + 1 })
         .eq('id', conversationId)
         .lt('ai_reply_count', config.autoReplyMaxPerConversation)
         .select('id')
