@@ -195,10 +195,24 @@ export function findSmartPhone(payload: unknown, configuredPath?: string | null)
     }
   }
 
-  // 3. Try nested common objects: lead.phone, customer.mobile, data.phone, contact.phone, fields.phone
-  const nestedPrefixes = ['lead', 'customer', 'data', 'contact', 'user', 'fields', 'body', 'form_data'];
+  // 3. Try nested common objects: lead.phone, customer.mobile, data.phone, contact.phone, fields.phone, Razorpay payload
+  const nestedPrefixes = [
+    'lead',
+    'customer',
+    'data',
+    'contact',
+    'user',
+    'fields',
+    'body',
+    'form_data',
+    'payload.payment.entity',
+    'payload.order.entity',
+    'payment.entity',
+    'payment',
+    'order',
+  ];
   for (const prefix of nestedPrefixes) {
-    for (const key of ['phone', 'mobile', 'whatsapp', 'phone_number', 'contact', 'number']) {
+    for (const key of ['phone', 'mobile', 'whatsapp', 'phone_number', 'contact', 'number', 'notes.phone', 'notes.contact']) {
       const val = extractValueByPath(payload, `${prefix}.${key}`);
       if (val) {
         const cleaned = cleanPhone(val);
@@ -262,7 +276,18 @@ export function findSmartName(payload: unknown, configuredPath?: string | null):
   }
 
   // 4. Nested prefixes
-  const nestedPrefixes = ['lead', 'customer', 'data', 'contact', 'user', 'fields'];
+  const nestedPrefixes = [
+    'lead',
+    'customer',
+    'data',
+    'contact',
+    'user',
+    'fields',
+    'payload.payment.entity.notes',
+    'payload.payment.entity',
+    'payload.order.entity.notes',
+    'payload.order.entity',
+  ];
   for (const prefix of nestedPrefixes) {
     for (const key of ['name', 'full_name', 'first_name', 'customer_name']) {
       const val = extractValueByPath(payload, `${prefix}.${key}`);
