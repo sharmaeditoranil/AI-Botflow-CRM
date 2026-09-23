@@ -27,6 +27,7 @@ import {
   Trash2,
   CheckCircle,
   XCircle,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -40,9 +41,16 @@ import { toast } from "sonner";
 interface ContactSidebarProps {
   contact: Contact | null;
   conversationId?: string;
+  className?: string;
+  onClose?: () => void;
 }
 
-export function ContactSidebar({ contact, conversationId }: ContactSidebarProps) {
+export function ContactSidebar({
+  contact,
+  conversationId,
+  className,
+  onClose,
+}: ContactSidebarProps) {
   const tSidebar = useTranslations("Inbox.sidebar");
   const tThread = useTranslations("Inbox.messageThread");
 
@@ -360,7 +368,7 @@ export function ContactSidebar({ contact, conversationId }: ContactSidebarProps)
 
   if (!contact) {
     return (
-      <div className="flex h-full w-70 items-center justify-center border-l border-border bg-card">
+      <div className={cn("flex h-full w-70 items-center justify-center border-l border-border bg-card", className)}>
         <p className="text-sm text-muted-foreground">{tThread("selectConversation")}</p>
       </div>
     );
@@ -375,7 +383,25 @@ export function ContactSidebar({ contact, conversationId }: ContactSidebarProps)
   const aiMemory = liveContact?.ai_memory ?? contact.ai_memory;
 
   return (
-    <div className="flex h-full w-72 flex-col overflow-hidden border-l border-border bg-card">
+    <div className={cn("flex h-full w-72 flex-col overflow-hidden border-l border-border bg-card", className)}>
+      {onClose && (
+        <div className="flex items-center justify-between border-b border-border px-4 py-3 bg-muted/40 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <User className="h-4 w-4 text-primary shrink-0" />
+            <h3 className="text-sm font-semibold text-foreground truncate">
+              {displayName}
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
       <ScrollArea className="h-full min-h-0 flex-1">
         <div className="p-4">
           {/* Contact Info */}

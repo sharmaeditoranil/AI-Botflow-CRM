@@ -13,6 +13,13 @@ import { useRealtime } from "@/hooks/use-realtime";
 import { ConversationList } from "@/components/inbox/conversation-list";
 import { MessageThread } from "@/components/inbox/message-thread";
 import { ContactSidebar } from "@/components/inbox/contact-sidebar";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
 import { WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDashboardShell } from "../dashboard-shell";
@@ -51,6 +58,7 @@ function InboxPageInner() {
   const [activeConversation, setActiveConversation] =
     useState<Conversation | null>(null);
   const [activeContact, setActiveContact] = useState<Contact | null>(null);
+  const [mobileContactOpen, setMobileContactOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [whatsappConnected, setWhatsappConnected] = useState<boolean | null>(
     null
@@ -504,6 +512,7 @@ function InboxPageInner() {
   const handleCloseConversation = useCallback(() => {
     setActiveConversation(null);
     setActiveContact(null);
+    setMobileContactOpen(false);
     setMessages([]);
     // Clearing the ref lets the deep-link auto-selector fire again if
     // the user later visits /inbox?c=<same-id> — desirable UX.
@@ -613,6 +622,24 @@ function InboxPageInner() {
   // before, unchanged.
   const hasActiveConv = !!activeConversation;
 
+  const resolvedContact: Contact | null =
+    activeContact ||
+    (activeConversation?.contact
+      ? activeConversation.contact
+      : activeConversation
+      ? ({
+          id: activeConversation.contact_id || activeConversation.id,
+          account_id: (activeConversation as unknown as { account_id?: string })?.account_id || "",
+          name: (activeConversation as unknown as { contact_name?: string }).contact_name || "",
+          phone:
+            (activeConversation as unknown as { contact_phone?: string; phone_number?: string }).contact_phone ||
+            (activeConversation as unknown as { contact_phone?: string; phone_number?: string }).phone_number ||
+            "",
+          created_at: activeConversation.created_at,
+          updated_at: activeConversation.updated_at,
+        } as Contact)
+      : null);
+
   return (
     <div className="flex h-full w-full max-w-full min-w-0 flex-col overflow-hidden">
       {/* WhatsApp connection banner — in the flex column, not absolute,
@@ -648,13 +675,7 @@ function InboxPageInner() {
         {/* Center panel: Message thread.
             Hidden on mobile when no conversation is selected so the
             list can occupy the full width. Always visible on lg+
-            (shows its own empty-state if no thread is picked yet).
-
-            `min-w-0` is load-bearing: without it, a single wide piece
-            of content inside the thread (long quote preview, very
-            long URL in a message body) forces the flex child past
-            its share and pushes the contact-sidebar panel off-screen
-            on the right. Issue #165. */}
+            (shows its own empty-state if no thread is picked yet). */}
         <div
           className={cn(
             "flex h-full min-w-0 flex-1 lg:flex",
@@ -663,7 +684,7 @@ function InboxPageInner() {
         >
           <MessageThread
             conversation={activeConversation}
-            contact={activeContact}
+            contact={resolvedContact}
             messages={messages}
             onMessagesLoaded={handleMessagesLoaded}
             onNewMessage={handleNewMessage}
@@ -675,19 +696,43 @@ function InboxPageInner() {
             onRefresh={handleManualRefresh}
             contactPanelOpen={contactPanelOpen}
             onToggleContactPanel={handleToggleContactPanel}
+            onOpenContactDetails={() => setMobileContactOpen(true)}
           />
         </div>
 
         {/* Right panel: Contact sidebar — desktop only, and only when the
-            agent hasn't collapsed it via the thread-header toggle (#258).
-            On mobile it's always hidden (the `lg:block` below), so the
-            toggle — which is itself desktop-only — never affects it. */}
+            agent hasn't collapsed it via the thread-header toggle (#258). */}
         {contactPanelOpen && (
           <div className="hidden lg:flex h-full min-h-0 overflow-hidden shrink-0">
-            <ContactSidebar contact={activeContact} conversationId={activeConversation?.id} />
+            <ContactSidebar contact={resolvedContact} conversationId={activeConversation?.id} />
           </div>
         )}
       </div>
+
+      {/* Mobile Contact Sidebar Sheet (Tags, Automations, Notes, Deals) */}
+      <Sheet open={mobileContactOpen} onOpenChange={setMobileContactOpen}>
+        <SheetContent
+          side="right"
+          className="w-[90vw] max-w-[390px] p-0 flex flex-col h-full bg-card border-l border-border"
+        >
+          <SheetHeader className="px-4 py-3 border-b border-border bg-muted/30">
+            <SheetTitle className="text-base font-semibold text-foreground truncate">
+              {resolvedContact?.name || resolvedContact?.phone || (activeConversation as unknown as { contact_phone?: string })?.contact_phone || "Contact Details"}
+            </SheetTitle>
+            <SheetDescription className="sr-only">
+              Contact tags, assigned automations, deals and notes
+            </SheetDescription>
+          </SheetHeader>
+          <div className="flex-1 overflow-hidden min-h-0">
+            <ContactSidebar
+              contact={resolvedContact}
+              conversationId={activeConversation?.id}
+              className="w-full border-l-0"
+              onClose={() => setMobileContactOpen(false)}
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Render Mobile Bottom Navigation only when viewing conversation list on mobile */}
       {!hasActiveConv && <MobileBottomNav onOpenMenu={openSidebar} />}

@@ -28,6 +28,7 @@ import {
   PanelRightOpen,
   PanelRightClose,
   Phone,
+  SlidersHorizontal,
 } from "lucide-react";
 import { format, isToday, isYesterday, differenceInHours } from "date-fns";
 import { useTranslations } from "next-intl";
@@ -113,6 +114,7 @@ interface MessageThreadProps {
    */
   contactPanelOpen?: boolean;
   onToggleContactPanel?: () => void;
+  onOpenContactDetails?: () => void;
 }
 
 function formatDateSeparator(dateStr: string, t: ReturnType<typeof useTranslations>): string {
@@ -171,6 +173,7 @@ export function MessageThread({
   onRefresh,
   contactPanelOpen,
   onToggleContactPanel,
+  onOpenContactDetails,
 }: MessageThreadProps) {
   const t = useTranslations("Inbox.messageThread");
   const tTimer = useTranslations("Inbox.sessionTimer");
@@ -941,39 +944,57 @@ export function MessageThread({
               <ArrowLeft className="h-5 w-5" />
             </button>
           )}
-          <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[#128c7e] text-sm font-bold text-white shadow-xs">
-            {displayName.charAt(0).toUpperCase()}
-            <span
-              className={cn(
-                "absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full ring-2 ring-card shadow-xs text-white",
-                channel === "facebook"
-                  ? "bg-[#0084FF]"
-                  : channel === "instagram"
-                  ? "bg-gradient-to-tr from-[#f09433] via-[#dc2743] to-[#bc1888]"
-                  : "bg-[#25D366]"
-              )}
-              title={channel === "facebook" ? "Facebook Messenger" : channel === "instagram" ? "Instagram DM" : "WhatsApp"}
-            >
-              {channel === "facebook" ? (
-                <MessengerIcon className="h-2 w-2 fill-current" />
-              ) : channel === "instagram" ? (
-                <InstagramIcon className="h-2 w-2 fill-current" />
-              ) : (
-                <WhatsAppIcon className="h-2 w-2 fill-current" />
-              )}
-            </span>
-          </div>
-          <div className="min-w-0">
-            <h2 className="truncate text-[15px] sm:text-base font-bold text-foreground leading-tight">
-              {displayName}
-            </h2>
-            <div className="flex items-center gap-1.5 text-xs">
-              <span className="h-2 w-2 rounded-full bg-[#25D366] shrink-0" />
-              <span className="truncate font-medium text-emerald-500">
-                {channel === "whatsapp" ? "Online on WhatsApp" : channel === "facebook" ? "Active on Facebook" : "Active on Instagram"}
+          {/* Contact header info: clickable on both mobile and desktop to open Contact Details & Options */}
+          <button
+            type="button"
+            onClick={() => {
+              if (onOpenContactDetails) {
+                onOpenContactDetails();
+              } else if (onToggleContactPanel) {
+                onToggleContactPanel();
+              }
+            }}
+            className="flex min-w-0 items-center gap-2 sm:gap-3 text-left hover:opacity-90 active:scale-[0.99] transition-all cursor-pointer group"
+            title="View contact details, tags, automations & notes"
+            aria-label="View contact details"
+          >
+            <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[#128c7e] text-sm font-bold text-white shadow-xs group-hover:ring-2 group-hover:ring-primary/40 transition-all">
+              {displayName.charAt(0).toUpperCase()}
+              <span
+                className={cn(
+                  "absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full ring-2 ring-card shadow-xs text-white",
+                  channel === "facebook"
+                    ? "bg-[#0084FF]"
+                    : channel === "instagram"
+                    ? "bg-gradient-to-tr from-[#f09433] via-[#dc2743] to-[#bc1888]"
+                    : "bg-[#25D366]"
+                )}
+                title={channel === "facebook" ? "Facebook Messenger" : channel === "instagram" ? "Instagram DM" : "WhatsApp"}
+              >
+                {channel === "facebook" ? (
+                  <MessengerIcon className="h-2 w-2 fill-current" />
+                ) : channel === "instagram" ? (
+                  <InstagramIcon className="h-2 w-2 fill-current" />
+                ) : (
+                  <WhatsAppIcon className="h-2 w-2 fill-current" />
+                )}
               </span>
             </div>
-          </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <h2 className="truncate text-[15px] sm:text-base font-bold text-foreground leading-tight group-hover:text-primary transition-colors">
+                  {displayName}
+                </h2>
+                <SlidersHorizontal className="h-3.5 w-3.5 text-muted-foreground/60 group-hover:text-primary transition-colors shrink-0" />
+              </div>
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="h-2 w-2 rounded-full bg-[#25D366] shrink-0" />
+                <span className="truncate font-medium text-emerald-500">
+                  {channel === "whatsapp" ? "Online on WhatsApp" : channel === "facebook" ? "Active on Facebook" : "Active on Instagram"}
+                </span>
+              </div>
+            </div>
+          </button>
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
@@ -995,6 +1016,19 @@ export function MessageThread({
             >
               <Phone className="h-4 w-4" />
             </div>
+          )}
+
+          {/* Mobile contact info button (Tags, Automations, Notes) */}
+          {onOpenContactDetails && (
+            <button
+              type="button"
+              onClick={onOpenContactDetails}
+              aria-label="Contact options"
+              title="Tags, Automations & Notes"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/40 bg-muted/60 hover:bg-muted text-foreground transition-colors shadow-xs lg:hidden"
+            >
+              <SlidersHorizontal className="h-4 w-4 text-primary" />
+            </button>
           )}
 
           {/* Desktop-only controls: Contact-panel toggle, Refresh, Status, Assign */}
