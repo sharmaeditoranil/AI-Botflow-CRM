@@ -559,3 +559,28 @@ export async function subscribePageToApp(
   }
 }
 
+/**
+ * Unsubscribes a Facebook Page from the Meta App so incoming webhooks (messages) are halted.
+ */
+export async function unsubscribePageFromApp(
+  pageId: string,
+  pageAccessToken: string
+): Promise<{ success: boolean; error?: string }> {
+  const url = new URL(`${META_GRAPH_BASE_URL}/${encodeURIComponent(pageId)}/subscribed_apps`);
+  url.searchParams.set('access_token', pageAccessToken);
+  try {
+    const res = await fetch(url.toString(), {
+      method: 'DELETE',
+    });
+    const data = (await res.json()) as { success?: boolean; error?: { message?: string } };
+    if (!res.ok || !data.success) {
+      console.warn(`[Meta Social] Unsubscribe warning for page ${pageId}:`, data);
+      return { success: false, error: data.error?.message };
+    }
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Network error' };
+  }
+}
+
+

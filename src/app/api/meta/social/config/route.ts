@@ -104,3 +104,51 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: message }, { status: 401 });
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const { supabase, accountId } = await requireRole('admin');
+    const url = new URL(request.url);
+    const channel = url.searchParams.get('channel') || 'all';
+
+    let updatePayload: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (channel === 'all' || channel === 'facebook') {
+      updatePayload = {
+        ...updatePayload,
+        facebook_page_id: null,
+        facebook_page_name: null,
+        facebook_page_access_token: null,
+        facebook_status: 'disconnected',
+        instagram_account_id: null,
+        instagram_username: null,
+        instagram_status: 'disconnected',
+        metadata: {},
+      };
+    } else if (channel === 'instagram') {
+      updatePayload = {
+        ...updatePayload,
+        instagram_account_id: null,
+        instagram_username: null,
+        instagram_status: 'disconnected',
+      };
+    }
+
+    const { error } = await supabase
+      .from('meta_social_config')
+      .update(updatePayload)
+      .eq('account_id', accountId);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, message: 'Disconnected.' });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unauthorized';
+    return NextResponse.json({ error: message }, { status: 401 });
+  }
+}
+

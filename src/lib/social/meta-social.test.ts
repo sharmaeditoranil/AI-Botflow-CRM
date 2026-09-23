@@ -7,6 +7,7 @@ import {
   exchangeCodeForUserToken,
   fetchUserFacebookPages,
   subscribePageToApp,
+  unsubscribePageFromApp,
 } from './meta-social';
 
 describe('Meta Social Messaging', () => {
@@ -240,5 +241,20 @@ describe('Meta Social Messaging', () => {
       const res = await subscribePageToApp('page-1', 'token-1');
       expect(res.success).toBe(true);
     });
+
+    it('unsubscribePageFromApp calls DELETE and returns success', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ success: true }),
+      } as Response);
+
+      const res = await unsubscribePageFromApp('page-1', 'token-1');
+      expect(res.success).toBe(true);
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('/page-1/subscribed_apps?access_token=token-1'),
+        expect.objectContaining({ method: 'DELETE' })
+      );
+    });
   });
 });
+

@@ -14,6 +14,14 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Copy,
   Check,
   ShieldCheck,
@@ -25,6 +33,7 @@ import {
   AlertCircle,
   RefreshCw,
   UserCheck,
+  Unlink,
 } from "lucide-react";
 import {
   MessengerIcon,
@@ -50,6 +59,9 @@ export function SocialChannelsConfig() {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [metaAppConfigured, setMetaAppConfigured] = useState<boolean | null>(null);
   const [repairingContacts, setRepairingContacts] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [disconnectTarget, setDisconnectTarget] = useState<'all' | 'facebook' | 'instagram' | null>(null);
+  const [showDisconnectDialog, setShowDisconnectDialog] = useState(false);
 
   // Form states
   const [fbPageId, setFbPageId] = useState("");
@@ -83,23 +95,37 @@ export function SocialChannelsConfig() {
 
       if (data.config) {
         const c: MetaSocialConfig = data.config;
-        setFbPageId(c.facebook_page_id || "");
-        setFbPageName(c.facebook_page_name || "");
-        setFbAccessToken(c.facebook_page_access_token ? "••••••••••••••••" : "");
-        setFbConnected(c.facebook_status === "connected");
+        const isFbConnected = c.facebook_status === "connected" && Boolean(c.facebook_page_id);
+        const isIgConnected = c.instagram_status === "connected" && Boolean(c.instagram_account_id);
 
-        setIgAccountId(c.instagram_account_id || "");
-        setIgUsername(c.instagram_username || "");
-        setIgConnected(c.instagram_status === "connected");
+        setFbPageId(isFbConnected ? (c.facebook_page_id || "") : "");
+        setFbPageName(isFbConnected ? (c.facebook_page_name || "") : "");
+        setFbAccessToken(isFbConnected && c.facebook_page_access_token ? "••••••••••••••••" : "");
+        setFbConnected(isFbConnected);
+
+        setIgAccountId(isIgConnected ? (c.instagram_account_id || "") : "");
+        setIgUsername(isIgConnected ? (c.instagram_username || "") : "");
+        setIgConnected(isIgConnected);
 
         if (c.verify_token) {
           setVerifyToken(c.verify_token);
         }
 
         const meta = c.metadata as { available_pages?: AvailablePage[] } | undefined;
-        if (meta?.available_pages) {
+        if (isFbConnected && meta?.available_pages) {
           setAvailablePages(meta.available_pages);
+        } else {
+          setAvailablePages([]);
         }
+      } else {
+        setFbPageId("");
+        setFbPageName("");
+        setFbAccessToken("");
+        setFbConnected(false);
+        setIgAccountId("");
+        setIgUsername("");
+        setIgConnected(false);
+        setAvailablePages([]);
       }
     } catch (err) {
       console.error("Failed to load social config:", err);
@@ -206,6 +232,37 @@ export function SocialChannelsConfig() {
       setRepairingContacts(false);
     }
   };
+
+  const handleOpenDisconnect = (target: 'all' | 'facebook' | 'instagram') => {
+    setDisconnectTarget(target);
+    setShowDisconnectDialog(true);
+  };
+
+  const handleConfirmDisconnect = async () => {
+    if (!disconnectTarget) return;
+    try {
+      setDisconnecting(true);
+      const res = await fetch("/api/meta/social/disconnect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channel: disconnectTarget }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to disconnect channel");
+      }
+      toast.success(data.message || "Disconnected successfully!");
+      setShowDisconnectDialog(false);
+      setDisconnectTarget(null);
+      await loadConfig();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Disconnect failed";
+      toast.error(msg);
+    } finally {
+      setDisconnecting(false);
+    }
+  };
+
 
   const copyToClipboard = async (text: string, fieldName: string) => {
     try {
@@ -316,7 +373,7 @@ export function SocialChannelsConfig() {
             <Button
               type="button"
               onClick={handleLaunchOAuth}
-              disabled={connectingOAuth || switchingPage}
+              disabled={connectingOAuth || switchingPage || disconnecting}
               className="bg-[#1877F2] hover:bg-[#166fe5] text-white font-medium shadow-sm transition-all gap-2 px-5 h-11 text-sm"
             >
               {connectingOAuth ? (
@@ -329,6 +386,19 @@ export function SocialChannelsConfig() {
               )}
               <span>{fbConnected ? "Reconnect or Change Accounts" : "Connect with Facebook & Instagram"}</span>
             </Button>
+
+            {(fbConnected || igConnected) && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleOpenDisconnect("all")}
+                disabled={connectingOAuth || switchingPage || disconnecting}
+                className="border-red-500/40 text-red-600 hover:bg-red-500/10 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950/40 dark:hover:text-red-300 font-medium transition-all gap-1.5 px-4 h-11 text-sm"
+              >
+                <Unlink className="h-4 w-4" />
+                <span>Disconnect</span>
+              </Button>
+            )}
 
             <p className="text-xs text-muted-foreground flex items-center gap-1">
               <ShieldCheck className="h-4 w-4 text-emerald-500" />
@@ -348,7 +418,7 @@ export function SocialChannelsConfig() {
               <Label className="text-xs text-muted-foreground whitespace-nowrap">Switch Active Facebook Page:</Label>
               <select
                 value={fbPageId}
-                disabled={switchingPage}
+                disabled={switchingPage || disconnecting}
                 onChange={(e) => handleSwitchPage(e.target.value)}
                 className="h-9 rounded-md border border-border bg-background px-2.5 text-xs text-foreground focus:outline-hidden"
               >
@@ -379,16 +449,31 @@ export function SocialChannelsConfig() {
               </p>
             </div>
           </div>
-          <Badge
-            variant="outline"
-            className={
-              fbConnected
-                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium"
-                : "border-border text-muted-foreground"
-            }
-          >
-            {fbConnected ? "Connected" : "Disconnected"}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge
+              variant="outline"
+              className={
+                fbConnected
+                  ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium"
+                  : "border-border text-muted-foreground"
+              }
+            >
+              {fbConnected ? "Connected" : "Disconnected"}
+            </Badge>
+            {fbConnected && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => handleOpenDisconnect("facebook")}
+                disabled={disconnecting}
+                className="h-7 px-2.5 text-xs text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                title="Disconnect Facebook Messenger"
+              >
+                Disconnect
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Instagram DM Status */}
@@ -404,16 +489,31 @@ export function SocialChannelsConfig() {
               </p>
             </div>
           </div>
-          <Badge
-            variant="outline"
-            className={
-              igConnected
-                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium"
-                : "border-border text-muted-foreground"
-            }
-          >
-            {igConnected ? "Connected" : "Disconnected"}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge
+              variant="outline"
+              className={
+                igConnected
+                  ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium"
+                  : "border-border text-muted-foreground"
+              }
+            >
+              {igConnected ? "Connected" : "Disconnected"}
+            </Badge>
+            {igConnected && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => handleOpenDisconnect("instagram")}
+                disabled={disconnecting}
+                className="h-7 px-2.5 text-xs text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                title="Disconnect Instagram Direct Messages"
+              >
+                Disconnect
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -646,6 +746,49 @@ export function SocialChannelsConfig() {
           </div>
         )}
       </div>
+
+      {/* Disconnect Confirmation Modal */}
+      <Dialog open={showDisconnectDialog} onOpenChange={setShowDisconnectDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="h-5 w-5 shrink-0" />
+              {disconnectTarget === "instagram"
+                ? "Instagram Account Disconnect करें?"
+                : disconnectTarget === "facebook"
+                  ? "Facebook Page Disconnect करें?"
+                  : "Social Channels Disconnect करें?"}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground pt-1.5 leading-relaxed">
+              {disconnectTarget === "instagram"
+                ? "Aapka Instagram Direct Messages CRM se unlink ho jayega aur customers ke naye DMs aana band ho jayenge. Kya aap disconnect karna chahte hain?"
+                : disconnectTarget === "facebook"
+                  ? "Facebook Page disconnect karne se Facebook Messenger aur linked Instagram dono disconnect ho jayenge kyunki Instagram Facebook Page token use karta hai. Kya aap aage badhna chahte hain?"
+                  : "Facebook Messenger aur Instagram Direct Messages dono CRM se unlink ho jayenge aur customer messages aana band ho jayenge. Kya aap confirm karte hain?"}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0 pt-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowDisconnectDialog(false)}
+              disabled={disconnecting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleConfirmDisconnect}
+              disabled={disconnecting}
+              className="gap-2 bg-destructive hover:bg-destructive/90 text-white"
+            >
+              {disconnecting && <Loader2 className="h-4 w-4 animate-spin" />}
+              <span>Yes, Disconnect</span>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
