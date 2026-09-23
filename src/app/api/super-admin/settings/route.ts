@@ -26,6 +26,11 @@ export async function GET() {
       admin_ai_model: 'gpt-4o-mini',
       support_email: 'support@aibotflow.in',
       support_phone: '',
+      wallet_system_enabled: true,
+      wallet_rate_marketing: 0.85,
+      wallet_rate_utility: 0.15,
+      wallet_rate_service: 0.35,
+      wallet_rate_auth: 0.15,
     };
 
     const finalSettings = {
@@ -71,6 +76,11 @@ export async function POST(req: NextRequest) {
       admin_ai_model,
       support_email,
       support_phone,
+      wallet_system_enabled,
+      wallet_rate_marketing,
+      wallet_rate_utility,
+      wallet_rate_service,
+      wallet_rate_auth,
     } = body;
 
     const payload: Record<string, any> = {
@@ -88,6 +98,11 @@ export async function POST(req: NextRequest) {
       admin_ai_model: admin_ai_model?.trim() || 'gpt-4o-mini',
       support_email: support_email?.trim() || 'support@aibotflow.in',
       support_phone: support_phone?.trim() || null,
+      wallet_system_enabled: wallet_system_enabled !== false,
+      wallet_rate_marketing: wallet_rate_marketing !== undefined ? Number(wallet_rate_marketing) : 0.85,
+      wallet_rate_utility: wallet_rate_utility !== undefined ? Number(wallet_rate_utility) : 0.15,
+      wallet_rate_service: wallet_rate_service !== undefined ? Number(wallet_rate_service) : 0.35,
+      wallet_rate_auth: wallet_rate_auth !== undefined ? Number(wallet_rate_auth) : 0.15,
       updated_at: new Date().toISOString(),
     };
 

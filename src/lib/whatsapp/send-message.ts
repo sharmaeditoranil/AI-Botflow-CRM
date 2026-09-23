@@ -52,6 +52,11 @@ import {
   sendInstagramMessage,
   MetaSocialError,
 } from '@/lib/social/meta-social';
+import {
+  checkWalletBalance,
+  deductWalletCredits,
+  calculateMessageCost,
+} from '@/lib/billing/wallet';
 
 export const MEDIA_KINDS = ['image', 'video', 'document', 'audio'] as const;
 export const VALID_MESSAGE_TYPES = [
@@ -510,6 +515,23 @@ export async function sendMessageToConversation(
     return result.messageId;
   };
 
+  // Wallet balance check for WhatsApp messages
+  let messageCost = 0;
+  try {
+    messageCost = calculateMessageCost(templateRow?.category);
+    const walletCheck = await checkWalletBalance(accountId, messageCost);
+    if (!walletCheck.allowed) {
+      throw new SendMessageError(
+        'insufficient_balance',
+        `Insufficient wallet balance (₹${walletCheck.balance.toFixed(2)}). Message cost is ₹${messageCost.toFixed(2)}. Please recharge your wallet.`,
+        402
+      );
+    }
+  } catch (wErr) {
+    if (wErr instanceof SendMessageError) throw wErr;
+    console.warn('[send-message] wallet check skipped or non-blocking:', wErr);
+  }
+
   // Send via Meta — retry across phone-number variants if Meta rejects
   // with "recipient not in allowed list"; persist a working variant
   // back to the contact so the next send goes straight through.
@@ -618,6 +640,25 @@ export async function sendMessageToConversation(
       updated_at: new Date().toISOString(),
     })
     .eq('id', conversationId);
+
+  // Deduct credits asynchronously from wallet
+  if (messageCost > 0) {
+    void deductWalletCredits({
+      accountId,
+      amount: messageCost,
+      referenceType: 'direct_send',
+      referenceId: messageRecord.id,
+      description: `WhatsApp ${messageType === 'template' ? (templateRow?.category || 'template') : 'service'} message to ${sanitizedPhone || sendTarget}`,
+      metadata: {
+        messageId: messageRecord.id,
+        waMessageId,
+        category: templateRow?.category || 'service',
+        messageType,
+      },
+    }).catch((deductErr) => {
+      console.warn('[send-message] wallet deduction failed:', deductErr);
+    });
+  }
 
   // Pause any active Flow run for this contact — the agent stepping in
   // is the strongest "yield, human is here" signal. Best-effort.

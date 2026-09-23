@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ModeToggle } from "@/components/layout/mode-toggle";
+import { WalletPill } from "@/components/wallet/wallet-pill";
 import { cn } from "@/lib/utils";
 import { useTranslations } from "next-intl";
 
@@ -103,6 +104,9 @@ export function Header({ onOpenSidebar }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3">
+        {/* Prepaid Wallet Credits Widget */}
+        <WalletPill />
+
         {/* Theme mode toggle */}
         <ModeToggle />
 

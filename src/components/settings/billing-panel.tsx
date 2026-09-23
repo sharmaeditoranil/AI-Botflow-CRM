@@ -19,6 +19,9 @@ import {
   Tag,
   X,
   ArrowRight,
+  Wallet,
+  ArrowUpRight,
+  Plus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,6 +32,7 @@ import { SettingsPanelHead } from './settings-panel-head';
 import type { AccountUsageInfo } from '@/lib/billing/limits';
 import { BrandLogo } from '@/components/brand/brand-logo';
 import { GstInvoiceModal, type InvoiceRecord } from './gst-invoice-modal';
+import { WalletTopupModal } from '@/components/wallet/wallet-topup-modal';
 
 declare global {
   interface Window {
@@ -64,13 +68,22 @@ export function BillingPanel() {
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceRecord | null>(null);
   const [gstModalOpen, setGstModalOpen] = useState(false);
 
+  // Prepaid Wallet State
+  const [walletData, setWalletData] = useState<{
+    wallet: { balance: number; currency: string; is_active: boolean };
+    rates: { marketing: number; utility: number; service: number; auth: number; enabled: boolean };
+    transactions: any[];
+  } | null>(null);
+  const [walletModalOpen, setWalletModalOpen] = useState(false);
+
   const fetchUsageAndPlans = async () => {
     try {
       setLoading(true);
-      const [usageRes, plansRes, invoicesRes] = await Promise.all([
+      const [usageRes, plansRes, invoicesRes, walletRes] = await Promise.all([
         fetch('/api/billing/usage'),
         fetch('/api/billing/plans'),
         fetch('/api/billing/invoices'),
+        fetch('/api/wallet'),
       ]);
 
       if (usageRes.ok) {
@@ -93,6 +106,11 @@ export function BillingPanel() {
           if (iData.account.billing_address) setBillingAddress(iData.account.billing_address);
           if (iData.account.billing_state) setBillingState(iData.account.billing_state);
         }
+      }
+
+      if (walletRes.ok) {
+        const wData = await walletRes.json();
+        setWalletData(wData);
       }
     } catch (err) {
       console.error('Error loading billing data:', err);
@@ -456,6 +474,162 @@ export function BillingPanel() {
                 </div>
               </div>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Prepaid WhatsApp Wallet & Credits Section */}
+      <Card className="border-border/80 bg-card shadow-sm overflow-hidden rounded-2xl">
+        <div className="bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent p-5 border-b border-border/60">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-500 ring-1 ring-emerald-500/30 shrink-0">
+                <Wallet className="h-6 w-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-bold tracking-tight text-foreground">
+                    Prepaid WhatsApp Credits & Wallet
+                  </h3>
+                  <Badge variant="outline" className="border-emerald-500/30 bg-emerald-500/10 text-emerald-500 text-[10px] font-semibold">
+                    Instant UPI
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  No Meta card needed! Recharge with UPI/Razorpay and credits are automatically deducted per message.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 self-start sm:self-auto">
+              <div className="text-right">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground block">
+                  Available Balance
+                </span>
+                <span className="text-xl font-bold text-emerald-500 tabular-nums">
+                  ₹{Number(walletData?.wallet?.balance || 0).toFixed(2)}
+                </span>
+              </div>
+              <Button
+                type="button"
+                onClick={() => setWalletModalOpen(true)}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs h-9 px-4 rounded-xl shadow-sm gap-1.5"
+              >
+                <Plus className="h-4 w-4 stroke-[2.5]" />
+                Add Money
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <CardContent className="p-5 space-y-5">
+          {/* Rate Cards */}
+          <div>
+            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block mb-2">
+              Standard Per-Message Rates
+            </span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              <div className="rounded-xl border border-border/80 bg-muted/20 p-3">
+                <span className="text-muted-foreground block text-[11px]">Marketing Template</span>
+                <span className="text-base font-bold text-foreground">
+                  ₹{Number(walletData?.rates?.marketing ?? 0.85).toFixed(2)}
+                </span>
+                <span className="text-[10px] text-muted-foreground block mt-0.5">per broadcast message</span>
+              </div>
+              <div className="rounded-xl border border-border/80 bg-muted/20 p-3">
+                <span className="text-muted-foreground block text-[11px]">Utility / Orders</span>
+                <span className="text-base font-bold text-foreground">
+                  ₹{Number(walletData?.rates?.utility ?? 0.15).toFixed(2)}
+                </span>
+                <span className="text-[10px] text-muted-foreground block mt-0.5">order updates & alerts</span>
+              </div>
+              <div className="rounded-xl border border-border/80 bg-muted/20 p-3">
+                <span className="text-muted-foreground block text-[11px]">Authentication / OTP</span>
+                <span className="text-base font-bold text-foreground">
+                  ₹{Number(walletData?.rates?.auth ?? 0.15).toFixed(2)}
+                </span>
+                <span className="text-[10px] text-muted-foreground block mt-0.5">security verification codes</span>
+              </div>
+              <div className="rounded-xl border border-border/80 bg-muted/20 p-3">
+                <span className="text-muted-foreground block text-[11px]">Service / Live Chat</span>
+                <span className="text-base font-bold text-foreground">
+                  ₹{Number(walletData?.rates?.service ?? 0.35).toFixed(2)}
+                </span>
+                <span className="text-[10px] text-muted-foreground block mt-0.5">within 24hr support window</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Transactions Passbook */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Recent Credit Activity & Passbook
+              </span>
+              <span className="text-[11px] text-muted-foreground">
+                Last {walletData?.transactions?.length || 0} transactions
+              </span>
+            </div>
+
+            {(!walletData?.transactions || walletData.transactions.length === 0) ? (
+              <div className="rounded-xl border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
+                No wallet transactions yet. Click <strong>&quot;Add Money&quot;</strong> to top-up your credits.
+              </div>
+            ) : (
+              <div className="rounded-xl border border-border/80 overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-border/60 bg-muted/40 text-muted-foreground text-left">
+                      <th className="py-2.5 px-3">Date</th>
+                      <th className="py-2.5 px-3">Description</th>
+                      <th className="py-2.5 px-3 text-center">Type</th>
+                      <th className="py-2.5 px-3 text-right">Amount</th>
+                      <th className="py-2.5 px-3 text-right">Balance After</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/40">
+                    {walletData.transactions.map((tx: any) => {
+                      const isCredit = tx.type === 'credit';
+                      return (
+                        <tr key={tx.id} className="hover:bg-muted/20 transition-colors">
+                          <td className="py-2.5 px-3 text-muted-foreground whitespace-nowrap">
+                            {new Date(tx.created_at).toLocaleDateString('en-IN', {
+                              day: '2-digit',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </td>
+                          <td className="py-2.5 px-3 font-medium text-foreground">
+                            {tx.description}
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            <Badge
+                              variant="outline"
+                              className={`text-[10px] font-bold uppercase ${
+                                isCredit
+                                  ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                                  : 'bg-muted text-muted-foreground border-border'
+                              }`}
+                            >
+                              {tx.type}
+                            </Badge>
+                          </td>
+                          <td className={`py-2.5 px-3 text-right font-bold whitespace-nowrap ${
+                            isCredit ? 'text-emerald-500' : 'text-foreground'
+                          }`}>
+                            {isCredit ? '+' : '-'}₹{Number(tx.amount).toFixed(2)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-muted-foreground whitespace-nowrap font-medium">
+                            ₹{Number(tx.balance_after).toFixed(2)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -1214,6 +1388,17 @@ export function BillingPanel() {
         onOpenChange={setGstModalOpen}
         invoice={selectedInvoice}
         account={accountDetails}
+      />
+
+      {/* Prepaid Wallet Recharge Modal */}
+      <WalletTopupModal
+        open={walletModalOpen}
+        onOpenChange={setWalletModalOpen}
+        currentBalance={Number(walletData?.wallet?.balance || 0)}
+        onSuccess={() => {
+          fetchUsageAndPlans();
+          window.dispatchEvent(new CustomEvent('wallet:updated'));
+        }}
       />
     </section>
   );

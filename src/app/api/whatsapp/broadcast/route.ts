@@ -15,6 +15,11 @@ import {
   rateLimitResponse,
   RATE_LIMITS,
 } from '@/lib/rate-limit'
+import {
+  checkWalletBalance,
+  deductWalletCredits,
+  calculateMessageCost,
+} from '@/lib/billing/wallet'
 
 interface BroadcastResult {
   phone: string
@@ -160,6 +165,25 @@ export async function POST(request: Request) {
     }
     const templateRow = resolvedTemplate.row
 
+    // Verify wallet balance for the planned broadcast
+    const costPerMsg = calculateMessageCost(templateRow?.category)
+    let isWalletControlled = false
+    try {
+      const estimatedCost = recipients.length * costPerMsg
+      const balanceCheck = await checkWalletBalance(accountId, estimatedCost)
+      if (!balanceCheck.allowed) {
+        return NextResponse.json(
+          {
+            error: `Insufficient wallet balance (₹${balanceCheck.balance.toFixed(2)}). Required: ₹${estimatedCost.toFixed(2)} for ${recipients.length} messages. Please recharge your wallet.`,
+          },
+          { status: 402 }
+        )
+      }
+      isWalletControlled = balanceCheck.rates.enabled
+    } catch (wErr) {
+      console.warn('[broadcast] wallet check non-blocking error:', wErr)
+    }
+
     const results: BroadcastResult[] = []
     let sentCount = 0
     let failedCount = 0
@@ -229,6 +253,26 @@ export async function POST(request: Request) {
         })
         failedCount++
       }
+    }
+
+    // Deduct actual sent message credits from wallet
+    if (isWalletControlled && sentCount > 0) {
+      const actualDeduct = sentCount * costPerMsg
+      void deductWalletCredits({
+        accountId,
+        amount: actualDeduct,
+        referenceType: 'broadcast',
+        referenceId: template_name,
+        description: `WhatsApp Broadcast (${template_name}): ${sentCount} sent`,
+        metadata: {
+          templateName: template_name,
+          sentCount,
+          failedCount,
+          costPerMsg,
+        },
+      }).catch((deductErr) => {
+        console.warn('[broadcast] wallet deduction failed:', deductErr)
+      })
     }
 
     return NextResponse.json({

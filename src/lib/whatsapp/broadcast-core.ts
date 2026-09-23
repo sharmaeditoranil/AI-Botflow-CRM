@@ -29,6 +29,11 @@ import {
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body';
 import type { MessageTemplate } from '@/types';
 import { findOrCreateContact } from '@/lib/api/v1/contacts';
+import {
+  checkWalletBalance,
+  deductWalletCredits,
+  calculateMessageCost,
+} from '@/lib/billing/wallet';
 
 /** Thrown by createBroadcast on a caller-visible failure; route maps it. */
 export class BroadcastError extends Error {
@@ -64,6 +69,7 @@ interface PlannedRecipient {
 
 export interface BroadcastPlan {
   broadcastId: string;
+  accountId?: string;
   templateName: string;
   templateLanguage: string;
   phoneNumberId: string;
@@ -183,6 +189,23 @@ export async function createBroadcast(
     );
   }
 
+  // Pre-check wallet balance for broadcast
+  const costPerMsg = calculateMessageCost(templateRow?.category);
+  const estimatedTotalCost = deduped.length * costPerMsg;
+  try {
+    const balanceCheck = await checkWalletBalance(accountId, estimatedTotalCost);
+    if (!balanceCheck.allowed) {
+      throw new BroadcastError(
+        'insufficient_balance',
+        `Insufficient wallet balance (₹${balanceCheck.balance.toFixed(2)}). Required: ₹${estimatedTotalCost.toFixed(2)} for ${deduped.length} messages. Please recharge your wallet.`,
+        402
+      );
+    }
+  } catch (wErr) {
+    if (wErr instanceof BroadcastError) throw wErr;
+    console.warn('[broadcast-core] wallet check non-blocking:', wErr);
+  }
+
   // Persist the broadcast + its recipients. The count columns
   // (sent/delivered/read/replied/failed) are owned by the DB aggregate
   // trigger (migrations 003/005) and derived purely from
@@ -232,6 +255,7 @@ export async function createBroadcast(
 
   return {
     broadcastId,
+    accountId,
     templateName,
     templateLanguage: resolvedTemplate.language,
     phoneNumberId: config.phone_number_id,
@@ -259,6 +283,7 @@ export async function deliverBroadcast(
   db: SupabaseClient,
   plan: BroadcastPlan
 ): Promise<void> {
+  let sentSuccessCount = 0;
   for (const recipient of plan.planned) {
     const variants = phoneVariants(recipient.phone);
     let sentMessageId: string | null = null;
@@ -287,6 +312,7 @@ export async function deliverBroadcast(
     }
 
     if (sentMessageId) {
+      sentSuccessCount++;
       await db
         .from('broadcast_recipients')
         .update({
@@ -305,6 +331,27 @@ export async function deliverBroadcast(
         })
         .eq('id', recipient.recipientRowId);
     }
+  }
+
+  // Deduct credits for delivered recipients
+  if (plan.accountId && sentSuccessCount > 0) {
+    const costPerMsg = calculateMessageCost(plan.templateRow?.category);
+    const totalDeduct = sentSuccessCount * costPerMsg;
+    void deductWalletCredits({
+      accountId: plan.accountId,
+      amount: totalDeduct,
+      referenceType: 'broadcast',
+      referenceId: plan.broadcastId,
+      description: `Broadcast (${plan.templateName}): ${sentSuccessCount} sent`,
+      metadata: {
+        broadcastId: plan.broadcastId,
+        templateName: plan.templateName,
+        sentSuccessCount,
+        costPerMsg,
+      },
+    }).catch((deductErr) => {
+      console.warn('[broadcast-core] wallet deduction failed:', deductErr);
+    });
   }
 
   await finalizeBroadcastStatus(db, plan.broadcastId);

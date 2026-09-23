@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   AlertCircle,
   Bot,
+  Wallet,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -35,6 +36,11 @@ export default function SuperAdminSettingsPage() {
     admin_ai_model: 'gpt-4o-mini',
     support_email: 'support@aibotflow.in',
     support_phone: '',
+    wallet_system_enabled: true,
+    wallet_rate_marketing: 0.85,
+    wallet_rate_utility: 0.15,
+    wallet_rate_service: 0.35,
+    wallet_rate_auth: 0.15,
   });
 
   useEffect(() => {
@@ -56,6 +62,11 @@ export default function SuperAdminSettingsPage() {
             admin_ai_model: data.settings.admin_ai_model || 'gpt-4o-mini',
             support_email: data.settings.support_email || 'support@aibotflow.in',
             support_phone: data.settings.support_phone || '',
+            wallet_system_enabled: data.settings.wallet_system_enabled !== false,
+            wallet_rate_marketing: Number(data.settings.wallet_rate_marketing ?? 0.85),
+            wallet_rate_utility: Number(data.settings.wallet_rate_utility ?? 0.15),
+            wallet_rate_service: Number(data.settings.wallet_rate_service ?? 0.35),
+            wallet_rate_auth: Number(data.settings.wallet_rate_auth ?? 0.15),
           });
         }
       })
@@ -200,6 +211,100 @@ export default function SuperAdminSettingsPage() {
           <div className="rounded-lg border border-border/80 bg-muted/40 p-3 text-[11px] text-muted-foreground">
             <strong>Webhook URL for Razorpay:</strong>{' '}
             <code className="text-primary font-semibold">https://dash.aibotflow.in/api/webhooks/razorpay</code>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Prepaid WhatsApp Wallet & Per-Message Rates */}
+      <Card className="border-border bg-card">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <div className="flex size-6 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500">
+              <Wallet className="size-4" />
+            </div>
+            <div>
+              <CardTitle className="text-base font-bold text-foreground">
+                Prepaid WhatsApp Wallet & Per-Message Credit Pricing
+              </CardTitle>
+              <CardDescription className="text-xs text-muted-foreground">
+                Eliminate the need for customers to add credit cards on Meta. Customers recharge in INR via Razorpay and credits are deducted automatically.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4 text-xs">
+          <div className="flex items-center justify-between rounded-xl border border-border/80 bg-muted/30 p-3.5">
+            <div>
+              <span className="font-semibold text-foreground text-sm block">
+                Enable Prepaid Wallet System
+              </span>
+              <span className="text-xs text-muted-foreground">
+                When enabled, accounts must maintain positive wallet balance to send broadcasts and automated messages.
+              </span>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.wallet_system_enabled}
+                onChange={(e) => setForm({ ...form, wallet_system_enabled: e.target.checked })}
+                className="sr-only peer"
+              />
+              <div className="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+            </label>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-4 pt-2">
+            <div className="space-y-1">
+              <Label className="text-muted-foreground">Marketing (₹ / msg)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.wallet_rate_marketing}
+                onChange={(e) => setForm({ ...form, wallet_rate_marketing: Number(e.target.value) })}
+                className="border-border bg-muted font-bold text-foreground"
+              />
+              <span className="text-[10px] text-muted-foreground">Meta Base ~₹0.78 + Margin</span>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-muted-foreground">Utility / Orders (₹ / msg)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.wallet_rate_utility}
+                onChange={(e) => setForm({ ...form, wallet_rate_utility: Number(e.target.value) })}
+                className="border-border bg-muted font-bold text-foreground"
+              />
+              <span className="text-[10px] text-muted-foreground">Meta Base ~₹0.12 + Margin</span>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-muted-foreground">Auth / OTP (₹ / msg)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.wallet_rate_auth}
+                onChange={(e) => setForm({ ...form, wallet_rate_auth: Number(e.target.value) })}
+                className="border-border bg-muted font-bold text-foreground"
+              />
+              <span className="text-[10px] text-muted-foreground">Meta Base ~₹0.12 + Margin</span>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-muted-foreground">Service Chat (₹ / msg)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.wallet_rate_service}
+                onChange={(e) => setForm({ ...form, wallet_rate_service: Number(e.target.value) })}
+                className="border-border bg-muted font-bold text-foreground"
+              />
+              <span className="text-[10px] text-muted-foreground">24hr customer chat window</span>
+            </div>
           </div>
         </CardContent>
       </Card>
