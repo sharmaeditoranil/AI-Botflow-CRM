@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     const adminDb = getAdminSupabase();
 
     // Fetch conversation & contact
-    let convId = conversationId;
+    const convId = conversationId;
     let recipientPhone = '';
 
     if (convId) {

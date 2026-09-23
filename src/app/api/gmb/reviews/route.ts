@@ -27,11 +27,13 @@ export async function GET(req: NextRequest) {
     const adminDb = getAdminSupabase();
 
     // Fetch reviews from database
-    let { data: reviews, error: revError } = await adminDb
+    const { data: dbReviews, error: revError } = await adminDb
       .from("google_business_reviews")
       .select("*")
       .eq("account_id", profile.account_id)
       .order("review_timestamp", { ascending: false });
+
+    let reviews = dbReviews;
 
     if (revError) {
       console.warn("[GMB Reviews] Database fetch notice:", revError.message);
