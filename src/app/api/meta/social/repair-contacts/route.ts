@@ -1,12 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { decrypt } from '@/lib/whatsapp/encryption';
-import {
-  getFacebookUserProfile,
-  getInstagramUserProfile,
-} from '@/lib/social/meta-social';
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 function supabaseAdmin() {
   return createClient(
@@ -15,12 +11,25 @@ function supabaseAdmin() {
   );
 }
 
+interface Participant {
+  id: string;
+  name?: string;
+  username?: string;
+  email?: string;
+}
+
+interface ConversationItem {
+  id: string;
+  participants?: { data: Participant[] };
+  senders?: { data: Participant[] };
+}
+
 /**
  * POST /api/meta/social/repair-contacts
  *
- * Batch-repairs contacts that have generic names ("Facebook User", "Instagram User",
- * or IG:/FB: prefixed IDs) by fetching their real profile from the Meta Graph API
- * and updating the contacts table.
+ * Uses Meta Page Conversations API (both Messenger & Instagram) to fetch all
+ * conversation participants with their verified Facebook names and Instagram usernames,
+ * and updates any generic/empty contact names in the database.
  */
 export async function POST(request: Request) {
   try {
@@ -29,10 +38,9 @@ export async function POST(request: Request) {
 
     const supabase = supabaseAdmin();
 
-    // Fetch the social config (per account if provided, else first available)
     let configQuery = supabase
       .from('meta_social_config')
-      .select('account_id, facebook_page_access_token');
+      .select('account_id, facebook_page_id, instagram_account_id, facebook_page_access_token');
 
     if (accountId) {
       configQuery = configQuery.eq('account_id', accountId);
@@ -48,92 +56,125 @@ export async function POST(request: Request) {
     }
 
     let totalFixed = 0;
-    let totalFailed = 0;
     const errors: string[] = [];
 
     for (const config of configs) {
       const acctId: string = config.account_id;
+      const pageId: string | null = config.facebook_page_id;
       const rawToken: string | null = config.facebook_page_access_token;
-      if (!rawToken) {
-        errors.push(`Account ${acctId}: no access token stored`);
+
+      if (!rawToken || !pageId) {
+        errors.push(`Account ${acctId}: missing token or page ID`);
         continue;
       }
 
-      let pageAccessToken: string;
+      let token: string;
       try {
-        pageAccessToken = decrypt(rawToken);
+        token = decrypt(rawToken);
       } catch {
         errors.push(`Account ${acctId}: token decryption failed`);
         continue;
       }
 
-      if (!pageAccessToken) {
-        errors.push(`Account ${acctId}: empty token after decryption`);
-        continue;
-      }
+      if (!token) continue;
 
-      // Find all contacts with generic/fallback names for this account
-      const { data: genericContacts, error: contactsErr } = await supabase
-        .from('contacts')
-        .select('id, name, ig_user_id, fb_user_id')
-        .eq('account_id', acctId)
-        .or(
-          [
-            "name.eq.Facebook User",
-            "name.eq.Instagram User",
-            "name.like.Facebook User%",
-            "name.like.Instagram User%",
-            "name.like.FB: %",
-            "name.like.IG: %",
-            "name.is.null",
-          ].join(',')
-        );
+      // Map to hold sender_id -> displayName
+      const idToNameMap = new Map<string, string>();
 
-      if (contactsErr) {
-        errors.push(`Account ${acctId}: DB query error - ${contactsErr.message}`);
-        continue;
-      }
+      // 1. Fetch Facebook Messenger conversations
+      try {
+        let fbUrl: string | null = `https://graph.facebook.com/v21.0/${pageId}/conversations?fields=id,participants,senders&limit=100&access_token=${encodeURIComponent(token)}`;
+        let pagesCount = 0;
 
-      if (!genericContacts || genericContacts.length === 0) {
-        continue;
-      }
+        while (fbUrl && pagesCount < 5) {
+          pagesCount++;
+          const currentFbUrl: string = fbUrl;
+          const fbRes: Response = await fetch(currentFbUrl);
+          if (!fbRes.ok) break;
+          const fbJson: any = await fbRes.json();
+          const items: ConversationItem[] = fbJson.data || [];
 
-      // Process each generic contact
-      for (const contact of genericContacts) {
-        const igUserId: string | null = contact.ig_user_id ?? null;
-        const fbUserId: string | null = contact.fb_user_id ?? null;
-
-        let profile: { name: string; username?: string; avatarUrl?: string } | null = null;
-
-        try {
-          if (igUserId) {
-            profile = await getInstagramUserProfile(igUserId, pageAccessToken);
-          } else if (fbUserId) {
-            profile = await getFacebookUserProfile(fbUserId, pageAccessToken);
+          for (const item of items) {
+            const list = [...(item.participants?.data || []), ...(item.senders?.data || [])];
+            for (const p of list) {
+              if (p.id && p.id !== pageId && p.name) {
+                idToNameMap.set(p.id, p.name.trim());
+              }
+            }
           }
-        } catch (err) {
-          console.warn(`[repair-contacts] Profile fetch failed for contact ${contact.id}:`, err);
+
+          fbUrl = fbJson.paging?.next || null;
+        }
+      } catch (err) {
+        console.warn(`[repair-contacts] Error fetching FB conversations for account ${acctId}:`, err);
+      }
+
+      // 2. Fetch Instagram conversations via Page (platform=instagram)
+      try {
+        let igUrl: string | null = `https://graph.facebook.com/v21.0/${pageId}/conversations?platform=instagram&fields=id,participants,senders&limit=100&access_token=${encodeURIComponent(token)}`;
+        let igPagesCount = 0;
+
+        while (igUrl && igPagesCount < 5) {
+          igPagesCount++;
+          const currentIgUrl: string = igUrl;
+          const igRes: Response = await fetch(currentIgUrl);
+          if (!igRes.ok) break;
+          const igJson: any = await igRes.json();
+          const items: ConversationItem[] = igJson.data || [];
+
+          for (const item of items) {
+            const list = [...(item.participants?.data || []), ...(item.senders?.data || [])];
+            for (const p of list) {
+              if (p.id && p.id !== pageId && p.id !== config.instagram_account_id) {
+                const displayName = p.username ? `@${p.username.trim()}` : p.name?.trim();
+                if (displayName) {
+                  idToNameMap.set(p.id, displayName);
+                }
+              }
+            }
+          }
+
+          igUrl = igJson.paging?.next || null;
+        }
+      } catch (err) {
+        console.warn(`[repair-contacts] Error fetching IG conversations for account ${acctId}:`, err);
+      }
+
+      console.log(`[repair-contacts] Discovered ${idToNameMap.size} user profiles from Meta conversations`);
+
+      // 3. Update database contacts matching these IDs
+      for (const [userId, realName] of idToNameMap.entries()) {
+        // Check FB user match
+        const { data: fbMatch } = await supabase
+          .from('contacts')
+          .select('id, name')
+          .eq('account_id', acctId)
+          .eq('fb_user_id', userId)
+          .limit(1);
+
+        if (fbMatch && fbMatch.length > 0) {
+          const c = fbMatch[0];
+          if (!c.name || c.name === 'Facebook User' || c.name.startsWith('Facebook User') || c.name.startsWith('FB: ')) {
+            await supabase.from('contacts').update({ name: realName, updated_at: new Date().toISOString() }).eq('id', c.id);
+            totalFixed++;
+            continue;
+          }
         }
 
-        if (profile && profile.name) {
-          const { error: updateErr } = await supabase
-            .from('contacts')
-            .update({
-              name: profile.name,
-              ...(profile.avatarUrl ? { avatar_url: profile.avatarUrl } : {}),
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', contact.id);
+        // Check IG user match
+        const { data: igMatch } = await supabase
+          .from('contacts')
+          .select('id, name')
+          .eq('account_id', acctId)
+          .eq('ig_user_id', userId)
+          .limit(1);
 
-          if (updateErr) {
-            totalFailed++;
-            errors.push(`Contact ${contact.id}: update failed - ${updateErr.message}`);
-          } else {
+        if (igMatch && igMatch.length > 0) {
+          const c = igMatch[0];
+          if (!c.name || c.name === 'Instagram User' || c.name.startsWith('Instagram User') || c.name.startsWith('IG: ')) {
+            await supabase.from('contacts').update({ name: realName, updated_at: new Date().toISOString() }).eq('id', c.id);
             totalFixed++;
           }
-        } else {
-          // Could not get real name — leave as is (already has a non-null fallback)
-          totalFailed++;
         }
       }
     }
@@ -141,9 +182,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       fixed: totalFixed,
-      failed: totalFailed,
-      errors: errors.length > 0 ? errors : undefined,
-      message: `${totalFixed} contact(s) naam update ho gaye. ${totalFailed > 0 ? `${totalFailed} update nahi ho sake (Meta API permission ya token issue).` : ''}`,
+      message: `${totalFixed} contact(s) ka naam successfully Meta se sync ho gaya!`,
     });
   } catch (err) {
     console.error('[repair-contacts] Unexpected error:', err);

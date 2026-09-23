@@ -240,79 +240,134 @@ function computeAppSecretProof(accessToken: string): string | null {
 
 /**
  * Fetch a Facebook user's public profile (PSID-scoped).
+ * Falls back to /{pageId}/conversations?user_id={psid} if direct query lacks capability.
  */
 export async function getFacebookUserProfile(
   psid: string,
   pageAccessToken: string,
+  pageId?: string,
 ): Promise<SocialUserProfile | null> {
   if (!psid || !pageAccessToken) return null;
   const proof = computeAppSecretProof(pageAccessToken);
   const proofParam = proof ? `&appsecret_proof=${proof}` : '';
+
+  // 1. Try direct user profile endpoint
   const url = `${META_GRAPH_BASE_URL}/${encodeURIComponent(psid)}?fields=name,first_name,last_name,profile_pic&access_token=${encodeURIComponent(pageAccessToken)}${proofParam}`;
 
   try {
     const res = await fetch(url);
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      console.warn('[meta-social] Facebook profile request non-200:', res.status, errText);
-      return null;
+    if (res.ok) {
+      const data = (await res.json()) as {
+        name?: string;
+        first_name?: string;
+        last_name?: string;
+        profile_pic?: string;
+      };
+      const resolvedName = (data.name || [data.first_name, data.last_name].filter(Boolean).join(' ')).trim();
+      if (resolvedName) {
+        return {
+          name: resolvedName,
+          avatarUrl: data.profile_pic,
+        };
+      }
     }
-    const data = (await res.json()) as {
-      name?: string;
-      first_name?: string;
-      last_name?: string;
-      profile_pic?: string;
-    };
-    const resolvedName = (data.name || [data.first_name, data.last_name].filter(Boolean).join(' ')).trim();
-    if (!resolvedName) return null;
-    return {
-      name: resolvedName,
-      avatarUrl: data.profile_pic,
-    };
   } catch (err) {
-    console.warn('[meta-social] Facebook profile fetch error:', err);
-    return null;
+    console.warn('[meta-social] Direct FB profile fetch error:', err);
   }
+
+  // 2. Resilient Fallback: /{pageId}/conversations?user_id={psid}
+  if (pageId) {
+    try {
+      const convUrl = `${META_GRAPH_BASE_URL}/${encodeURIComponent(pageId)}/conversations?user_id=${encodeURIComponent(psid)}&fields=participants,senders&access_token=${encodeURIComponent(pageAccessToken)}${proofParam}`;
+      const convRes = await fetch(convUrl);
+      if (convRes.ok) {
+        const convData = await convRes.json();
+        const threads = convData.data || [];
+        for (const thread of threads) {
+          const allPeople = [...(thread.participants?.data || []), ...(thread.senders?.data || [])];
+          for (const p of allPeople) {
+            if (p.id === psid && p.name?.trim()) {
+              return { name: p.name.trim() };
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[meta-social] FB conversation lookup fallback error:', err);
+    }
+  }
+
+  return null;
 }
 
 /**
  * Fetch an Instagram user's public profile (IGSID-scoped).
+ * Falls back to /{pageId}/conversations?platform=instagram&user_id={igsid} if direct query lacks capability.
  */
 export async function getInstagramUserProfile(
   igsid: string,
   pageAccessToken: string,
+  pageId?: string,
 ): Promise<SocialUserProfile | null> {
   if (!igsid || !pageAccessToken) return null;
   const proof = computeAppSecretProof(pageAccessToken);
   const proofParam = proof ? `&appsecret_proof=${proof}` : '';
+
+  // 1. Try direct Instagram user endpoint
   const url = `${META_GRAPH_BASE_URL}/${encodeURIComponent(igsid)}?fields=name,username,profile_pic&access_token=${encodeURIComponent(pageAccessToken)}${proofParam}`;
 
   try {
     const res = await fetch(url);
-    if (!res.ok) {
-      const errText = await res.text().catch(() => '');
-      console.warn('[meta-social] Instagram profile request non-200:', res.status, errText);
-      return null;
+    if (res.ok) {
+      const data = (await res.json()) as {
+        name?: string;
+        username?: string;
+        profile_pic?: string;
+      };
+      const cleanName = data.name?.trim();
+      const cleanUsername = data.username?.trim();
+      const resolvedName = cleanName || (cleanUsername ? `@${cleanUsername}` : null);
+      if (resolvedName) {
+        return {
+          name: resolvedName,
+          username: cleanUsername,
+          avatarUrl: data.profile_pic,
+        };
+      }
     }
-    const data = (await res.json()) as {
-      name?: string;
-      username?: string;
-      profile_pic?: string;
-    };
-    const cleanName = data.name?.trim();
-    const cleanUsername = data.username?.trim();
-    const resolvedName = cleanName || (cleanUsername ? `@${cleanUsername}` : null);
-    if (!resolvedName) return null;
-
-    return {
-      name: resolvedName,
-      username: cleanUsername,
-      avatarUrl: data.profile_pic,
-    };
   } catch (err) {
-    console.warn('[meta-social] Instagram profile fetch error:', err);
-    return null;
+    console.warn('[meta-social] Direct IG profile fetch error:', err);
   }
+
+  // 2. Resilient Fallback: /{pageId}/conversations?platform=instagram&user_id={igsid}
+  if (pageId) {
+    try {
+      const convUrl = `${META_GRAPH_BASE_URL}/${encodeURIComponent(pageId)}/conversations?platform=instagram&user_id=${encodeURIComponent(igsid)}&fields=participants,senders&access_token=${encodeURIComponent(pageAccessToken)}${proofParam}`;
+      const convRes = await fetch(convUrl);
+      if (convRes.ok) {
+        const convData = await convRes.json();
+        const threads = convData.data || [];
+        for (const thread of threads) {
+          const allPeople = [...(thread.participants?.data || []), ...(thread.senders?.data || [])];
+          for (const p of allPeople) {
+            if (p.id === igsid) {
+              const displayName = p.username ? `@${p.username.trim()}` : p.name?.trim();
+              if (displayName) {
+                return {
+                  name: displayName,
+                  username: p.username?.trim(),
+                };
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[meta-social] IG conversation lookup fallback error:', err);
+    }
+  }
+
+  return null;
 }
 
 function getAdminSupabase() {

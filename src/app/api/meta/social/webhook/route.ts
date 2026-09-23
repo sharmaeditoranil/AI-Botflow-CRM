@@ -132,13 +132,14 @@ export async function POST(request: Request) {
       let configRow: {
         account_id: string;
         user_id: string;
+        facebook_page_id?: string | null;
         facebook_page_access_token?: string | null;
       } | null = null;
 
       const idColumn = isInstagram ? 'instagram_account_id' : 'facebook_page_id';
       const { data: matchedConfigs } = await supabase
         .from('meta_social_config')
-        .select('account_id, user_id, facebook_page_access_token')
+        .select('account_id, user_id, facebook_page_id, facebook_page_access_token')
         .eq(idColumn, entryId)
         .limit(1);
 
@@ -148,7 +149,7 @@ export async function POST(request: Request) {
         // If not matched by entry ID directly, attempt to use the first active config
         const { data: anyConfig } = await supabase
           .from('meta_social_config')
-          .select('account_id, user_id, facebook_page_access_token')
+          .select('account_id, user_id, facebook_page_id, facebook_page_access_token')
           .limit(1);
         if (anyConfig && anyConfig.length > 0) {
           configRow = anyConfig[0];
@@ -162,6 +163,7 @@ export async function POST(request: Request) {
 
       const accountId = configRow.account_id;
       const userId = configRow.user_id;
+      const pageId = configRow.facebook_page_id || entryId;
       const pageAccessToken = configRow.facebook_page_access_token
         ? decrypt(configRow.facebook_page_access_token)
         : '';
@@ -221,8 +223,8 @@ export async function POST(request: Request) {
           if (isGeneric && pageAccessToken) {
             try {
               const profile = isInstagram
-                ? await getInstagramUserProfile(senderId, pageAccessToken)
-                : await getFacebookUserProfile(senderId, pageAccessToken);
+                ? await getInstagramUserProfile(senderId, pageAccessToken, pageId)
+                : await getFacebookUserProfile(senderId, pageAccessToken, pageId);
 
               if (profile && profile.name) {
                 contactName = profile.name;
@@ -245,8 +247,8 @@ export async function POST(request: Request) {
           if (pageAccessToken) {
             try {
               const profile = isInstagram
-                ? await getInstagramUserProfile(senderId, pageAccessToken)
-                : await getFacebookUserProfile(senderId, pageAccessToken);
+                ? await getInstagramUserProfile(senderId, pageAccessToken, pageId)
+                : await getFacebookUserProfile(senderId, pageAccessToken, pageId);
 
               if (profile && profile.name) {
                 contactName = profile.name;
