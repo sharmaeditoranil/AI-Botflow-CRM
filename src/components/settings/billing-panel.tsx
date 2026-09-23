@@ -28,6 +28,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { SettingsPanelHead } from './settings-panel-head';
 import type { AccountUsageInfo } from '@/lib/billing/limits';
 import { BrandLogo } from '@/components/brand/brand-logo';
