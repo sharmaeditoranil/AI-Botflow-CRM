@@ -213,14 +213,24 @@ export function SocialChannelsConfig() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
-      const data = await res.json();
+
+      const contentType = res.headers.get("content-type") || "";
+      let data: any = null;
+      if (contentType.includes("application/json")) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        console.warn("[repair-contacts] Non-JSON response:", res.status, text.slice(0, 150));
+        throw new Error(`Server response error (${res.status}). Kripya thodi der baad dobara koshish karein.`);
+      }
+
       if (!res.ok) {
         throw new Error(data.error || "Contact repair failed");
       }
       if (data.fixed > 0) {
         toast.success(`✅ ${data.fixed} contact(s) ka naam update ho gaya!`);
       } else {
-        toast.info("Koi generic naam wala contact nahi mila, ya Meta API se naam nahi aaya.");
+        toast.info(data.message || "Koi generic naam wala contact nahi mila, ya Meta API se naam nahi aaya.");
       }
       if (data.failed > 0) {
         toast.warning(`⚠️ ${data.failed} contact(s) update nahi ho sake. Token ya Meta API permissions check karein.`);
@@ -247,7 +257,15 @@ export function SocialChannelsConfig() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ channel: disconnectTarget }),
       });
-      const data = await res.json();
+
+      const contentType = res.headers.get("content-type") || "";
+      let data: any = null;
+      if (contentType.includes("application/json")) {
+        data = await res.json();
+      } else {
+        throw new Error(`Server response error (${res.status}). Failed to disconnect channel.`);
+      }
+
       if (!res.ok) {
         throw new Error(data.error || "Failed to disconnect channel");
       }
