@@ -84,14 +84,15 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
-      { url: "/brand/logo-32.png?v=6", sizes: "32x32", type: "image/png" },
-      { url: "/brand/logo-192.png?v=6", sizes: "192x192", type: "image/png" },
-      { url: "/brand/logo-512.png?v=6", sizes: "512x512", type: "image/png" },
-      { url: "/icon?v=6" },
+      { url: "/favicon.ico?v=7", sizes: "any" },
+      { url: "/brand/logo-32.png?v=7", sizes: "32x32", type: "image/png" },
+      { url: "/brand/logo-192.png?v=7", sizes: "192x192", type: "image/png" },
+      { url: "/brand/logo-512.png?v=7", sizes: "512x512", type: "image/png" },
+      { url: "/icon?v=7" },
     ],
-    shortcut: "/favicon.ico?v=6",
+    shortcut: "/favicon.ico?v=7",
     apple: [
-      { url: "/apple-touch-icon.png?v=6", sizes: "180x180", type: "image/png" },
+      { url: "/apple-touch-icon.png?v=7", sizes: "180x180", type: "image/png" },
     ],
   },
   formatDetection: {
