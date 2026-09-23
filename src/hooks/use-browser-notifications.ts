@@ -7,16 +7,20 @@ import { createClient } from "@/lib/supabase/client";
 import type { Message } from "@/types";
 import {
   DEFAULT_NOTIFICATION_LABELS,
+  DEDUPE_WINDOW_MS,
   buildNotificationContent,
   conversationHref,
   getNotificationPermission,
   pickContactDisplayName,
   readBrowserNotifyPref,
-  shouldNotifyForMessage,
   subscribeBrowserNotifyPref,
   viewedConversationFromLocation,
   type NotificationLabels,
 } from "@/lib/notifications/browser-notify";
+import {
+  playNotificationSound,
+  useNotificationSoundPref,
+} from "@/lib/notifications/sound";
 
 const serverSnapshot = () => false;
 
@@ -33,23 +37,18 @@ export function useBrowserNotifyPref(): boolean {
 }
 
 /**
- * Desktop notifications for new inbound customer messages. Mount ONCE
- * per signed-in dashboard tab (the dashboard shell does this via
+ * Notifications (sound chime & desktop OS popups) for new inbound customer messages.
+ * Mount ONCE per signed-in dashboard tab (the dashboard shell does this via
  * <BrowserNotificationsListener />) so alerts fire on any page.
  *
  * Listens for realtime INSERTs on `messages` — RLS scopes the stream to
  * the caller's account, same as useTotalUnread / useRealtime. Only
  * live events are considered: there is no initial fetch, so an existing
  * backlog never produces a burst of alerts on page load.
- *
- * Own channel name so it coexists with the inbox page's subscription
- * and the sidebar's unread counters.
- *
- * Fires only while a dashboard tab is open — there is no service worker
- * or Web Push here, so a closed browser stays quiet.
  */
 export function useBrowserNotifications(): void {
-  const enabled = useBrowserNotifyPref();
+  const desktopEnabled = useBrowserNotifyPref();
+  const soundEnabled = useNotificationSoundPref();
   const router = useRouter();
   const t = useTranslations("Settings.browserNotifications.labels");
 
@@ -69,26 +68,26 @@ export function useBrowserNotifications(): void {
     };
   });
 
-  // Message ids already handled, for replay dedupe. Survives re-renders,
-  // pruned by shouldNotifyForMessage.
+  // Message ids already handled, for replay dedupe. Survives re-renders.
   const seenRef = useRef<Map<string, number>>(new Map());
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch((err) => {
-        console.warn('[PWA] Service worker registration notice:', err);
+    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch((err) => {
+        console.warn("[PWA] Service worker registration notice:", err);
       });
     }
 
-    if (!enabled) return;
-    if (getNotificationPermission() === "unsupported") return;
+    // Only run if either desktop notifications or sound notifications are enabled
+    if (!desktopEnabled && !soundEnabled) return;
 
     const supabase = createClient();
     let cancelled = false;
 
-    const notify = async (msg: Message) => {
-      // One small select to put the contact's name in the title. A
-      // failure here just means the generic fallback title.
+    const showDesktopNotification = async (msg: Message) => {
+      if (!desktopEnabled || getNotificationPermission() !== "granted") return;
+
+      // Contact name query for title
       const { data } = await supabase
         .from("conversations")
         .select("contact:contacts(name, wa_username, phone)")
@@ -106,9 +105,9 @@ export function useBrowserNotifications(): void {
       );
 
       try {
-        if ('serviceWorker' in navigator) {
+        if ("serviceWorker" in navigator) {
           const reg = await navigator.serviceWorker.ready;
-          if (reg && 'showNotification' in reg) {
+          if (reg && "showNotification" in reg) {
             await reg.showNotification(title, {
               body,
               tag: msg.conversation_id,
@@ -131,7 +130,6 @@ export function useBrowserNotifications(): void {
           notification.close();
         };
       } catch (err) {
-        // Fallback for non-compliant browser environments
         console.error("[useBrowserNotifications] failed to show:", err);
       }
     };
@@ -142,20 +140,34 @@ export function useBrowserNotifications(): void {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages" },
         (payload) => {
-          // Re-check every time: the user can revoke permission in the
-          // browser without the preference flipping.
-          if (getNotificationPermission() !== "granted") return;
           const msg = payload.new as Message;
-          const shouldNotify = shouldNotifyForMessage(msg, {
-            documentVisible: document.visibilityState === "visible",
-            viewingConversationId: viewedConversationFromLocation(
+          // Only alert for customer messages (not agent or bot sends)
+          if (msg.sender_type !== "customer") return;
+
+          // Dedupe against Realtime reconnect replays
+          const now = Date.now();
+          for (const [id, at] of seenRef.current) {
+            if (now - at > DEDUPE_WINDOW_MS) seenRef.current.delete(id);
+          }
+          if (seenRef.current.has(msg.id)) return;
+          seenRef.current.set(msg.id, now);
+
+          // 1. Play sound chime alert
+          if (soundEnabled) {
+            playNotificationSound();
+          }
+
+          // 2. Desktop notification popup: skip if user is actively in this conversation
+          const isViewingThisConversation =
+            document.visibilityState === "visible" &&
+            viewedConversationFromLocation(
               window.location.pathname,
               window.location.search,
-            ),
-            seen: seenRef.current,
-          });
-          if (!shouldNotify) return;
-          void notify(msg);
+            ) === msg.conversation_id;
+
+          if (!isViewingThisConversation) {
+            void showDesktopNotification(msg);
+          }
         },
       )
       .subscribe();
@@ -164,5 +176,5 @@ export function useBrowserNotifications(): void {
       cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, [enabled, router]);
+  }, [desktopEnabled, soundEnabled, router]);
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useSyncExternalStore } from 'react';
-import { Bell, BellRing, CircleAlert, Loader2 } from 'lucide-react';
+import { Bell, BellRing, CircleAlert, Loader2, Volume2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTranslations } from 'next-intl';
 
@@ -21,6 +21,11 @@ import {
   writeBrowserNotifyPref,
   type BrowserNotifyPermission,
 } from '@/lib/notifications/browser-notify';
+import {
+  playNotificationSound,
+  setNotificationSoundEnabled,
+  useNotificationSoundPref,
+} from '@/lib/notifications/sound';
 
 // `Notification.permission` has no change event of its own. Re-read it
 // whenever the tab regains focus (the user may have flipped the site
@@ -41,13 +46,12 @@ const serverPermission = (): BrowserNotifyPermission => 'unsupported';
 
 /**
  * "Browser notifications" card — device-scoped opt-in for desktop
- * alerts about new customer messages (issue #516). Persistence is
- * localStorage; the browser's own permission grant is the real gate,
- * so the switch reads as off whenever that grant is missing.
+ * alerts and sound chimes about new customer messages.
  */
 export function BrowserNotificationsCard({ className }: { className?: string }) {
   const t = useTranslations('Settings.browserNotifications');
   const enabled = useBrowserNotifyPref();
+  const soundEnabled = useNotificationSoundPref();
   const permission = useSyncExternalStore(
     subscribePermission,
     getNotificationPermission,
@@ -112,55 +116,87 @@ export function BrowserNotificationsCard({ className }: { className?: string }) 
         </CardTitle>
         <CardDescription>{t('description')}</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {!supported ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <CircleAlert className="size-4 shrink-0" />
-            {t('unsupported')}
-          </p>
-        ) : (
-          <>
-            <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground">
-                  {t('toggleLabel')}
-                </p>
-                <p className="text-xs text-muted-foreground">{t('toggleDesc')}</p>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {requesting && (
-                  <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                )}
-                <Switch
-                  checked={checked}
-                  onCheckedChange={(next) => void onToggle(next)}
-                  disabled={requesting || permission === 'denied'}
-                  aria-label={t('toggleLabel')}
-                />
-              </div>
-            </div>
-
-            <p className="text-xs text-muted-foreground">{t(statusKey)}</p>
-
-            {permission === 'denied' && (
-              <p className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-                <CircleAlert className="mt-0.5 size-3.5 shrink-0" />
-                <span>{t('deniedHint')}</span>
+      <CardContent className="space-y-6">
+        {/* Sound Notification Alert Section */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-foreground">
+                {t('soundToggleLabel')}
               </p>
-            )}
+              <p className="text-xs text-muted-foreground">{t('soundToggleDesc')}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Switch
+                checked={soundEnabled}
+                onCheckedChange={(next) => setNotificationSoundEnabled(next)}
+                aria-label={t('soundToggleLabel')}
+              />
+            </div>
+          </div>
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={sendTest}
-              disabled={!checked}
-            >
-              <BellRing className="size-4" />
-              {t('sendTest')}
-            </Button>
-          </>
-        )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => playNotificationSound()}
+          >
+            <Volume2 className="size-4" />
+            {t('testSound')}
+          </Button>
+        </div>
+
+        {/* Desktop Notification Popup Section */}
+        <div className="space-y-3 pt-2 border-t border-border">
+          {!supported ? (
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <CircleAlert className="size-4 shrink-0" />
+              {t('unsupported')}
+            </p>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-4 rounded-md border border-border p-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">
+                    {t('toggleLabel')}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{t('toggleDesc')}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {requesting && (
+                    <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                  )}
+                  <Switch
+                    checked={checked}
+                    onCheckedChange={(next) => void onToggle(next)}
+                    disabled={requesting || permission === 'denied'}
+                    aria-label={t('toggleLabel')}
+                  />
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground">{t(statusKey)}</p>
+
+              {permission === 'denied' && (
+                <p className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                  <CircleAlert className="mt-0.5 size-3.5 shrink-0" />
+                  <span>{t('deniedHint')}</span>
+                </p>
+              )}
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={sendTest}
+                disabled={!checked}
+              >
+                <BellRing className="size-4" />
+                {t('sendTest')}
+              </Button>
+            </>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

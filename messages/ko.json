@@ -1856,6 +1856,10 @@
       "testTitle": "테스트 알림",
       "testBody": "알림이 정상 작동합니다. 새 고객 메시지가 이렇게 표시됩니다.",
       "permissionDeniedToast": "브라우저가 알림을 차단했습니다",
+      "soundTitle": "메시지 알림음",
+      "soundToggleLabel": "새 고객 메시지 도착 시 알림음 재생",
+      "soundToggleDesc": "고객이 메시지를 보낼 때 알림 소리를 재생합니다.",
+      "testSound": "알림음 테스트",
       "labels": {
         "fallbackTitle": "새 메시지",
         "image": "📷 사진",

@@ -1856,6 +1856,10 @@
       "testTitle": "Notificação de teste",
       "testBody": "As notificações estão funcionando. Novas mensagens de clientes aparecerão assim.",
       "permissionDeniedToast": "Seu navegador bloqueou as notificações",
+      "soundTitle": "Alerta sonoro de mensagem",
+      "soundToggleLabel": "Tocar aviso sonoro em novas mensagens de clientes",
+      "soundToggleDesc": "Reproduz um som sempre que um cliente enviar uma mensagem.",
+      "testSound": "Testar som",
       "labels": {
         "fallbackTitle": "Nova mensagem",
         "image": "📷 Foto",

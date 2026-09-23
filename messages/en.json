@@ -1831,6 +1831,10 @@
       "testTitle": "Test notification",
       "testBody": "Notifications are working. New customer messages will show up like this.",
       "permissionDeniedToast": "Your browser blocked notifications",
+      "soundTitle": "Message sound alert",
+      "soundToggleLabel": "Play sound chime on new customer message",
+      "soundToggleDesc": "Plays a friendly bell chime whenever a customer sends a message.",
+      "testSound": "Test chime sound",
       "labels": {
         "fallbackTitle": "New message",
         "image": "📷 Photo",
