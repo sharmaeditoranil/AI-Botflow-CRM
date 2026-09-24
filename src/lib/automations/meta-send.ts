@@ -49,6 +49,7 @@ interface SendTemplateArgs {
   templateName: string
   language?: string
   params?: string[]
+  headerMediaUrl?: string
 }
 
 export async function engineSendText(args: SendTextArgs): Promise<{ whatsapp_message_id: string }> {
@@ -168,6 +169,7 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
 
   const attempt = async (phone: string): Promise<string> => {
     if (input.kind === 'template') {
+      const mediaUrl = input.headerMediaUrl || templateRow?.header_media_url || undefined
       const r = await sendTemplateMessage({
         phoneNumberId: config.phone_number_id,
         accessToken,
@@ -175,6 +177,11 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
         templateName: input.templateName,
         language: input.language,
         params: input.params,
+        template: templateRow || undefined,
+        messageParams: {
+          body: input.params,
+          headerMediaUrl: mediaUrl,
+        },
       })
       return r.messageId
     }

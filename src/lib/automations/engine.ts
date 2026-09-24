@@ -422,7 +422,7 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       let expectedVarCount = 0
       const { data: tmplRow } = await db
         .from('message_templates')
-        .select('body_text')
+        .select('body_text, header_type, header_media_url')
         .eq('account_id', args.automation.account_id)
         .eq('name', cfg.template_name)
         .maybeSingle()
@@ -461,6 +461,7 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         templateName: cfg.template_name,
         language: cfg.language,
         params,
+        headerMediaUrl: cfg.header_media_url || tmplRow?.header_media_url,
       })
       return `template sent via Meta (${whatsapp_message_id})`
     }

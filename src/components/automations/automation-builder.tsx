@@ -6,6 +6,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  useRef,
   type ReactNode,
 } from "react"
 import { useRouter } from "next/navigation"
@@ -41,6 +42,9 @@ import {
   Eye,
   EyeOff,
   RefreshCw,
+  Upload,
+  ImageIcon,
+  Video,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -68,8 +72,10 @@ import {
   blankButtonsPayload,
   blankListPayload,
 } from "@/components/interactive/interactive-builder"
-import { interactivePayloadPreviewText } from "@/lib/whatsapp/interactive"
 import { createClient } from "@/lib/supabase/client"
+import { interactivePayloadPreviewText } from "@/lib/whatsapp/interactive"
+import { uploadAccountMedia, MEDIA_MAX_BYTES_BY_KIND } from "@/lib/storage/upload-media"
+import { type MediaHeaderKind } from "@/lib/whatsapp/media-header-types"
 import {
   childPath,
   insertAt,
@@ -188,7 +194,7 @@ function blankConfig(type: AutomationStepType): Record<string, unknown> {
     case "send_list":
       return toStepConfig(blankListPayload())
     case "send_template":
-      return { template_name: "", language: "en_US" }
+      return { template_name: "", language: "en_US", header_media_url: "" }
     case "add_tag":
     case "remove_tag":
       return { tag_id: "" }
@@ -566,16 +572,26 @@ function SendTemplateFields({
   templateName,
   language,
   variables = {},
+  headerMediaUrl = "",
   onChange,
   t,
 }: {
   templateName: string
   language: string
   variables?: Record<string, string>
-  onChange: (patch: { template_name: string; language: string; variables?: Record<string, string> }) => void
+  headerMediaUrl?: string
+  onChange: (patch: {
+    template_name: string
+    language: string
+    variables?: Record<string, string>
+    header_media_url?: string
+  }) => void
   t: ReturnType<typeof useTranslations>
 }) {
   const { templates } = useResources()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploadingMedia, setUploadingMedia] = useState(false)
+  const [showUrlInput, setShowUrlInput] = useState(false)
 
   // Find currently selected template
   const selectedTemplate = useMemo(() => {
@@ -589,11 +605,70 @@ function SendTemplateFields({
     )
   }, [templateName, language, templates])
 
+  // Media header type required by this template (image / video / document)
+  const mediaHeaderType = useMemo<MediaHeaderKind | null>(() => {
+    if (!selectedTemplate?.header_type) return null
+    if (
+      selectedTemplate.header_type === "image" ||
+      selectedTemplate.header_type === "video" ||
+      selectedTemplate.header_type === "document"
+    ) {
+      return selectedTemplate.header_type as MediaHeaderKind
+    }
+    return null
+  }, [selectedTemplate])
+
+  // Seed headerMediaUrl from template's stored header_media_url if not set
+  useEffect(() => {
+    if (mediaHeaderType && !headerMediaUrl && selectedTemplate?.header_media_url) {
+      onChange({
+        template_name: templateName,
+        language,
+        variables,
+        header_media_url: selectedTemplate.header_media_url,
+      })
+    }
+  }, [mediaHeaderType, selectedTemplate?.header_media_url, headerMediaUrl, templateName, language, variables, onChange])
+
   // Extract variable indices from body text (e.g. [1, 2])
   const detectedIndices = useMemo(() => {
     if (!selectedTemplate?.body_text) return []
     return extractVariableIndices(selectedTemplate.body_text)
   }, [selectedTemplate])
+
+  const handleFileUpload = async (file: File) => {
+    if (!mediaHeaderType) return
+    const maxBytes = MEDIA_MAX_BYTES_BY_KIND[mediaHeaderType]
+    if (file.size > maxBytes) {
+      toast.error(
+        `File is too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Limit is ${Math.round(maxBytes / 1024 / 1024)} MB.`
+      )
+      return
+    }
+
+    setUploadingMedia(true)
+    try {
+      const { publicUrl } = await uploadAccountMedia("chat-media", file)
+      onChange({
+        template_name: templateName,
+        language,
+        variables,
+        header_media_url: publicUrl,
+      })
+      toast.success(
+        mediaHeaderType === "image"
+          ? "Header image uploaded successfully!"
+          : mediaHeaderType === "video"
+            ? "Header video uploaded successfully!"
+            : "Header document uploaded successfully!"
+      )
+    } catch (err: any) {
+      console.error("Header upload error:", err)
+      toast.error(err?.message || "Failed to upload file")
+    } finally {
+      setUploadingMedia(false)
+    }
+  }
 
   if (templates.length === 0) {
     return (
@@ -602,7 +677,7 @@ function SendTemplateFields({
           <Input
             value={templateName}
             onChange={(e) =>
-              onChange({ template_name: e.target.value, language, variables })
+              onChange({ template_name: e.target.value, language, variables, header_media_url: headerMediaUrl })
             }
             className="bg-muted text-foreground"
           />
@@ -611,7 +686,7 @@ function SendTemplateFields({
           <Input
             value={language}
             onChange={(e) =>
-              onChange({ template_name: templateName, language: e.target.value, variables })
+              onChange({ template_name: templateName, language: e.target.value, variables, header_media_url: headerMediaUrl })
             }
             className="bg-muted text-foreground"
           />
@@ -630,7 +705,7 @@ function SendTemplateFields({
 
   const handleVarChange = (idx: number, val: string) => {
     const updated = { ...variables, [String(idx)]: val }
-    onChange({ template_name: templateName, language, variables: updated })
+    onChange({ template_name: templateName, language, variables: updated, header_media_url: headerMediaUrl })
   }
 
   return (
@@ -640,7 +715,14 @@ function SendTemplateFields({
           value={current}
           onChange={(e) => {
             const [name, lang] = e.target.value.split("::")
-            onChange({ template_name: name ?? "", language: lang ?? "", variables })
+            const newTmpl = templates.find((t) => t.name === name && (!lang || t.language === lang))
+            const defaultMediaUrl = (newTmpl?.header_type && newTmpl.header_type !== "text") ? (newTmpl.header_media_url || "") : ""
+            onChange({
+              template_name: name ?? "",
+              language: lang ?? "",
+              variables,
+              header_media_url: defaultMediaUrl,
+            })
           }}
           className={SELECT_CLASS}
         >
@@ -661,12 +743,200 @@ function SendTemplateFields({
         </select>
       </FieldBlock>
 
+      {/* Media Header Upload UI (when template has an IMAGE / VIDEO / DOCUMENT header) */}
+      {selectedTemplate && mediaHeaderType && (
+        <div className="space-y-2.5 rounded-lg border border-primary/25 bg-primary/[0.04] p-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              {mediaHeaderType === "image" && <ImageIcon className="h-4 w-4 text-emerald-500" />}
+              {mediaHeaderType === "video" && <Video className="h-4 w-4 text-blue-500" />}
+              {mediaHeaderType === "document" && <FileText className="h-4 w-4 text-amber-500" />}
+              <span className="text-xs font-semibold text-foreground capitalize">
+                Header {mediaHeaderType}
+              </span>
+              <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-500 border-emerald-500/20 py-0 px-1.5 font-medium">
+                Required
+              </Badge>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowUrlInput(!showUrlInput)}
+              className="text-[11px] text-muted-foreground hover:text-foreground underline transition-colors"
+            >
+              {showUrlInput ? "Use File Upload" : "Enter URL instead"}
+            </button>
+          </div>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={
+              mediaHeaderType === "image"
+                ? "image/jpeg,image/png"
+                : mediaHeaderType === "video"
+                  ? "video/mp4,video/3gpp"
+                  : "application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+            }
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) void handleFileUpload(file)
+              e.target.value = ""
+            }}
+          />
+
+          {showUrlInput ? (
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-medium text-muted-foreground">
+                Public Media URL ({mediaHeaderType}):
+              </label>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={headerMediaUrl}
+                  onChange={(e) =>
+                    onChange({
+                      template_name: templateName,
+                      language,
+                      variables,
+                      header_media_url: e.target.value,
+                    })
+                  }
+                  placeholder={`https://example.com/media.${mediaHeaderType === "image" ? "jpg" : mediaHeaderType === "video" ? "mp4" : "pdf"}`}
+                  className="font-mono text-xs bg-muted/60"
+                />
+                {headerMediaUrl && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-red-400"
+                    onClick={() =>
+                      onChange({
+                        template_name: templateName,
+                        language,
+                        variables,
+                        header_media_url: "",
+                      })
+                    }
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {headerMediaUrl ? (
+                <div className="space-y-2">
+                  {mediaHeaderType === "image" && (
+                    <div className="relative rounded-lg overflow-hidden border border-border bg-black/40 max-h-48 flex items-center justify-center">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={headerMediaUrl}
+                        alt="Header preview"
+                        className="max-h-48 w-full object-contain"
+                      />
+                    </div>
+                  )}
+                  {mediaHeaderType === "video" && (
+                    <div className="rounded-lg overflow-hidden border border-border bg-black max-h-48">
+                      <video
+                        controls
+                        src={headerMediaUrl}
+                        className="max-h-48 w-full object-contain"
+                      />
+                    </div>
+                  )}
+                  {mediaHeaderType === "document" && (
+                    <div className="flex items-center gap-2.5 p-2.5 rounded-lg border border-border bg-background/50 text-xs">
+                      <FileText className="h-5 w-5 text-amber-500 shrink-0" />
+                      <span className="font-mono truncate flex-1 text-[11px] text-foreground">
+                        {headerMediaUrl}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={uploadingMedia}
+                      onClick={() => fileInputRef.current?.click()}
+                      className="h-7 text-xs flex items-center gap-1.5"
+                    >
+                      {uploadingMedia ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Upload className="h-3.5 w-3.5" />
+                      )}
+                      <span>Change {mediaHeaderType}</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        onChange({
+                          template_name: templateName,
+                          language,
+                          variables,
+                          header_media_url: "",
+                        })
+                      }
+                      className="h-7 text-xs text-muted-foreground hover:text-red-400"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="group flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-border/80 hover:border-primary/60 bg-muted/20 hover:bg-muted/40 p-4 transition-all cursor-pointer text-center"
+                >
+                  {uploadingMedia ? (
+                    <Loader2 className="h-7 w-7 text-primary animate-spin" />
+                  ) : (
+                    <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary group-hover:scale-105 transition-transform">
+                      <Upload className="h-4 w-4" />
+                    </div>
+                  )}
+                  <div className="text-xs font-semibold text-foreground">
+                    {uploadingMedia ? `Uploading ${mediaHeaderType}...` : `Click to Upload ${mediaHeaderType.toUpperCase()}`}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {mediaHeaderType === "image"
+                      ? "JPEG or PNG, up to 5 MB"
+                      : mediaHeaderType === "video"
+                        ? "MP4 or 3GP, up to 16 MB"
+                        : "PDF or Office document, up to 16 MB"}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Template Preview (if selected) */}
       {selectedTemplate && (
         <div className="rounded border border-border/40 bg-muted/20 p-2.5 text-xs">
-          <div className="text-[11px] font-medium text-muted-foreground mb-1">
-            Template Preview:
+          <div className="text-[11px] font-medium text-muted-foreground mb-1.5 flex items-center justify-between">
+            <span>Template Preview:</span>
+            {mediaHeaderType && (
+              <span className="text-[10px] capitalize text-primary font-mono">
+                [{mediaHeaderType} Header]
+              </span>
+            )}
           </div>
+          {mediaHeaderType === "image" && headerMediaUrl && (
+            <div className="mb-2 relative rounded overflow-hidden max-h-36 bg-black/30 border border-border/40">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={headerMediaUrl} alt="Header" className="w-full h-36 object-contain" />
+            </div>
+          )}
           <p className="whitespace-pre-line text-muted-foreground/90 font-mono text-[11px]">
             {selectedTemplate.body_text}
           </p>
@@ -1672,6 +1942,7 @@ function StepEditor({
           templateName={(cfg.template_name as string) ?? ""}
           language={(cfg.language as string) ?? ""}
           variables={(cfg.variables as Record<string, string>) ?? {}}
+          headerMediaUrl={(cfg.header_media_url as string) ?? ""}
           onChange={(patch) => set(patch)}
           t={t}
         />

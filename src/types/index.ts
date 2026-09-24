@@ -623,6 +623,7 @@ export interface SendTemplateStepConfig {
   template_name: string;
   language?: string;
   variables?: Record<string, string>;
+  header_media_url?: string;
 }
 
 export interface TagStepConfig {
