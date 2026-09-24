@@ -269,34 +269,41 @@ async function executeIncomingWebhook(
     }
 
     const cfg = (automation.trigger_config || {}) as Record<string, any>;
-    if (cfg.secret && !safeCompareSecrets(providedSecret, cfg.secret)) {
-      console.warn(`[Webhook ${method}] Secret mismatch for automation:`, id);
-      return NextResponse.json(
-        {
-          error: 'Invalid or missing webhook secret key.',
-          code: 'unauthorized',
-        },
-        { status: 401, headers: CORS_HEADERS }
-      );
+    // If a secret is provided, verify it. Or if require_secret is explicitly enabled, require it.
+    // Otherwise allow requests without secret since the unique automation ID is private and unique.
+    if (providedSecret || cfg.require_secret) {
+      if (!cfg.secret || !safeCompareSecrets(providedSecret, cfg.secret)) {
+        console.warn(`[Webhook ${method}] Secret mismatch for automation:`, id);
+        return NextResponse.json(
+          {
+            error: 'Invalid or missing webhook secret key.',
+            code: 'unauthorized',
+          },
+          { status: 401, headers: CORS_HEADERS }
+        );
+      }
     }
 
     const phonePath = cfg.phone_path || 'phone';
     const rawPhone = findSmartPhone(payload, phonePath);
     console.log(`[Webhook ${method}] phonePath:`, phonePath, '| rawPhone found:', rawPhone);
 
+    const isTest = isLikelyTestPing(payload) || rawPhone === '+919999999999';
+
+    if (isTest) {
+      console.log(`[Webhook ${method}] Test ping detected, returning ping_ok`);
+      return NextResponse.json(
+        {
+          success: true,
+          status: 'ping_ok',
+          message: 'Automation webhook test received successfully. Ready to receive leads.',
+          data: { automation_id: automation.id },
+        },
+        { status: 200, headers: CORS_HEADERS }
+      );
+    }
+
     if (!rawPhone) {
-      if (isLikelyTestPing(payload)) {
-        console.log(`[Webhook ${method}] Test ping detected, returning ping_ok`);
-        return NextResponse.json(
-          {
-            success: true,
-            status: 'ping_ok',
-            message: 'Automation webhook test received successfully. Ready to receive leads.',
-            data: { automation_id: automation.id },
-          },
-          { status: 200, headers: CORS_HEADERS }
-        );
-      }
 
       console.warn(`[Webhook ${method}] Phone not found in payload. phonePath:`, phonePath, '| payload:', JSON.stringify(payload).slice(0, 300));
       return NextResponse.json(

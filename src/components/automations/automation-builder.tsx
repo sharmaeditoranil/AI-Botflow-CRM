@@ -1042,7 +1042,7 @@ function IncomingWebhookConfig({
       <div>
         <div className="mb-1 flex items-center justify-between">
           <label className="font-medium text-muted-foreground">
-            Secret Key (Header: x-webhook-secret)
+            Secret Key (Optional)
           </label>
           <button
             type="button"
@@ -1127,11 +1127,8 @@ function IncomingWebhookConfig({
       </div>
 
       <div className="rounded-md border border-emerald-500/20 bg-emerald-500/10 p-2 text-[11px] text-emerald-300">
-        POST JSON payload to the Webhook URL with header{' '}
-        <code className="bg-background/40 px-1 py-0.5 rounded font-mono text-[10px]">
-          x-webhook-secret
-        </code>
-        . When received, this workflow runs automatically for the contact!
+        Send <strong>POST</strong> (JSON, Form-data) or <strong>GET</strong> (Query parameters) to the Webhook URL.
+        Secret key is optional since your Webhook URL is already unique and private.
       </div>
     </div>
   )

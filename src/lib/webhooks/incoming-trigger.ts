@@ -307,7 +307,11 @@ export function isLikelyTestPing(payload: unknown): boolean {
   const p = payload as Record<string, unknown>;
   if (p.test === true || p.test === 'true' || p.is_test === true || p.is_test === 'true') return true;
   if (p.type === 'test' || p.type === 'ping' || p.action === 'test' || p.event === 'ping') return true;
+  if (p.source === 'admin-test' || (typeof p.source === 'string' && p.source.toLowerCase().includes('test'))) return true;
+  if (typeof p.lead_id === 'string' && p.lead_id.toLowerCase().startsWith('test-')) return true;
   if (typeof p.message === 'string' && p.message.toLowerCase().includes('test')) return true;
+  if (typeof p.phone === 'string' && p.phone.includes('9999999999')) return true;
+  if (typeof p.phone_number === 'string' && p.phone_number.includes('9999999999')) return true;
   const keys = Object.keys(p);
   if (keys.length === 0) return true;
   if (keys.every((k) => ['timestamp', 'token', 'time', 'date', 'source', 'format'].includes(k.toLowerCase()))) return true;
@@ -469,35 +473,37 @@ export async function processIncomingWebhook(
     name
   );
 
-  // 7. If no phone found: check if this is a test ping / connection verification from an external website
+  // 7. If test ping detected: verify connection without sending real message
+  const isTest = isLikelyTestPing(payload) || phone === '+919999999999' || options.isTest;
+  if (isTest) {
+    const executionTimeMs = Date.now() - startTime;
+    await supabase.from('webhook_trigger_logs').insert({
+      trigger_id: typedTrigger.id,
+      account_id: typedTrigger.account_id,
+      status: 'success',
+      http_status: 200,
+      recipient_name: 'Test Ping',
+      request_payload: typeof payload === 'object' && payload !== null ? payload : {},
+      mapped_variables: mappedValues,
+      error_message: 'Test ping verified successfully.',
+      execution_time_ms: executionTimeMs,
+    });
+
+    return {
+      success: true,
+      messageId: 'test_ping_ok',
+      whatsappMessageId: 'test_ping_ok',
+      recipient: phone || 'test_ping',
+      recipientName: name || 'Test Ping',
+      template: typedTrigger.template_name,
+      language: typedTrigger.template_language,
+      mappedParams: templateParams,
+      executionTimeMs,
+    };
+  }
+
+  // 8. If no phone found: return phone missing error
   if (!phone) {
-    if (isLikelyTestPing(payload) || options.isTest) {
-      const executionTimeMs = Date.now() - startTime;
-      await supabase.from('webhook_trigger_logs').insert({
-        trigger_id: typedTrigger.id,
-        account_id: typedTrigger.account_id,
-        status: 'success',
-        http_status: 200,
-        recipient_name: 'Test Ping',
-        request_payload: typeof payload === 'object' && payload !== null ? payload : {},
-        mapped_variables: mappedValues,
-        error_message: 'Test ping verified successfully (no phone provided).',
-        execution_time_ms: executionTimeMs,
-      });
-
-      return {
-        success: true,
-        messageId: 'test_ping_ok',
-        whatsappMessageId: 'test_ping_ok',
-        recipient: 'test_ping',
-        recipientName: 'Test Ping',
-        template: typedTrigger.template_name,
-        language: typedTrigger.template_language,
-        mappedParams: templateParams,
-        executionTimeMs,
-      };
-    }
-
     const errorMsg = `Recipient phone number could not be found. Please include a phone field (e.g. "phone", "mobile", "whatsapp", or "team_whatsapp").`;
     await supabase.from('webhook_trigger_logs').insert({
       trigger_id: typedTrigger.id,
