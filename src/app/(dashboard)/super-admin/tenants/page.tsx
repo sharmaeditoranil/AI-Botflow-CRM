@@ -16,6 +16,7 @@ import {
   Sparkles,
   Edit2,
   Calendar,
+  Trash2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -68,6 +69,11 @@ export default function SuperAdminTenantsPage() {
   const [selectedDuration, setSelectedDuration] = useState('keep');
   const [customDate, setCustomDate] = useState('');
   const [savingPlan, setSavingPlan] = useState(false);
+
+  // Deletion modals state
+  const [deletingTenant, setDeletingTenant] = useState<Tenant | null>(null);
+  const [cancellingSubTenant, setCancellingSubTenant] = useState<Tenant | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -197,6 +203,65 @@ export default function SuperAdminTenantsPage() {
       toast.error(err.message || 'Error updating tenant.');
     } finally {
       setUpdatingId(null);
+    }
+  };
+
+  const handleDeleteTenant = async () => {
+    if (!deletingTenant) return;
+    try {
+      setIsDeleting(true);
+      const res = await fetch(`/api/super-admin/tenants?accountId=${deletingTenant.id}&action=delete_account`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to delete tenant');
+        return;
+      }
+      toast.success(`Tenant "${deletingTenant.name}" has been permanently deleted.`);
+      setTenants((prev) => prev.filter((t) => t.id !== deletingTenant.id));
+      setDeletingTenant(null);
+    } catch (err: any) {
+      toast.error(err.message || 'Error deleting tenant');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    if (!cancellingSubTenant) return;
+    try {
+      setIsDeleting(true);
+      const res = await fetch(`/api/super-admin/tenants?accountId=${cancellingSubTenant.id}&action=delete_subscription`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to cancel subscription');
+        return;
+      }
+      toast.success(`Subscription for "${cancellingSubTenant.name}" cancelled.`);
+      setTenants((prev) =>
+        prev.map((t) =>
+          t.id === cancellingSubTenant.id
+            ? {
+                ...t,
+                subscriptionStatus: 'cancelled',
+                planName: 'Free Trial',
+                currentPeriodEnd: null,
+                trialEndsAt: null,
+              }
+            : t
+        )
+      );
+      setCancellingSubTenant(null);
+      if (editingTenant?.id === cancellingSubTenant.id) {
+        setEditingTenant(null);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Error cancelling subscription');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -334,6 +399,16 @@ export default function SuperAdminTenantsPage() {
                                 <Ban className="mr-1 h-3.5 w-3.5" /> Suspend
                               </>
                             )}
+                          </Button>
+
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => setDeletingTenant(tenant)}
+                            title="Delete Tenant Account"
+                            className="h-7 px-2 text-xs bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white border border-rose-500/20"
+                          >
+                            <Trash2 className="h-3 w-3" />
                           </Button>
                         </div>
                       </td>
@@ -475,6 +550,23 @@ export default function SuperAdminTenantsPage() {
                 </p>
               </div>
 
+              {/* Cancel / Reset Subscription Option */}
+              <div className="pt-3 border-t border-border flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-semibold text-rose-500 block">Cancel Active Subscription</span>
+                  <span className="text-[11px] text-muted-foreground">Reset plan to Free Trial and revoke premium tier.</span>
+                </div>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setCancellingSubTenant(editingTenant)}
+                  className="h-7 text-xs bg-rose-500 hover:bg-rose-600 text-white"
+                >
+                  Cancel Plan
+                </Button>
+              </div>
+
               <DialogFooter className="pt-3">
                 <Button
                   type="button"
@@ -483,7 +575,7 @@ export default function SuperAdminTenantsPage() {
                   onClick={() => setEditingTenant(null)}
                   className="text-xs"
                 >
-                  Cancel
+                  Close
                 </Button>
                 <Button
                   type="submit"
@@ -502,6 +594,108 @@ export default function SuperAdminTenantsPage() {
               </DialogFooter>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Tenant Account Confirmation Dialog */}
+      <Dialog open={!!deletingTenant} onOpenChange={(open) => !open && setDeletingTenant(null)}>
+        <DialogContent className="max-w-md border-border bg-card">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-rose-500">
+              <Trash2 className="h-5 w-5 text-rose-500" />
+              Permanently Delete Tenant Account?
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground pt-1.5 space-y-2">
+              <p>
+                Are you sure you want to permanently delete{' '}
+                <strong className="text-foreground">{deletingTenant?.name}</strong> (
+                <span className="text-foreground font-mono">{deletingTenant?.ownerEmail}</span>)?
+              </p>
+              <div className="p-2.5 rounded-lg border border-rose-500/20 bg-rose-500/10 text-rose-400 text-xs">
+                ⚠️ <strong>Irreversible Action:</strong> All WhatsApp chats, broadcast logs, contacts, automations, flows, and user profiles associated with this tenant will be permanently wiped.
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="pt-3 gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setDeletingTenant(null)}
+              disabled={isDeleting}
+              className="text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={handleDeleteTenant}
+              disabled={isDeleting}
+              className="text-xs bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              {isDeleting ? (
+                <span className="flex items-center gap-1.5">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Deleting...
+                </span>
+              ) : (
+                'Yes, Delete Account'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Tenant Subscription Confirmation Dialog */}
+      <Dialog open={!!cancellingSubTenant} onOpenChange={(open) => !open && setCancellingSubTenant(null)}>
+        <DialogContent className="max-w-md border-border bg-card">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-amber-500">
+              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              Cancel Active Subscription?
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground pt-1.5 space-y-2">
+              <p>
+                Are you sure you want to cancel the paid subscription for{' '}
+                <strong className="text-foreground">{cancellingSubTenant?.name}</strong> (
+                <span className="text-foreground font-mono">{cancellingSubTenant?.ownerEmail}</span>)?
+              </p>
+              <p>
+                This will immediately reset their plan to <strong>Free Trial / Cancelled</strong>, clear their active billing period, and revoke premium tier features.
+              </p>
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="pt-3 gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setCancellingSubTenant(null)}
+              disabled={isDeleting}
+              className="text-xs"
+            >
+              Keep Subscription
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={handleCancelSubscription}
+              disabled={isDeleting}
+              className="text-xs bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              {isDeleting ? (
+                <span className="flex items-center gap-1.5">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Cancelling...
+                </span>
+              ) : (
+                'Yes, Cancel Subscription'
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

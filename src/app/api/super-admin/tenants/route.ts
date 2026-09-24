@@ -94,3 +94,123 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: err.message }, { status: 403 });
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const admin = await assertSuperAdmin();
+    const supabase = getAdminSupabase();
+
+    const { searchParams } = new URL(req.url);
+    let accountId = searchParams.get('accountId');
+    let action = searchParams.get('action') || 'delete_account'; // 'delete_account' | 'delete_subscription'
+
+    // Also support JSON body if sent
+    if (!accountId) {
+      try {
+        const body = await req.json();
+        accountId = body.accountId;
+        if (body.action) action = body.action;
+      } catch {
+        // query param fallback
+      }
+    }
+
+    if (!accountId) {
+      return NextResponse.json({ error: 'Account ID is required.' }, { status: 400 });
+    }
+
+    // Safety: prevent self-deletion or deleting any super admin account
+    const { data: adminProfile } = await supabase
+      .from('profiles')
+      .select('account_id')
+      .eq('user_id', admin.userId)
+      .maybeSingle();
+
+    if (adminProfile?.account_id === accountId) {
+      return NextResponse.json(
+        { error: 'Action denied: You cannot delete or reset your own active Super-Admin account.' },
+        { status: 400 }
+      );
+    }
+
+    const { data: targetProfiles } = await supabase
+      .from('profiles')
+      .select('user_id, is_super_admin')
+      .eq('account_id', accountId);
+
+    if (targetProfiles?.some((p) => p.is_super_admin)) {
+      return NextResponse.json(
+        { error: 'Action denied: Cannot delete an account belonging to a Super Admin.' },
+        { status: 400 }
+      );
+    }
+
+    if (action === 'delete_subscription') {
+      const { data: trialPlan } = await supabase
+        .from('plans')
+        .select('id')
+        .eq('slug', 'trial')
+        .maybeSingle();
+
+      const { error: accSubErr } = await supabase
+        .from('accounts')
+        .update({
+          plan_id: trialPlan?.id || null,
+          subscription_status: 'cancelled',
+          current_period_end: null,
+          trial_ends_at: null,
+        })
+        .eq('id', accountId);
+
+      if (accSubErr) {
+        return NextResponse.json({ error: accSubErr.message }, { status: 500 });
+      }
+
+      await supabase
+        .from('subscriptions')
+        .update({ status: 'cancelled' })
+        .eq('account_id', accountId);
+
+      await logSuperAdminAction({
+        actorUserId: admin.userId,
+        action: 'cancel_tenant_subscription',
+        targetType: 'account',
+        targetId: accountId,
+        details: { cancelledAt: new Date().toISOString() },
+      });
+
+      return NextResponse.json({ success: true, message: 'Subscription removed and cancelled successfully.' });
+    }
+
+    // Action: delete_account
+    // 1. Delete associated non-admin auth users
+    for (const p of targetProfiles || []) {
+      if (p.user_id) {
+        try {
+          await supabase.auth.admin.deleteUser(p.user_id);
+        } catch (authErr) {
+          console.warn('Could not delete auth user:', authErr);
+        }
+      }
+    }
+
+    // 2. Delete the account row (all child tables cascade ON DELETE CASCADE)
+    const { error: delError } = await supabase.from('accounts').delete().eq('id', accountId);
+
+    if (delError) {
+      return NextResponse.json({ error: delError.message }, { status: 500 });
+    }
+
+    await logSuperAdminAction({
+      actorUserId: admin.userId,
+      action: 'delete_tenant_account',
+      targetType: 'account',
+      targetId: accountId,
+      details: { deletedAt: new Date().toISOString() },
+    });
+
+    return NextResponse.json({ success: true, message: 'Tenant account permanently deleted.' });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 403 });
+  }
+}
