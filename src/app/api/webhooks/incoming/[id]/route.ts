@@ -304,6 +304,7 @@ export async function POST(
   });
 
   // 4. Process the incoming webhook
+  console.log('[Webhook POST] id:', id, '| payload keys:', Object.keys(payload));
   try {
     const { data: triggerCheck } = await admin
       .from('webhook_triggers')
@@ -312,6 +313,7 @@ export async function POST(
       .maybeSingle();
 
     if (triggerCheck) {
+      console.log('[Webhook POST] Found webhook_trigger, processing via processIncomingWebhook');
       const result = await processIncomingWebhook(admin, id, payload, providedSecret);
       return NextResponse.json(
         {
@@ -332,6 +334,7 @@ export async function POST(
       .maybeSingle();
 
     if (!automation) {
+      console.warn('[Webhook POST] No automation found with id:', id);
       return NextResponse.json(
         {
           error: 'Webhook trigger or automation not found.',
@@ -341,10 +344,13 @@ export async function POST(
       );
     }
 
+    console.log('[Webhook POST] Found automation:', automation.id, '| is_active:', automation.is_active);
+
     if (!automation.is_active) {
+      console.warn('[Webhook POST] Automation is inactive, skipping execution');
       return NextResponse.json(
         {
-          error: 'Automation workflow is inactive/paused.',
+          error: 'Automation workflow is inactive/paused. Please enable it in the Automations dashboard.',
           code: 'inactive',
         },
         { status: 400 }
@@ -353,6 +359,7 @@ export async function POST(
 
     const cfg = (automation.trigger_config || {}) as Record<string, any>;
     if (cfg.secret && !safeCompareSecrets(providedSecret, cfg.secret)) {
+      console.warn('[Webhook POST] Secret mismatch for automation:', id);
       return NextResponse.json(
         {
           error: 'Invalid or missing webhook secret key.',
@@ -364,8 +371,11 @@ export async function POST(
 
     const phonePath = cfg.phone_path || 'phone';
     const rawPhone = findSmartPhone(payload, phonePath);
+    console.log('[Webhook POST] phonePath:', phonePath, '| rawPhone found:', rawPhone);
+
     if (!rawPhone) {
       if (isLikelyTestPing(payload)) {
+        console.log('[Webhook POST] Test ping detected, returning ping_ok');
         return NextResponse.json(
           {
             success: true,
@@ -377,10 +387,12 @@ export async function POST(
         );
       }
 
+      console.warn('[Webhook POST] Phone not found in payload. phonePath:', phonePath, '| payload:', JSON.stringify(payload).slice(0, 300));
       return NextResponse.json(
         {
-          error: `Recipient phone number could not be found. Please include a phone field (e.g. "phone", "mobile", "whatsapp", or "${phonePath}").`,
+          error: `Recipient phone number could not be found. Please include a phone field named "${phonePath}" (e.g. ${phonePath}: "919876543210").`,
           code: 'missing_phone',
+          debug: { expected_phone_field: phonePath, received_fields: Object.keys(payload) },
         },
         { status: 400 }
       );
@@ -388,6 +400,7 @@ export async function POST(
 
     const namePath = cfg.name_path || 'name';
     const contactName = findSmartName(payload, namePath) || 'Webhook Lead';
+    console.log('[Webhook POST] contactName:', contactName, '| phone:', rawPhone);
 
     // Resolve or create contact and conversation
     let resolved;
@@ -399,6 +412,7 @@ export async function POST(
         contactName
       );
     } catch (e: any) {
+      console.error('[Webhook POST] resolveConversationByPhone failed:', e.message);
       return NextResponse.json(
         {
           error: e.message || 'Failed to resolve contact with provided phone number.',
@@ -408,16 +422,30 @@ export async function POST(
       );
     }
 
+    console.log('[Webhook POST] Resolved contact:', resolved.contactId, '| conversation:', resolved.conversationId);
+
     // Execute automation workflow
-    await executeAutomation(automation as any, {
-      accountId: automation.account_id,
-      triggerType: 'incoming_webhook',
-      contactId: resolved.contactId,
-      context: {
-        vars: payload as Record<string, unknown>,
-        conversation_id: resolved.conversationId,
-      },
-    });
+    try {
+      await executeAutomation(automation as any, {
+        accountId: automation.account_id,
+        triggerType: 'incoming_webhook',
+        contactId: resolved.contactId,
+        context: {
+          vars: payload as Record<string, unknown>,
+          conversation_id: resolved.conversationId,
+        },
+      });
+      console.log('[Webhook POST] executeAutomation completed for automation:', automation.id);
+    } catch (execErr: any) {
+      console.error('[Webhook POST] executeAutomation failed:', execErr.message || execErr);
+      return NextResponse.json(
+        {
+          error: `Automation executed but failed: ${execErr.message || 'Unknown error'}`,
+          code: 'execution_error',
+        },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json(
       {
