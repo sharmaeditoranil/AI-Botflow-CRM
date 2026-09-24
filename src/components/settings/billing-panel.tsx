@@ -78,7 +78,18 @@ export function BillingPanel() {
 
   // Dedicated Subscription Checkout Modal with GST Option
   const [checkoutPlan, setCheckoutPlan] = useState<any | null>(null);
+  const [checkoutModalOpen, setCheckoutModalOpen] = useState(false);
   const [showSubscriptionGst, setShowSubscriptionGst] = useState(false);
+
+  const openCheckout = (plan: any) => {
+    setCheckoutPlan(plan);
+    setCheckoutModalOpen(true);
+  };
+
+  const closeCheckout = () => {
+    setCheckoutModalOpen(false);
+    setCheckoutPlan(null);
+  };
 
   // Cancel Subscription Dialog State
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
@@ -97,7 +108,7 @@ export function BillingPanel() {
       }
       toast.success(data.message || 'Subscription cancelled successfully.');
       setCancelModalOpen(false);
-      fetchUsageAndPlans();
+      fetchUsageAndPlans(true);
     } catch (err: any) {
       toast.error(err.message || 'Error cancelling subscription.');
     } finally {
@@ -105,9 +116,9 @@ export function BillingPanel() {
     }
   };
 
-  const fetchUsageAndPlans = async () => {
+  const fetchUsageAndPlans = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [usageRes, plansRes, invoicesRes, walletRes] = await Promise.all([
         fetch('/api/billing/usage'),
         fetch('/api/billing/plans'),
@@ -147,7 +158,7 @@ export function BillingPanel() {
     } catch (err) {
       console.error('Error loading billing data:', err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -240,9 +251,9 @@ export function BillingPanel() {
 
       if (data.freeActivation) {
         toast.success(data.message || 'Plan activated!');
+        closeCheckout();
         setUpgradeModalOpen(false);
-        setCheckoutPlan(null);
-        fetchUsageAndPlans();
+        fetchUsageAndPlans(true);
         return;
       }
 
@@ -274,6 +285,10 @@ export function BillingPanel() {
           },
         },
         handler: async function (response: any) {
+          // Immediately close the checkout dialog upon Razorpay payment authorization
+          closeCheckout();
+          setUpgradeModalOpen(false);
+
           toast.info('Verifying payment and generating GST invoice...');
           try {
             const verifyRes = await fetch('/api/billing/verify-payment', {
@@ -300,9 +315,7 @@ export function BillingPanel() {
             const verifyData = await verifyRes.json();
             if (verifyRes.ok && verifyData.success) {
               toast.success(`Payment verified! GST Invoice ${verifyData.invoiceNumber || ''} generated.`);
-              setUpgradeModalOpen(false);
-              setCheckoutPlan(null);
-              fetchUsageAndPlans();
+              fetchUsageAndPlans(true);
             } else {
               toast.error(verifyData.error || 'Payment verification failed.');
             }
@@ -878,7 +891,7 @@ export function BillingPanel() {
                 {/* Card CTA */}
                 <div className="mt-6 pt-4 border-t border-border/60">
                   <Button
-                    onClick={() => setCheckoutPlan(p)}
+                    onClick={() => openCheckout(p)}
                     disabled={isCurrent || upgradingPlanId === p.id}
                     className={`w-full font-semibold shadow-sm transition-all ${
                       isGrowth
@@ -1277,7 +1290,7 @@ export function BillingPanel() {
                       <Button
                         onClick={() => {
                           setUpgradeModalOpen(false);
-                          setCheckoutPlan(p);
+                          openCheckout(p);
                         }}
                         disabled={isCurrent || upgradingPlanId === p.id}
                         className={`w-full font-semibold shadow-sm transition-all text-sm h-11 ${
@@ -1455,13 +1468,18 @@ export function BillingPanel() {
         currentBalance={Number(walletData?.wallet?.balance || 0)}
         rates={walletData?.rates}
         onSuccess={() => {
-          fetchUsageAndPlans();
+          fetchUsageAndPlans(true);
           window.dispatchEvent(new CustomEvent('wallet:updated'));
         }}
       />
 
       {/* Subscription Checkout Modal with GST & 18% ITC Option */}
-      <Dialog open={!!checkoutPlan} onOpenChange={(open) => !open && setCheckoutPlan(null)}>
+      <Dialog
+        open={checkoutModalOpen && !!checkoutPlan}
+        onOpenChange={(open) => {
+          if (!open) closeCheckout();
+        }}
+      >
         <DialogContent className="max-w-xl p-0 overflow-hidden border border-border/80 bg-background shadow-2xl rounded-2xl">
           {/* Modal Header */}
           <div className="bg-gradient-to-br from-primary/15 via-primary/5 to-transparent p-6 border-b border-border/60">
