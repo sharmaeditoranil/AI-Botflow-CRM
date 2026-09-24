@@ -129,12 +129,12 @@ describe('extractTemplateVariables', () => {
     });
   });
 
-  it('substitutes empty string when mapping path is not found in payload', () => {
+  it('substitutes fallback when mapping path is not found in payload', () => {
     const mappings = {
       '1': 'customer.unknown_field',
       '2': 'total',
     };
     const { params } = extractTemplateVariables(payload, mappings);
-    expect(params).toEqual(['', '₹2,500']);
+    expect(params).toEqual(['Customer', '₹2,500']);
   });
 });

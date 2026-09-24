@@ -107,21 +107,25 @@ export async function POST(request: Request) {
 
       const idToNameMap = new Map<string, string>();
 
-      // 2. Fetch FB & IG conversations in parallel with 5s timeout
+      // 2. Fetch FB & IG conversations in parallel with 7s timeout
       const fetchPlatformConvs = async (platform?: 'instagram') => {
         const found = new Map<string, string>();
         try {
           const url = platform === 'instagram'
-            ? `https://graph.facebook.com/v21.0/${encodeURIComponent(pageId)}/conversations?platform=instagram&fields=id,participants,senders&limit=100&access_token=${encodeURIComponent(token)}`
-            : `https://graph.facebook.com/v21.0/${encodeURIComponent(pageId)}/conversations?fields=id,participants,senders&limit=100&access_token=${encodeURIComponent(token)}`;
+            ? `https://graph.facebook.com/v21.0/${encodeURIComponent(pageId)}/conversations?platform=instagram&fields=id,participants{id,name,username},senders{id,name,username},messages.limit(1){from{id,name,username}}&limit=100&access_token=${encodeURIComponent(token)}`
+            : `https://graph.facebook.com/v21.0/${encodeURIComponent(pageId)}/conversations?fields=id,participants{id,name,username},senders{id,name,username},messages.limit(1){from{id,name,username}}&limit=100&access_token=${encodeURIComponent(token)}`;
 
-          const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+          const res = await fetch(url, { signal: AbortSignal.timeout(7000) });
           if (!res.ok) return found;
           const json = await res.json();
-          const items: ConversationItem[] = json.data || [];
+          const items: any[] = json.data || [];
 
           for (const item of items) {
-            const list = [...(item.participants?.data || []), ...(item.senders?.data || [])];
+            const list = [
+              ...(item.participants?.data || []),
+              ...(item.senders?.data || []),
+              ...(item.messages?.data?.map((m: any) => m.from).filter(Boolean) || []),
+            ];
             for (const p of list) {
               if (!p.id || p.id === pageId || p.id === config.instagram_account_id) continue;
               const displayName = platform === 'instagram'
@@ -139,8 +143,8 @@ export async function POST(request: Request) {
       };
 
       const [fbProfiles, igProfiles] = await Promise.all([
-        targetFbIds.size > 0 ? fetchPlatformConvs() : Promise.resolve(new Map<string, string>()),
-        targetIgIds.size > 0 ? fetchPlatformConvs('instagram') : Promise.resolve(new Map<string, string>()),
+        fetchPlatformConvs(),
+        fetchPlatformConvs('instagram'),
       ]);
 
       for (const [k, v] of fbProfiles) idToNameMap.set(k, v);
@@ -152,10 +156,29 @@ export async function POST(request: Request) {
       // 3. Match against contactsToRepair
       for (const c of contactsToRepair) {
         let resolvedName: string | null = null;
-        if (c.ig_user_id && idToNameMap.has(c.ig_user_id)) {
-          resolvedName = idToNameMap.get(c.ig_user_id)!;
-        } else if (c.fb_user_id && idToNameMap.has(c.fb_user_id)) {
-          resolvedName = idToNameMap.get(c.fb_user_id)!;
+        if (c.ig_user_id) {
+          if (idToNameMap.has(c.ig_user_id)) {
+            resolvedName = idToNameMap.get(c.ig_user_id)!;
+          } else {
+            for (const [k, v] of idToNameMap) {
+              if (k.endsWith(c.ig_user_id) || c.ig_user_id.endsWith(k)) {
+                resolvedName = v;
+                break;
+              }
+            }
+          }
+        }
+        if (!resolvedName && c.fb_user_id) {
+          if (idToNameMap.has(c.fb_user_id)) {
+            resolvedName = idToNameMap.get(c.fb_user_id)!;
+          } else {
+            for (const [k, v] of idToNameMap) {
+              if (k.endsWith(c.fb_user_id) || c.fb_user_id.endsWith(k)) {
+                resolvedName = v;
+                break;
+              }
+            }
+          }
         }
 
         if (resolvedName) {
@@ -171,63 +194,44 @@ export async function POST(request: Request) {
         }
       }
 
-      // 4. For any still-missing contacts, try direct single query in parallel (max 10, 3s timeout)
-      if (stillMissing.length > 0 && Date.now() < deadline) {
-        const directPromises = stillMissing.slice(0, 10).map(async (c) => {
-          if (Date.now() > deadline) return;
-          try {
-            if (c.ig_user_id) {
-              const res = await fetch(
-                `https://graph.facebook.com/v21.0/${encodeURIComponent(c.ig_user_id)}?fields=name,username,profile_pic&access_token=${encodeURIComponent(token)}`,
-                { signal: AbortSignal.timeout(3000) }
-              );
-              if (res.ok) {
-                const data = await res.json();
-                const found = data.name?.trim() || (data.username ? `@${data.username.trim()}` : null);
-                if (found) {
-                  totalFixed++;
-                  await supabase.from('contacts').update({
-                    name: found,
-                    avatar_url: data.profile_pic || undefined,
-                    updated_at: new Date().toISOString(),
-                  }).eq('id', c.id);
-                }
-              }
-            } else if (c.fb_user_id) {
-              const res = await fetch(
-                `https://graph.facebook.com/v21.0/${encodeURIComponent(c.fb_user_id)}?fields=name,first_name,last_name,profile_pic&access_token=${encodeURIComponent(token)}`,
-                { signal: AbortSignal.timeout(3000) }
-              );
-              if (res.ok) {
-                const data = await res.json();
-                const found = (data.name || [data.first_name, data.last_name].filter(Boolean).join(' ')).trim();
-                if (found) {
-                  totalFixed++;
-                  await supabase.from('contacts').update({
-                    name: found,
-                    avatar_url: data.profile_pic || undefined,
-                    updated_at: new Date().toISOString(),
-                  }).eq('id', c.id);
-                }
-              }
-            }
-          } catch {
-            // ignore timeout/error
-          }
-        });
+      // 4. Also import/sync real Meta conversations that don't have contacts yet in this account
+      for (const [personId, personName] of idToNameMap) {
+        const isIg = personName.startsWith('@');
+        const userCol = isIg ? 'ig_user_id' : 'fb_user_id';
+        const { data: existing } = await supabase
+          .from('contacts')
+          .select('id')
+          .eq('account_id', acctId)
+          .eq(userCol, personId)
+          .limit(1);
 
-        updateOperations.push(...directPromises);
+        if (!existing || existing.length === 0) {
+          updateOperations.push(
+            supabase.from('contacts').insert({
+              account_id: acctId,
+              name: personName,
+              phone: '',
+              [userCol]: personId,
+              lead_status: 'new',
+            })
+          );
+        }
       }
 
       await Promise.all(updateOperations);
     }
 
+    let message = '';
+    if (totalFixed > 0) {
+      message = `${totalFixed} contact(s) ka real naam Meta se sync kar diya gaya hai!`;
+    } else {
+      message = 'Sabhi connected Meta conversations check ho gaye hain. Naye messages aane par real names automatically update ho jayenge.';
+    }
+
     return NextResponse.json({
       success: true,
       fixed: totalFixed,
-      message: totalFixed > 0
-        ? `${totalFixed} contact(s) ka naam successfully Meta se sync ho gaya!`
-        : 'Sabhi contacts check ho gaye hain. Naye messages aane par real names automatically update ho jayenge.',
+      message,
     });
   } catch (err) {
     console.error('[repair-contacts] Unexpected error:', err);

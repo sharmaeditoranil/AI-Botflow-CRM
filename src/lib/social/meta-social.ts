@@ -64,14 +64,33 @@ function explainGraphError(error: Record<string, unknown> | undefined): string {
   const code = error.code as number | undefined;
   const subcode = error.error_subcode as number | undefined;
 
-  // 24-hour window policy error
-  if (code === 10 || subcode === 2018001 || message.includes('outside the allowed window')) {
+  // Recipient ID mismatch / message received on different Page or Instagram account
+  if (code === 100 && (subcode === 2018001 || message.includes('No matching user') || message.includes('Cannot find user'))) {
+    return 'Cannot send message: Recipient user ID does not match this connected Facebook Page / Instagram account. (Customer messaged a different page or account).';
+  }
+
+  // 24-hour window policy error (Meta code 10 or explicit window message, but not code 100)
+  if (
+    code === 10 ||
+    message.includes('outside the allowed window') ||
+    message.includes('past 24 hours') ||
+    message.includes('messaging window') ||
+    (subcode === 2018001 && code !== 100)
+  ) {
     return 'Cannot send message: Customer has not messaged in the past 24 hours (Meta 24-hour messaging window rule).';
   }
 
-  // Permission / Token expired
-  if (code === 190 || code === 200 || message.includes('Session has expired') || message.includes('access token')) {
-    return 'Meta Page Access Token has expired or lacks permissions (pages_messaging / instagram_manage_messages). Please reconnect in Settings.';
+  // Permission / Token expired / missing pages_messaging
+  if (
+    code === 190 ||
+    code === 200 ||
+    code === 230 ||
+    message.includes('Session has expired') ||
+    message.includes('access token') ||
+    message.includes('pages_messaging') ||
+    message.includes('instagram_manage_messages')
+  ) {
+    return 'Meta Page Access Token lacks permissions (pages_messaging / instagram_manage_messages). Please reconnect your Facebook Page in Settings with all messaging permissions granted.';
   }
 
   // Rate limit

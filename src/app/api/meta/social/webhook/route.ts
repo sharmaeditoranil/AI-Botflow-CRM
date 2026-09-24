@@ -137,27 +137,42 @@ export async function POST(request: Request) {
       } | null = null;
 
       const idColumn = isInstagram ? 'instagram_account_id' : 'facebook_page_id';
-      const { data: matchedConfigs } = await supabase
+      const recipientId = messagingEvents[0]?.recipient?.id;
+
+      // 1. Try matching by entryId on primary platform column
+      let { data: matchedConfigs } = await supabase
         .from('meta_social_config')
-        .select('account_id, user_id, facebook_page_id, facebook_page_access_token')
+        .select('account_id, user_id, facebook_page_id, facebook_page_access_token, instagram_account_id')
         .eq(idColumn, entryId)
         .limit(1);
 
+      // 2. If not matched, try matching entryId against the other column
+      if (!matchedConfigs || matchedConfigs.length === 0) {
+        const altColumn = isInstagram ? 'facebook_page_id' : 'instagram_account_id';
+        const { data: altMatched } = await supabase
+          .from('meta_social_config')
+          .select('account_id, user_id, facebook_page_id, facebook_page_access_token, instagram_account_id')
+          .eq(altColumn, entryId)
+          .limit(1);
+        if (altMatched && altMatched.length > 0) matchedConfigs = altMatched;
+      }
+
+      // 3. If still not matched and recipientId exists, try matching recipientId
+      if ((!matchedConfigs || matchedConfigs.length === 0) && recipientId) {
+        const { data: recMatched } = await supabase
+          .from('meta_social_config')
+          .select('account_id, user_id, facebook_page_id, facebook_page_access_token, instagram_account_id')
+          .or(`facebook_page_id.eq.${recipientId},instagram_account_id.eq.${recipientId}`)
+          .limit(1);
+        if (recMatched && recMatched.length > 0) matchedConfigs = recMatched;
+      }
+
       if (matchedConfigs && matchedConfigs.length > 0) {
         configRow = matchedConfigs[0];
-      } else {
-        // If not matched by entry ID directly, attempt to use the first active config
-        const { data: anyConfig } = await supabase
-          .from('meta_social_config')
-          .select('account_id, user_id, facebook_page_id, facebook_page_access_token')
-          .limit(1);
-        if (anyConfig && anyConfig.length > 0) {
-          configRow = anyConfig[0];
-        }
       }
 
       if (!configRow) {
-        console.warn(`No meta_social_config found for ${channel} entry ID:`, entryId);
+        console.warn(`[Social Webhook] Ignored event: No connected meta_social_config found for ${channel} entryId=${entryId}, recipient=${recipientId}. (Connect this page in Settings to receive messages).`);
         continue;
       }
 
@@ -218,7 +233,11 @@ export async function POST(request: Request) {
             contactName === 'Facebook User' ||
             contactName === 'Instagram User' ||
             contactName.startsWith('Facebook User') ||
-            contactName.startsWith('Instagram User');
+            contactName.startsWith('Instagram User') ||
+            contactName.startsWith('FB:') ||
+            contactName.startsWith('IG:') ||
+            contactName.startsWith('FB :') ||
+            contactName.startsWith('IG :');
 
           if (isGeneric && pageAccessToken) {
             try {

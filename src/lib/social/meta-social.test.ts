@@ -102,6 +102,29 @@ describe('Meta Social Messaging', () => {
         })
       ).rejects.toThrow(/24-hour messaging window rule/);
     });
+
+    it('explains code 100 No matching user found clearly instead of 24-hour window error', async () => {
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        json: async () => ({
+          error: {
+            message: '(#100) No matching user found',
+            type: 'OAuthException',
+            code: 100,
+            error_subcode: 2018001,
+          },
+        }),
+      } as Response);
+
+      await expect(
+        sendFacebookMessage({
+          pageAccessToken: 'token-abc',
+          recipientId: 'psid-wrong',
+          text: 'Hello',
+        })
+      ).rejects.toThrow(/Recipient user ID does not match/);
+    });
   });
 
   describe('sendInstagramMessage', () => {
