@@ -7,7 +7,7 @@ export async function GET() {
   try {
     const { supabase, accountId } = await requireRole('agent');
     const { appId, appSecret } = await getSocialAppCredentials();
-    const metaAppConfigured = Boolean(appId && appSecret);
+    const metaAppConfigured = Boolean(appId && appSecret && /^\d+$/.test(appId));
 
     const { data, error } = await supabase
       .from('meta_social_config')

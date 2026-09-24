@@ -126,23 +126,31 @@ export default function SuperAdminSettingsPage() {
         <CardContent className="space-y-4 text-xs">
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-1">
-              <Label className="text-muted-foreground">Meta App ID</Label>
+              <Label className="text-muted-foreground">Meta App ID (15-16 digits)</Label>
               <Input
-                placeholder="e.g. 123456789012345"
+                placeholder="e.g. 1163705176837211"
                 value={form.meta_app_id}
                 onChange={(e) => setForm({ ...form, meta_app_id: e.target.value })}
-                className="border-border bg-muted"
+                className={`border-border bg-muted ${
+                  form.meta_app_id && !/^\d+$/.test(form.meta_app_id.trim()) ? 'border-destructive' : ''
+                }`}
               />
+              <span className="text-[10px] text-muted-foreground block">
+                From developers.facebook.com (App ID number, not your email).
+              </span>
             </div>
             <div className="space-y-1">
               <Label className="text-muted-foreground">Meta App Secret</Label>
               <Input
                 type="password"
-                placeholder="••••••••••••••••"
+                placeholder="32-character hex secret"
                 value={form.meta_app_secret}
                 onChange={(e) => setForm({ ...form, meta_app_secret: e.target.value })}
                 className="border-border bg-muted"
               />
+              <span className="text-[10px] text-muted-foreground block">
+                From App settings ➔ Basic (not your FB account password).
+              </span>
             </div>
             <div className="space-y-1">
               <Label className="text-muted-foreground">Embedded Signup Config ID</Label>
@@ -152,8 +160,19 @@ export default function SuperAdminSettingsPage() {
                 onChange={(e) => setForm({ ...form, meta_config_id: e.target.value })}
                 className="border-border bg-muted"
               />
+              <span className="text-[10px] text-muted-foreground block">
+                WhatsApp Embedded Signup Configuration ID.
+              </span>
             </div>
           </div>
+          {form.meta_app_id && !/^\d+$/.test(form.meta_app_id.trim()) && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-500 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>
+                <strong>Warning:</strong> Meta App ID must be a numeric ID (e.g. 15-16 digits from developers.facebook.com), not an email address. Entering an email will cause Meta to show &quot;Invalid app ID&quot;.
+              </span>
+            </div>
+          )}
           <div className="rounded-lg border border-border/80 bg-muted/40 p-3 text-[11px] text-muted-foreground">
             <strong>Webhook URL for Meta App:</strong>{' '}
             <code className="text-primary font-semibold">https://dash.aibotflow.in/api/whatsapp/webhook</code>

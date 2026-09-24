@@ -32,6 +32,13 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    if (!/^\d+$/.test(appId)) {
+      return NextResponse.json({
+        configured: false,
+        error: 'Invalid Meta App ID in Super-Admin settings. Meta App ID must be a numeric ID (15-16 digits from developers.facebook.com ➔ App settings ➔ Basic), not your personal Facebook login email.',
+      });
+    }
+
     const requestedRedirectUri = req.nextUrl.searchParams.get('redirectUri');
     const forwardedHost = req.headers.get('x-forwarded-host') || req.headers.get('host');
     const forwardedProto = req.headers.get('x-forwarded-proto') || 'https';
