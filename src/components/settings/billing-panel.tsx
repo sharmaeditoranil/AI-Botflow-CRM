@@ -241,6 +241,7 @@ export function BillingPanel() {
       if (data.freeActivation) {
         toast.success(data.message || 'Plan activated!');
         setUpgradeModalOpen(false);
+        setCheckoutPlan(null);
         fetchUsageAndPlans();
         return;
       }
@@ -267,36 +268,48 @@ export function BillingPanel() {
         theme: {
           color: '#7c3aed',
         },
+        modal: {
+          ondismiss: function () {
+            setUpgradingPlanId(null);
+          },
+        },
         handler: async function (response: any) {
           toast.info('Verifying payment and generating GST invoice...');
-          const verifyRes = await fetch('/api/billing/verify-payment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-              planId,
-              billingCycle,
-              amount: data.amount,
-              taxableAmount: data.taxableAmount,
-              gstAmount: data.gstAmount,
-              gstRate: 18,
-              businessName: businessName.trim(),
-              gstNumber: gstNumber.trim().toUpperCase(),
-              billingAddress: billingAddress.trim(),
-              billingState: billingState.trim(),
-              couponCode: appliedCoupon?.code || couponCode.trim(),
-            }),
-          });
+          try {
+            const verifyRes = await fetch('/api/billing/verify-payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                planId,
+                billingCycle,
+                amount: data.amount,
+                taxableAmount: data.taxableAmount,
+                gstAmount: data.gstAmount,
+                gstRate: 18,
+                businessName: businessName.trim(),
+                gstNumber: gstNumber.trim().toUpperCase(),
+                billingAddress: billingAddress.trim(),
+                billingState: billingState.trim(),
+                couponCode: appliedCoupon?.code || couponCode.trim(),
+              }),
+            });
 
-          const verifyData = await verifyRes.json();
-          if (verifyRes.ok && verifyData.success) {
-            toast.success(`Payment verified! GST Invoice ${verifyData.invoiceNumber || ''} generated.`);
-            setUpgradeModalOpen(false);
-            fetchUsageAndPlans();
-          } else {
-            toast.error(verifyData.error || 'Payment verification failed.');
+            const verifyData = await verifyRes.json();
+            if (verifyRes.ok && verifyData.success) {
+              toast.success(`Payment verified! GST Invoice ${verifyData.invoiceNumber || ''} generated.`);
+              setUpgradeModalOpen(false);
+              setCheckoutPlan(null);
+              fetchUsageAndPlans();
+            } else {
+              toast.error(verifyData.error || 'Payment verification failed.');
+            }
+          } catch (verifyErr: any) {
+            toast.error(verifyErr.message || 'Payment verification network error.');
+          } finally {
+            setUpgradingPlanId(null);
           }
         },
       };

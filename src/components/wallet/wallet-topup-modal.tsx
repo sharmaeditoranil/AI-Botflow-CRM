@@ -32,7 +32,7 @@ interface WalletTopupModalProps {
   rates?: WalletRates | null;
 }
 
-const PRESET_AMOUNTS = [500, 1000, 2000, 5000];
+const PRESET_AMOUNTS = [100, 500, 1000, 2000];
 
 export function WalletTopupModal({
   open,
@@ -41,7 +41,7 @@ export function WalletTopupModal({
   currentBalance = 0,
   rates,
 }: WalletTopupModalProps) {
-  const [selectedAmount, setSelectedAmount] = useState<number>(1000);
+  const [selectedAmount, setSelectedAmount] = useState<number>(100);
   const [customAmount, setCustomAmount] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [activeRates, setActiveRates] = useState<WalletRates>(rates || DEFAULT_WALLET_RATES);
@@ -280,7 +280,7 @@ export function WalletTopupModal({
                 type="number"
                 min="100"
                 step="50"
-                placeholder="e.g. 3500"
+                placeholder="e.g. 500"
                 value={customAmount}
                 onChange={(e) => handleCustomChange(e.target.value)}
                 className="pl-8 text-sm font-semibold bg-muted/20 border-border/80 h-10"

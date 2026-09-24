@@ -122,21 +122,28 @@ export function GstInvoiceModal({
         >
           {/* Header */}
           <div className="flex items-start justify-between border-b border-slate-200 pb-5">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="font-extrabold text-2xl tracking-tight text-purple-700">
-                  Aibotflow
-                </span>
-                <span className="text-[10px] px-2 py-0.5 rounded font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                  PAID
-                </span>
+            <div className="flex items-start gap-3.5">
+              <img
+                src="/brand/logo.png"
+                alt="Aibotflow Logo"
+                className="h-12 w-12 object-contain rounded-lg shrink-0 border border-slate-200 p-0.5 bg-slate-50 shadow-xs"
+              />
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-extrabold text-2xl tracking-tight text-purple-700">
+                    Aibotflow
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    PAID
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 font-medium">Aibotflow CRM Technologies</p>
+                <p className="text-xs text-slate-500">Cloud Software & WhatsApp Automation Services</p>
+                <p className="text-xs text-slate-600 mt-1">
+                  <span className="font-semibold text-slate-700">GSTIN:</span> 10JLWPS8995A1ZA
+                </p>
+                <p className="text-xs text-slate-500">State: Bihar (10) | https://dash.aibotflow.in | support@aibotflow.in</p>
               </div>
-              <p className="text-xs text-slate-600 font-medium">Aibotflow CRM Technologies Pvt. Ltd.</p>
-              <p className="text-xs text-slate-500">Cloud Software & WhatsApp Automation Services</p>
-              <p className="text-xs text-slate-600 mt-1">
-                <span className="font-semibold text-slate-700">GSTIN:</span> 07AAAAA0000A1Z5
-              </p>
-              <p className="text-xs text-slate-500">Website: https://dash.aibotflow.in | support@aibotflow.in</p>
             </div>
             <div className="text-right">
               <span className="inline-block px-3 py-1 bg-purple-50 text-purple-800 border border-purple-200 rounded font-bold text-xs uppercase tracking-wider mb-2">
