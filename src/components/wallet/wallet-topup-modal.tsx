@@ -66,6 +66,32 @@ export function WalletTopupModal({
     setSelectedAmount(0);
   };
 
+  /** Load Razorpay checkout.js once and return when ready */
+  const loadRazorpay = (): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (window.Razorpay) {
+        resolve(true);
+        return;
+      }
+      // Check if the script tag already exists (loading in progress)
+      const existing = document.querySelector(
+        'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
+      );
+      if (existing) {
+        // Wait for it to finish loading
+        existing.addEventListener('load', () => resolve(true));
+        existing.addEventListener('error', () => resolve(false));
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
   const handleInitiateTopup = async () => {
     if (finalAmount < 100) {
       toast.error('Minimum recharge amount is ₹100.');
@@ -74,6 +100,14 @@ export function WalletTopupModal({
 
     try {
       setLoading(true);
+
+      // Ensure SDK is ready before creating the order
+      const sdkReady = await loadRazorpay();
+      if (!sdkReady) {
+        toast.error('Could not load payment gateway. Please check your internet connection and try again.');
+        setLoading(false);
+        return;
+      }
 
       const res = await fetch('/api/wallet/topup/order', {
         method: 'POST',
@@ -91,12 +125,6 @@ export function WalletTopupModal({
 
       if (!res.ok) {
         toast.error(data.error || 'Failed to initiate recharge order.');
-        setLoading(false);
-        return;
-      }
-
-      if (!window.Razorpay) {
-        toast.error('Payment gateway SDK is loading. Please try again in 2 seconds.');
         setLoading(false);
         return;
       }
