@@ -19,6 +19,7 @@ import {
   checkWalletBalance,
   deductWalletCredits,
   calculateMessageCost,
+  getWalletRates,
 } from '@/lib/billing/wallet'
 
 interface BroadcastResult {
@@ -166,7 +167,8 @@ export async function POST(request: Request) {
     const templateRow = resolvedTemplate.row
 
     // Verify wallet balance for the planned broadcast
-    const costPerMsg = calculateMessageCost(templateRow?.category)
+    const rates = await getWalletRates()
+    const costPerMsg = calculateMessageCost(templateRow?.category, rates)
     let isWalletControlled = false
     try {
       const estimatedCost = recipients.length * costPerMsg

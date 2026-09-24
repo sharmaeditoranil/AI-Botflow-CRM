@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import {
   Wallet,
@@ -22,12 +22,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { DEFAULT_WALLET_RATES, type WalletRates } from '@/lib/billing/wallet';
 
 interface WalletTopupModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: (newBalance: number) => void;
   currentBalance?: number;
+  rates?: WalletRates | null;
 }
 
 const PRESET_AMOUNTS = [500, 1000, 2000, 5000];
@@ -37,10 +39,25 @@ export function WalletTopupModal({
   onOpenChange,
   onSuccess,
   currentBalance = 0,
+  rates,
 }: WalletTopupModalProps) {
   const [selectedAmount, setSelectedAmount] = useState<number>(1000);
   const [customAmount, setCustomAmount] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [activeRates, setActiveRates] = useState<WalletRates>(rates || DEFAULT_WALLET_RATES);
+
+  useEffect(() => {
+    if (rates) {
+      setActiveRates(rates);
+    } else if (open) {
+      fetch('/api/wallet')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.rates) setActiveRates(data.rates);
+        })
+        .catch(() => {});
+    }
+  }, [rates, open]);
 
   // Business GST details (optional)
   const [showGstDetails, setShowGstDetails] = useState(false);
@@ -53,8 +70,10 @@ export function WalletTopupModal({
   const gstAmount = Math.round(finalAmount * 0.18);
   const totalPayable = finalAmount + gstAmount;
 
-  const marketingCount = Math.floor(finalAmount / 0.85);
-  const utilityCount = Math.floor(finalAmount / 0.15);
+  const marketingRate = activeRates.marketing || 0.85;
+  const utilityRate = activeRates.utility || 0.15;
+  const marketingCount = Math.floor(finalAmount / marketingRate);
+  const utilityCount = Math.floor(finalAmount / utilityRate);
 
   const handleSelectPreset = (amt: number) => {
     setSelectedAmount(amt);
@@ -280,12 +299,12 @@ export function WalletTopupModal({
                 <div className="rounded-lg bg-background/60 p-2 border border-border/50">
                   <span className="text-muted-foreground block text-[11px]">Marketing Templates</span>
                   <span className="font-bold text-foreground text-sm">~{marketingCount.toLocaleString()}</span>
-                  <span className="text-[10px] text-muted-foreground ml-1">(₹0.85/msg)</span>
+                  <span className="text-[10px] text-muted-foreground ml-1">(₹{marketingRate.toFixed(2)}/msg)</span>
                 </div>
                 <div className="rounded-lg bg-background/60 p-2 border border-border/50">
                   <span className="text-muted-foreground block text-[11px]">Utility / OTP</span>
                   <span className="font-bold text-foreground text-sm">~{utilityCount.toLocaleString()}</span>
-                  <span className="text-[10px] text-muted-foreground ml-1">(₹0.15/msg)</span>
+                  <span className="text-[10px] text-muted-foreground ml-1">(₹{utilityRate.toFixed(2)}/msg)</span>
                 </div>
               </div>
             </div>

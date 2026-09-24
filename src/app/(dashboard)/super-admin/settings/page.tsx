@@ -416,6 +416,80 @@ export default function SuperAdminSettingsPage() {
         </CardContent>
       </Card>
 
+      {/* Prepaid WhatsApp Per-Message Credit Pricing */}
+      <Card className="border-border bg-card">
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <div className="flex size-8 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500 ring-1 ring-emerald-500/20">
+              <Wallet className="size-4" />
+            </div>
+            <div>
+              <CardTitle className="text-base font-bold text-foreground">
+                Prepaid WhatsApp Per-Message Credit Pricing
+              </CardTitle>
+              <CardDescription className="text-xs text-muted-foreground mt-0.5">
+                Customers pay these per-message rates from their CRM wallet balance when sending WhatsApp messages.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3 pt-1">
+          <div className="grid gap-3 sm:grid-cols-4">
+            <div className="space-y-1">
+              <Label className="text-muted-foreground text-[11px] font-semibold">Marketing (₹ / msg)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.wallet_rate_marketing}
+                onChange={(e) => setForm({ ...form, wallet_rate_marketing: Number(e.target.value) })}
+                className="border-border bg-muted font-bold text-foreground h-9 text-sm"
+              />
+              <span className="text-[10px] text-muted-foreground block">Meta Base ~₹0.78 + Margin</span>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-muted-foreground text-[11px] font-semibold">Utility / Orders (₹ / msg)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.wallet_rate_utility}
+                onChange={(e) => setForm({ ...form, wallet_rate_utility: Number(e.target.value) })}
+                className="border-border bg-muted font-bold text-foreground h-9 text-sm"
+              />
+              <span className="text-[10px] text-muted-foreground block">Meta Base ~₹0.12 + Margin</span>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-muted-foreground text-[11px] font-semibold">Auth / OTP (₹ / msg)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.wallet_rate_auth}
+                onChange={(e) => setForm({ ...form, wallet_rate_auth: Number(e.target.value) })}
+                className="border-border bg-muted font-bold text-foreground h-9 text-sm"
+              />
+              <span className="text-[10px] text-muted-foreground block">Meta Base ~₹0.12 + Margin</span>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-muted-foreground text-[11px] font-semibold">Service Chat (₹ / msg)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={form.wallet_rate_service}
+                onChange={(e) => setForm({ ...form, wallet_rate_service: Number(e.target.value) })}
+                className="border-border bg-muted font-bold text-foreground h-9 text-sm"
+              />
+              <span className="text-[10px] text-muted-foreground block">24hr customer chat window</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Operational Support Settings */}
       <Card className="border-border bg-card">
         <CardHeader>

@@ -33,6 +33,7 @@ import {
   checkWalletBalance,
   deductWalletCredits,
   calculateMessageCost,
+  getWalletRates,
 } from '@/lib/billing/wallet';
 
 /** Thrown by createBroadcast on a caller-visible failure; route maps it. */
@@ -190,7 +191,8 @@ export async function createBroadcast(
   }
 
   // Pre-check wallet balance for broadcast
-  const costPerMsg = calculateMessageCost(templateRow?.category);
+  const rates = await getWalletRates();
+  const costPerMsg = calculateMessageCost(templateRow?.category, rates);
   const estimatedTotalCost = deduped.length * costPerMsg;
   try {
     const balanceCheck = await checkWalletBalance(accountId, estimatedTotalCost);
@@ -335,7 +337,8 @@ export async function deliverBroadcast(
 
   // Deduct credits for delivered recipients
   if (plan.accountId && sentSuccessCount > 0) {
-    const costPerMsg = calculateMessageCost(plan.templateRow?.category);
+    const rates = await getWalletRates();
+    const costPerMsg = calculateMessageCost(plan.templateRow?.category, rates);
     const totalDeduct = sentSuccessCount * costPerMsg;
     void deductWalletCredits({
       accountId: plan.accountId,

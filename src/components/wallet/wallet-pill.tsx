@@ -5,8 +5,11 @@ import { Wallet, Plus, AlertCircle, Loader2 } from 'lucide-react';
 import { WalletTopupModal } from './wallet-topup-modal';
 import { cn } from '@/lib/utils';
 
+import type { WalletRates } from '@/lib/billing/wallet';
+
 export function WalletPill() {
   const [balance, setBalance] = useState<number | null>(null);
+  const [rates, setRates] = useState<WalletRates | null>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -19,6 +22,9 @@ export function WalletPill() {
         if (data.wallet) {
           setBalance(Number(data.wallet.balance || 0));
           setIsSuperAdmin(Boolean(data.wallet.is_super_admin));
+        }
+        if (data.rates) {
+          setRates(data.rates);
         }
       }
     } catch (err) {
@@ -101,6 +107,7 @@ export function WalletPill() {
         open={modalOpen}
         onOpenChange={setModalOpen}
         currentBalance={currentBalance}
+        rates={rates}
         onSuccess={(newBal) => {
           setBalance(newBal);
           window.dispatchEvent(new CustomEvent('wallet:updated', { detail: { balance: newBal } }));

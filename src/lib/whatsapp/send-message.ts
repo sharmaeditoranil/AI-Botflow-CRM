@@ -56,6 +56,7 @@ import {
   checkWalletBalance,
   deductWalletCredits,
   calculateMessageCost,
+  getWalletRates,
 } from '@/lib/billing/wallet';
 
 export const MEDIA_KINDS = ['image', 'video', 'document', 'audio'] as const;
@@ -518,7 +519,8 @@ export async function sendMessageToConversation(
   // Wallet balance check for WhatsApp messages
   let messageCost = 0;
   try {
-    messageCost = calculateMessageCost(templateRow?.category);
+    const rates = await getWalletRates();
+    messageCost = calculateMessageCost(templateRow?.category, rates);
     const walletCheck = await checkWalletBalance(accountId, messageCost);
     if (!walletCheck.allowed) {
       throw new SendMessageError(

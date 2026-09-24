@@ -1440,6 +1440,7 @@ export function BillingPanel() {
         open={walletModalOpen}
         onOpenChange={setWalletModalOpen}
         currentBalance={Number(walletData?.wallet?.balance || 0)}
+        rates={walletData?.rates}
         onSuccess={() => {
           fetchUsageAndPlans();
           window.dispatchEvent(new CustomEvent('wallet:updated'));

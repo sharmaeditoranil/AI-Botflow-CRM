@@ -85,39 +85,51 @@ export async function POST(req: NextRequest) {
 
     const payload: Record<string, any> = {
       id: 'default',
-      meta_app_id: meta_app_id?.trim() || null,
-      meta_app_secret: meta_app_secret?.trim() || null,
-      meta_config_id: meta_config_id?.trim() || null,
-      razorpay_key_id: razorpay_key_id?.trim() || null,
-      razorpay_key_secret: razorpay_key_secret?.trim() || null,
-      razorpay_webhook_secret: razorpay_webhook_secret?.trim() || null,
-      google_client_id: google_client_id?.trim() || null,
-      google_client_secret: google_client_secret?.trim() || null,
-      admin_openai_api_key: admin_openai_api_key?.trim() || null,
-      admin_gemini_api_key: admin_gemini_api_key?.trim() || null,
-      admin_ai_model: admin_ai_model?.trim() || 'gpt-4o-mini',
-      support_email: support_email?.trim() || 'support@aibotflow.in',
-      support_phone: support_phone?.trim() || null,
-      wallet_system_enabled: wallet_system_enabled !== false,
-      wallet_rate_marketing: wallet_rate_marketing !== undefined ? Number(wallet_rate_marketing) : 0.85,
-      wallet_rate_utility: wallet_rate_utility !== undefined ? Number(wallet_rate_utility) : 0.15,
-      wallet_rate_service: wallet_rate_service !== undefined ? Number(wallet_rate_service) : 0.35,
-      wallet_rate_auth: wallet_rate_auth !== undefined ? Number(wallet_rate_auth) : 0.15,
       updated_at: new Date().toISOString(),
     };
 
+    if ('meta_app_id' in body) payload.meta_app_id = body.meta_app_id?.trim() || null;
+    if ('meta_app_secret' in body) payload.meta_app_secret = body.meta_app_secret?.trim() || null;
+    if ('meta_config_id' in body) payload.meta_config_id = body.meta_config_id?.trim() || null;
+    if ('razorpay_key_id' in body) payload.razorpay_key_id = body.razorpay_key_id?.trim() || null;
+    if ('razorpay_key_secret' in body) payload.razorpay_key_secret = body.razorpay_key_secret?.trim() || null;
+    if ('razorpay_webhook_secret' in body) payload.razorpay_webhook_secret = body.razorpay_webhook_secret?.trim() || null;
+    if ('google_client_id' in body) payload.google_client_id = body.google_client_id?.trim() || null;
+    if ('google_client_secret' in body) payload.google_client_secret = body.google_client_secret?.trim() || null;
+    if ('admin_openai_api_key' in body) payload.admin_openai_api_key = body.admin_openai_api_key?.trim() || null;
+    if ('admin_gemini_api_key' in body) payload.admin_gemini_api_key = body.admin_gemini_api_key?.trim() || null;
+    if ('admin_ai_model' in body) payload.admin_ai_model = body.admin_ai_model?.trim() || 'gpt-4o-mini';
+    if ('support_email' in body) payload.support_email = body.support_email?.trim() || 'support@aibotflow.in';
+    if ('support_phone' in body) payload.support_phone = body.support_phone?.trim() || null;
+
+    if ('wallet_system_enabled' in body) payload.wallet_system_enabled = body.wallet_system_enabled !== false;
+    if ('wallet_rate_marketing' in body) payload.wallet_rate_marketing = Number(body.wallet_rate_marketing);
+    if ('wallet_rate_utility' in body) payload.wallet_rate_utility = Number(body.wallet_rate_utility);
+    if ('wallet_rate_service' in body) payload.wallet_rate_service = Number(body.wallet_rate_service);
+    if ('wallet_rate_auth' in body) payload.wallet_rate_auth = Number(body.wallet_rate_auth);
+
+    // Use update if row exists, or upsert
     let { error } = await supabase
       .from('platform_settings')
-      .upsert(payload, { onConflict: 'id' });
+      .update(payload)
+      .eq('id', 'default');
 
-    // Fallback if google_client_id column does not exist in DB yet
     if (error && error.message?.includes('google_client_id')) {
       delete payload.google_client_id;
       delete payload.google_client_secret;
       const retry = await supabase
         .from('platform_settings')
-        .upsert(payload, { onConflict: 'id' });
+        .update(payload)
+        .eq('id', 'default');
       error = retry.error;
+    }
+
+    if (error) {
+      // Fallback to upsert if default row was never created
+      const upsertRetry = await supabase
+        .from('platform_settings')
+        .upsert(payload, { onConflict: 'id' });
+      error = upsertRetry.error;
     }
 
     if (error) {
