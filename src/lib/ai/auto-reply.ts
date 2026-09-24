@@ -73,7 +73,43 @@ export async function dispatchInboundToAiReply(
     const db = supabaseAdmin()
 
     const config = await loadAiConfig(db, accountId)
-    if (!config || !config.autoReplyEnabled) return
+    if (!config) return
+
+    const messages = await buildConversationContext(db, conversationId)
+    if (messages.length === 0) return
+
+    const latestMsg = latestUserMessage(messages)
+
+    // 1. Follow-up Intelligence & Opt-Out:
+    // ALWAYS evaluates customer intent when enabled, ensuring tags ("Interested" / "Not Interested")
+    // are assigned and automations trigger, even if a human is chatting or text auto-reply is paused.
+    if (latestMsg && config.followupIntelligenceEnabled) {
+      if (config.autoUnsubscribeEnabled) {
+        const optOutResult = await checkAndExecuteOptOut({
+          db,
+          accountId,
+          contactId,
+          conversationId,
+          customerMessage: latestMsg,
+          config,
+          configOwnerUserId,
+        })
+        if (optOutResult.optedOut) return
+      }
+
+      void processFollowupIntelligence({
+        db,
+        accountId,
+        contactId,
+        conversationId,
+        customerMessage: latestMsg,
+        config,
+        configOwnerUserId,
+      })
+    }
+
+    // 2. Text Auto-Reply Gates:
+    if (!config.autoReplyEnabled) return
 
     // Check if the contact has already opted out
     const { data: contactRow } = await db
@@ -138,11 +174,6 @@ export async function dispatchInboundToAiReply(
     // Cheap early-out; the authoritative cap check is the atomic claim
     // below (this read can race a concurrent inbound).
     if (currentReplyCount >= config.autoReplyMaxPerConversation) return
-
-    const messages = await buildConversationContext(db, conversationId)
-    if (messages.length === 0) return
-
-    const latestMsg = latestUserMessage(messages)
 
     const convChannel = (conv as { channel?: string })?.channel || 'whatsapp'
 
@@ -292,19 +323,6 @@ export async function dispatchInboundToAiReply(
         update.assigned_agent_id = config.handoffAgentId
       }
       await db.from('conversations').update(update).eq('id', conversationId)
-
-      // Still evaluate intent (lead qualification & auto-tagging) so human agents have full context
-      if (latestMsg && config.followupIntelligenceEnabled) {
-        void processFollowupIntelligence({
-          db,
-          accountId,
-          contactId,
-          conversationId,
-          customerMessage: latestMsg,
-          config,
-          configOwnerUserId,
-        })
-      }
       return
     }
 
@@ -407,19 +425,6 @@ export async function dispatchInboundToAiReply(
         contactId,
         text,
         aiGenerated: true,
-      })
-    }
-
-    // Asynchronously process follow-up intelligence (scoring, status, auto-tags, learned memory)
-    if (latestMsg && config.followupIntelligenceEnabled) {
-      void processFollowupIntelligence({
-        db,
-        accountId,
-        contactId,
-        conversationId,
-        customerMessage: latestMsg,
-        config,
-        configOwnerUserId,
       })
     }
   } catch (err) {

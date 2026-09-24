@@ -10,6 +10,8 @@ import type { AiConfig } from './types';
 import { engineSendText } from '@/lib/flows/meta-send';
 import { generateWithAdminAi } from './admin-ai';
 import { findAndMergeOrCreateDeal, findExistingDealsForCustomer } from '@/lib/pipelines/deal-merger';
+import { addContactTagAndDispatch } from '@/lib/contacts/tag-events';
+import { isSystemProtectedTag } from '@/lib/tags/system-tags';
 
 export interface OptOutCheckResult {
   optedOut: boolean;
@@ -207,42 +209,55 @@ export function formatContactMemoryForPrompt(args: {
 }
 
 /** Buying intent regex patterns */
-const HIGH_INTENT_REGEX =
-  /\b(kitna\s*lagega|fee|fees|price|cost|discount|admission|join\s*karna|enroll|payment|pay\s*karna|qr\s*code|bank\s*details|account\s*number|upi|send\s*link|online\s*payment|ready\s*to\s*join|admission\s*lena)\b/i;
-const CALLBACK_REGEX =
-  /\b(call\s*karo|call\s*me|baat\s*karni\s*hai|phone\s*pe\s*baat|contact\s*me|number\s*par\s*call|please\s*call)\b/i;
-const QUALIFIED_REGEX =
-  /\b(payment\s*done|screenshot|paid|bhej\s*diya|admission\s*done|registered|seat\s*book|booked)\b/i;
-const GENERAL_INTEREST_REGEX =
-  /\b(syllabus|details|timing|batch|duration|address|location|certificate|course|demo|information)\b/i;
+/** Buying intent and positive interest regex patterns (Hindi, Hinglish, English) */
+const AFFIRMATIVE_INTEREST_REGEX =
+  /^(?:haan?|haa+|yes+|yup|sure|bilkul|zarur|bhejo|bhejiye|chahiye|chahie|interested|ok\s*send|send|ha\s*bhejo|ha\s*bhai|h)$/i;
 
-/** Helper to assign a tag idempotently to a contact */
+const HIGH_INTENT_REGEX =
+  /\b(kitna\s*lagega|fee|fees|price|prices|rate|rates|cost|discount|admission|join|enroll|payment|pay|qr\s*code|bank\s*details|account\s*number|upi|send\s*link|online\s*payment|ready\s*to\s*join|admission\s*lena|buy\s*karna|khareedna|lena\s*hai|chahiye|charge|charges|plan|plans|package|quotation|quote)\b/i;
+
+const CALLBACK_REGEX =
+  /\b(call\s*karo|call\s*me|baat\s*karni|phone\s*pe\s*baat|contact\s*me|number\s*par\s*call|please\s*call|phone\s*karo|call\s*kijiye)\b/i;
+
+const QUALIFIED_REGEX =
+  /\b(payment\s*done|screenshot|paid|bhej\s*diya|admission\s*done|registered|seat\s*book|booked|done\s*payment|transfer\s*done)\b/i;
+
+const GENERAL_INTEREST_REGEX =
+  /\b(syllabus|details|timing|batch|duration|address|location|certificate|course|demo|information|bhejo|bhejiye|brochure|catalogue|catalog|features)\b/i;
+
+const NEGATIVE_INTENT_REGEX =
+  /\b(nahi\s*chahiye|nahi\s*lena|nhi\s*chahiye|mat\s*bhejo|stop|cancel|unsubscribe|not\s*interested|no\s*thanks|no\s*need|galat\s*number|wrong\s*number|spam|band\s*karo|kisi\s*aur)\b/i;
+
+/** Helper to assign a tag to a contact and dispatch tag_added triggers to Automations */
 async function ensureTagAssigned(
   db: SupabaseClient,
   accountId: string,
   contactId: string,
   configOwnerUserId: string,
   tagName: string,
-  color: string = '#f59e0b'
+  color: string = '#10b981',
+  context?: { conversationId?: string; customerMessage?: string }
 ) {
   try {
+    const cleanName = tagName.trim();
     let tagId: string | null = null;
     const { data: existingTag } = await db
       .from('tags')
-      .select('id')
+      .select('id, name')
       .eq('account_id', accountId)
-      .ilike('name', tagName)
+      .ilike('name', cleanName)
       .limit(1);
 
     if (existingTag && existingTag.length > 0) {
       tagId = existingTag[0].id;
     } else {
+      const isSystem = isSystemProtectedTag(cleanName);
       const { data: newTag } = await db
         .from('tags')
         .insert({
           account_id: accountId,
           user_id: configOwnerUserId,
-          name: tagName,
+          name: cleanName,
           color,
         })
         .select('id')
@@ -251,19 +266,17 @@ async function ensureTagAssigned(
     }
 
     if (tagId) {
-      const { data: existingLink } = await db
-        .from('contact_tags')
-        .select('id')
-        .eq('contact_id', contactId)
-        .eq('tag_id', tagId)
-        .limit(1);
-
-      if (!existingLink || existingLink.length === 0) {
-        await db.from('contact_tags').insert({
-          contact_id: contactId,
-          tag_id: tagId,
-        });
-      }
+      // Dispatches tag_added trigger so automations configured for this tag execute immediately!
+      await addContactTagAndDispatch({
+        db,
+        accountId,
+        contactId,
+        tagId,
+        context: {
+          conversation_id: context?.conversationId,
+          message_text: context?.customerMessage,
+        },
+      });
     }
   } catch (err) {
     console.warn(`[ai-intelligence] Failed to assign tag "${tagName}":`, err);
@@ -278,11 +291,12 @@ async function ensureTagRemoved(
   tagName: string
 ) {
   try {
+    const cleanName = tagName.trim();
     const { data: existingTag } = await db
       .from('tags')
       .select('id')
       .eq('account_id', accountId)
-      .ilike('name', tagName)
+      .ilike('name', cleanName)
       .limit(1);
 
     if (existingTag && existingTag.length > 0) {
@@ -433,27 +447,39 @@ export async function processFollowupIntelligence(args: {
       .map((m: any) => `${m.sender_type === 'customer' ? 'Customer' : 'Bot'}: ${m.content_text || ''}`)
       .join('\n');
 
-    const prompt = `Analyze this WhatsApp customer message in context and return JSON:
-Context of conversation:
+    const prompt = `You are an expert CRM Lead Qualification and Sentiment Analysis AI for an Indian WhatsApp Business.
+Analyze this incoming customer message in the context of recent chat history and determine if the customer is Interested or Not Interested.
+
+CONVERSATION CONTEXT (last few messages):
 ${historySnippet || 'None'}
 
-Current incoming customer message: "${text}"
-Available tags in CRM: [${tagList}]
+CURRENT INCOMING CUSTOMER MESSAGE: "${text}"
+AVAILABLE TAGS IN CRM: [${tagList}]
 
-Instructions:
-1. Is this customer expressing genuine commercial interest, asking for price, quote, demo, details, or service? (is_interested: true/false)
-2. If customer is saying no, stop, don't message, not interested, cancel (sentiment: "not_interested", is_interested: false)
-3. If customer is asking for prices, products, service, booking, buying (sentiment: "interested", is_interested: true)
-4. Casual greeting like "hi", "hello", "ok", or questions unrelated to purchase should have is_interested: false, sentiment: "neutral"
-5. Set tag_to_apply ("Interested" or "Not Interested" or matching one from CRM tags), tag_to_remove (e.g. remove "Not Interested" if interested), and a 1-sentence summary in English/Hinglish.
+ANALYSIS RULES:
+1. "Interested":
+   - Asking about prices, rates, fees, cost, discounts, quotations, plans (e.g. "kya price hai", "rate batao", "kitna lagega", "fees", "cost?").
+   - Asking for demo, details, catalog, course, service, features, brochure (e.g. "demo do", "details bhejo", "bhejo bhai", "bro details", "information do").
+   - Short affirmative confirmation to a previous bot message/pitch (e.g. Bot asked "kya aapko demo chahiye?" or sent offer, and customer says "haan", "ha", "yes", "y", "sure", "bhejo", "chahiye", "okay send").
+   - Requesting a phone call or callback (e.g. "call karo", "call me", "phone pe baat karni hai", "number do").
+   - Wanting to buy, enroll, join, or register (e.g. "lena hai", "buy karna hai", "join karna hai", "admission lena hai", "interested").
+   -> Set: is_interested = true, sentiment = "interested", tag_to_apply = "Interested", tag_to_remove = "Not Interested".
+
+2. "Not Interested":
+   - Saying no, refusal, stop, cancel, don't message, wrong number, not interested (e.g. "nahi chahiye", "nahi lena", "not interested", "stop", "cancel", "mat bhejo", "galat number", "don't message", "no thanks").
+   -> Set: is_interested = false, sentiment = "not_interested", tag_to_apply = "Not Interested", tag_to_remove = "Interested".
+
+3. "Neutral":
+   - Casual greeting without buying intent (e.g. "hi", "hello", "good morning") or random irrelevant questions.
+   -> Set: is_interested = false, sentiment = "neutral", tag_to_apply = null, tag_to_remove = null.
 
 Return ONLY raw valid JSON:
 {
   "is_interested": boolean,
   "sentiment": "interested" | "not_interested" | "neutral",
-  "tag_to_apply": string | null,
-  "tag_to_remove": string | null,
-  "summary": string
+  "tag_to_apply": "Interested" | "Not Interested" | null,
+  "tag_to_remove": "Interested" | "Not Interested" | null,
+  "summary": "1 sentence explanation in Hinglish/English"
 }`;
 
     const rawAi = await generateWithAdminAi(prompt, {
@@ -469,7 +495,15 @@ Return ONLY raw valid JSON:
     if (parsed.summary) summary = parsed.summary;
   } catch (aiErr) {
     console.warn('[ai-intelligence] Admin AI qualification notice, using rule fallback:', aiErr);
-    if (
+    const lastMsgFromBot = recentMsgs && recentMsgs.length > 0 && recentMsgs[0].sender_type === 'bot';
+
+    if (AFFIRMATIVE_INTEREST_REGEX.test(text) && lastMsgFromBot) {
+      isInterested = true;
+      sentiment = 'interested';
+      tagToApply = 'Interested';
+      tagToRemove = 'Not Interested';
+      summary = `Customer confirmed interest: "${text}"`;
+    } else if (
       QUALIFIED_REGEX.test(text) ||
       HIGH_INTENT_REGEX.test(text) ||
       GENERAL_INTEREST_REGEX.test(text) ||
@@ -480,7 +514,10 @@ Return ONLY raw valid JSON:
       tagToApply = 'Interested';
       tagToRemove = 'Not Interested';
       summary = `Customer interested: "${text.slice(0, 80)}"`;
-    } else if (DEFAULT_OPTOUT_REGEXES.some((rx) => rx.test(text))) {
+    } else if (
+      NEGATIVE_INTENT_REGEX.test(text) ||
+      DEFAULT_OPTOUT_REGEXES.some((rx) => rx.test(text))
+    ) {
       isInterested = false;
       sentiment = 'not_interested';
       tagToApply = 'Not Interested';
@@ -489,14 +526,29 @@ Return ONLY raw valid JSON:
     }
   }
 
+  // Enforce strict mutual exclusivity between "Interested" and "Not Interested"
+  if (tagToApply && tagToApply.toLowerCase() === 'interested') {
+    tagToRemove = 'Not Interested';
+  } else if (tagToApply && tagToApply.toLowerCase().includes('not interested')) {
+    tagToRemove = 'Interested';
+  }
+
   // 6. Execute Automatic Tagging (Controlled by tagsEnabled toggle)
   if (tagsEnabled) {
     if (tagToRemove) {
       await ensureTagRemoved(db, accountId, contactId, tagToRemove);
     }
     if (tagToApply) {
-      const tagColor = tagToApply.toLowerCase().includes('not') ? '#ef4444' : '#f59e0b';
-      await ensureTagAssigned(db, accountId, contactId, configOwnerUserId, tagToApply, tagColor);
+      const tagColor = tagToApply.toLowerCase().includes('not') ? '#ef4444' : '#10b981';
+      await ensureTagAssigned(
+        db,
+        accountId,
+        contactId,
+        configOwnerUserId,
+        tagToApply,
+        tagColor,
+        { conversationId, customerMessage: text }
+      );
     }
   }
 

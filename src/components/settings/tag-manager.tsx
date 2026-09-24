@@ -26,6 +26,8 @@ import { cn } from '@/lib/utils';
 import { useTranslations } from 'next-intl';
 import type { Tag } from '@/types';
 
+import { isSystemProtectedTag, ensureDefaultTagsForAccount } from '@/lib/tags/system-tags';
+
 const PRESET_COLORS = [
   { name: 'red', value: '#ef4444' },
   { name: 'orange', value: '#f97316' },
@@ -64,16 +66,25 @@ export function TagManager() {
     }
     fetchTags(user.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user?.id]);
+  }, [authLoading, user?.id, accountId]);
 
   async function fetchTags(userId: string) {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('tags')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: true });
+
+      // Guarantee core system tags ("Interested", "Not Interested") exist for this account
+      if (accountId && userId) {
+        await ensureDefaultTagsForAccount(supabase, accountId, userId);
+      }
+
+      let query = supabase.from('tags').select('*');
+      if (accountId) {
+        query = query.eq('account_id', accountId);
+      } else {
+        query = query.eq('user_id', userId);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: true });
 
       if (error) throw error;
       setTags(data || []);
@@ -122,12 +133,23 @@ export function TagManager() {
   }
 
   function confirmDelete(tag: Tag) {
+    if (isSystemProtectedTag(tag)) {
+      toast.error('Cannot delete core AI system tag ("Interested" / "Not Interested"). These are used for automated AI qualification.');
+      return;
+    }
     setTagToDelete(tag);
     setDeleteDialogOpen(true);
   }
 
   async function handleDelete() {
     if (!tagToDelete) return;
+
+    if (isSystemProtectedTag(tagToDelete)) {
+      toast.error('Cannot delete core AI system tag.');
+      setDeleteDialogOpen(false);
+      setTagToDelete(null);
+      return;
+    }
 
     try {
       setDeleting(true);
@@ -170,31 +192,43 @@ export function TagManager() {
           <>
             {tags.length > 0 ? (
               <div className="flex flex-wrap gap-2">
-                {tags.map((tag) => (
-                  <span
-                    key={tag.id}
-                    className="group inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors"
-                    style={{
-                      backgroundColor: `${tag.color}20`,
-                      color: tag.color,
-                      border: `1px solid ${tag.color}40`,
-                    }}
-                  >
+                {tags.map((tag) => {
+                  const isProtected = isSystemProtectedTag(tag);
+                  return (
                     <span
-                      className="size-2 rounded-full"
-                      style={{ backgroundColor: tag.color }}
-                    />
-                    {tag.name}
-                    <button
-                      type="button"
-                      onClick={() => confirmDelete(tag)}
-                      aria-label={t('deleteAria', { name: tag.name })}
-                      className="ml-0.5 rounded-full p-0.5 opacity-60 transition-opacity hover:bg-black/10 hover:opacity-100 dark:hover:bg-white/10"
+                      key={tag.id}
+                      className="group inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors"
+                      style={{
+                        backgroundColor: `${tag.color}20`,
+                        color: tag.color,
+                        border: `1px solid ${tag.color}40`,
+                      }}
                     >
-                      <X className="size-3" />
-                    </button>
-                  </span>
-                ))}
+                      <span
+                        className="size-2 rounded-full"
+                        style={{ backgroundColor: tag.color }}
+                      />
+                      {tag.name}
+                      {isProtected ? (
+                        <span
+                          title="Core AI System Tag (Protected)"
+                          className="ml-1 text-[11px] opacity-75 font-normal cursor-help select-none"
+                        >
+                          🔒 AI Core
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => confirmDelete(tag)}
+                          aria-label={t('deleteAria', { name: tag.name })}
+                          className="ml-0.5 rounded-full p-0.5 opacity-60 transition-opacity hover:bg-black/10 hover:opacity-100 dark:hover:bg-white/10"
+                        >
+                          <X className="size-3" />
+                        </button>
+                      )}
+                    </span>
+                  );
+                })}
               </div>
             ) : (
               <p className="text-sm text-muted-foreground">
