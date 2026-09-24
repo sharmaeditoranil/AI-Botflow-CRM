@@ -54,7 +54,7 @@ export async function POST(request: Request) {
 
     let configQuery = supabase
       .from('meta_social_config')
-      .select('account_id, facebook_page_id, instagram_account_id, facebook_page_access_token');
+      .select('account_id, user_id, facebook_page_id, instagram_account_id, facebook_page_access_token');
 
     if (targetAccountId) {
       configQuery = configQuery.eq('account_id', targetAccountId);
@@ -206,9 +206,11 @@ export async function POST(request: Request) {
           .limit(1);
 
         if (!existing || existing.length === 0) {
+          totalFixed++;
           updateOperations.push(
             supabase.from('contacts').insert({
               account_id: acctId,
+              user_id: config.user_id || acctId,
               name: personName,
               phone: '',
               [userCol]: personId,
