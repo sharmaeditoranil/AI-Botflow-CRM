@@ -129,7 +129,7 @@ export function AssignAutomationWidget({
   if (!contactId) return null;
 
   return (
-    <div className={`space-y-2.5 rounded-xl border border-border/80 bg-card/60 p-3 shadow-xs ${className}`}>
+    <div className={`space-y-2.5 rounded-xl border border-border/80 bg-card/60 p-3 shadow-xs overflow-hidden ${className}`}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
@@ -185,12 +185,12 @@ export function AssignAutomationWidget({
         </div>
       ) : (
         <div className="space-y-2">
-          <div className="flex gap-1.5">
+          <div className="flex items-center gap-1.5 min-w-0">
             <select
               value={selectedAutomationId}
               onChange={(e) => setSelectedAutomationId(e.target.value)}
               disabled={assigning}
-              className="h-8 flex-1 rounded-lg border border-border/80 bg-background px-2 text-xs font-medium text-foreground outline-none focus:border-primary"
+              className="h-8 min-w-0 flex-1 rounded-lg border border-border/80 bg-background px-2 text-xs font-medium text-foreground outline-none focus:border-primary truncate"
             >
               {automations.map((auto) => (
                 <option key={auto.id} value={auto.id}>
@@ -216,7 +216,7 @@ export function AssignAutomationWidget({
               ) : (
                 <Play className="h-3 w-3 fill-current" />
               )}
-              Assign & Run
+              Run
             </Button>
           </div>
 
