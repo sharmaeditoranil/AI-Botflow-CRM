@@ -23,7 +23,7 @@ export async function GET() {
 
     const { data: profile } = await supabase
       .from('profiles')
-      .select('account_id, account_role')
+      .select('account_id, account_role, is_super_admin')
       .eq('user_id', user.id)
       .maybeSingle();
 
@@ -45,16 +45,15 @@ export async function GET() {
         .limit(30),
     ]);
 
-    const { data: acc } = await adminSupabase
-      .from('accounts')
-      .select('plan_id, plans(slug)')
-      .eq('id', accountId)
-      .maybeSingle();
-
-    const isFounder = (acc?.plans as any)?.slug === 'founder' || profile.account_role === 'owner';
-    if (isFounder && (acc?.plans as any)?.slug === 'founder') {
+    // Only genuine Super Admin accounts bypass prepaid wallet deductions via direct Meta card
+    const isSuperAdmin = Boolean(profile.is_super_admin);
+    if (isSuperAdmin) {
       wallet.balance = 999999;
+      (wallet as any).is_super_admin = true;
       (wallet as any).is_founder = true;
+    } else {
+      (wallet as any).is_super_admin = false;
+      (wallet as any).is_founder = false;
     }
 
     return NextResponse.json({

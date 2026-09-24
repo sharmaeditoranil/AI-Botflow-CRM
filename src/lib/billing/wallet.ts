@@ -154,6 +154,28 @@ export function calculateMessageCost(
 }
 
 /**
+ * Helper to determine if an account is owned or operated by a verified Super Admin.
+ */
+export async function isSuperAdminAccount(accountId: string): Promise<boolean> {
+  const supabase = getAdminSupabase();
+  if (!supabase) return false;
+
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('is_super_admin')
+      .eq('account_id', accountId)
+      .eq('is_super_admin', true)
+      .limit(1)
+      .maybeSingle();
+
+    return Boolean(data?.is_super_admin);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Check if the account has sufficient wallet balance for a given amount.
  */
 export async function checkWalletBalance(
@@ -166,17 +188,9 @@ export async function checkWalletBalance(
     return { allowed: true, balance: 999999, rates };
   }
 
-  const supabase = getAdminSupabase();
-  if (supabase) {
-    const { data: acc } = await supabase
-      .from('accounts')
-      .select('plan_id, plans(slug)')
-      .eq('id', accountId)
-      .maybeSingle();
-
-    if ((acc?.plans as any)?.slug === 'founder') {
-      return { allowed: true, balance: 999999, rates };
-    }
+  // Only verified Super-Admin accounts bypass wallet balance checks (billed via direct Meta card)
+  if (await isSuperAdminAccount(accountId)) {
+    return { allowed: true, balance: 999999, rates };
   }
 
   const wallet = await getAccountWallet(accountId);
@@ -207,14 +221,8 @@ export async function deductWalletCredits(params: {
   const supabase = getAdminSupabase();
   if (!supabase) return { success: true };
 
-  // Founder/Super-Admin accounts bypass deductions (billed directly on Meta card)
-  const { data: acc } = await supabase
-    .from('accounts')
-    .select('plan_id, plans(slug)')
-    .eq('id', params.accountId)
-    .maybeSingle();
-
-  if ((acc?.plans as any)?.slug === 'founder') {
+  // Only verified Super-Admin accounts bypass deductions (billed directly on Meta card)
+  if (await isSuperAdminAccount(params.accountId)) {
     return { success: true, newBalance: 999999 };
   }
 
