@@ -282,7 +282,7 @@ export function ContactSidebar({
         contact_id: contact.id,
         conversation_id: conversationId || null,
         title: `Deal: ${contact.name || contact.phone || "Customer"}`,
-        value: null,
+        value: 0,
         currency: "INR",
         status: "open",
         expected_close_date: tomorrow.toISOString().split("T")[0],

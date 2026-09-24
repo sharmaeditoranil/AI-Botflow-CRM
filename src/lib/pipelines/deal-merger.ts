@@ -204,11 +204,13 @@ export async function findAndMergeOrCreateDeal(
       input.followup_instructions
     );
 
-    // Determine updated values
+    // Determine updated values (deals.value is NOT NULL with default 0 in PostgreSQL)
     const updatedValue =
-      typeof input.value === "number" && input.value > 0
+      typeof input.value === "number" && !isNaN(input.value) && input.value > 0
         ? input.value
-        : primary.value ?? null;
+        : typeof primary.value === "number" && !isNaN(primary.value)
+        ? primary.value
+        : 0;
 
     const updatedTitle =
       input.title &&
@@ -231,7 +233,9 @@ export async function findAndMergeOrCreateDeal(
     if (input.contact_id) updatedPayload.contact_id = input.contact_id;
     if (input.assigned_to) updatedPayload.assigned_to = input.assigned_to;
     if (input.conversation_id) updatedPayload.conversation_id = input.conversation_id;
-    if (input.expected_close_date) updatedPayload.expected_close_date = input.expected_close_date;
+    if (input.expected_close_date && input.expected_close_date.trim()) {
+      updatedPayload.expected_close_date = input.expected_close_date.trim();
+    }
     if (typeof input.ai_followup_enabled === "boolean") {
       updatedPayload.ai_followup_enabled = input.ai_followup_enabled;
     }
@@ -268,10 +272,10 @@ export async function findAndMergeOrCreateDeal(
     conversation_id: input.conversation_id || null,
     assigned_to: input.assigned_to || null,
     title: input.title.trim(),
-    value: typeof input.value === "number" ? input.value : null,
+    value: typeof input.value === "number" && !isNaN(input.value) ? input.value : 0,
     currency: input.currency || "INR",
     notes: input.notes?.trim() || null,
-    expected_close_date: input.expected_close_date || null,
+    expected_close_date: input.expected_close_date && input.expected_close_date.trim() ? input.expected_close_date.trim() : null,
     status: input.status || "open",
     ai_followup_enabled: input.ai_followup_enabled !== false,
     followup_instructions: input.followup_instructions?.trim() || null,

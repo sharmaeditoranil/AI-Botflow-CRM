@@ -344,16 +344,19 @@ export function DealForm({
       setNewFollowupText("");
     }
 
+    const numericValue = value.trim() && !isNaN(parseFloat(value)) ? parseFloat(value) : 0;
+    const sanitizedCloseDate = expectedCloseDate.trim() ? expectedCloseDate.trim() : null;
+
     const payload = {
       title: title.trim(),
-      value: value.trim() && !isNaN(parseFloat(value)) ? parseFloat(value) : null,
+      value: numericValue,
       currency,
       contact_id: contactId,
       pipeline_id: pipelineId,
       stage_id: stageId,
       assigned_to: assignedTo || null,
       notes: finalNotes || null,
-      expected_close_date: expectedCloseDate || null,
+      expected_close_date: sanitizedCloseDate,
       ai_followup_enabled: aiFollowupEnabled,
       followup_instructions: followupInstructions.trim() || null,
     };
@@ -364,7 +367,7 @@ export function DealForm({
         .update(payload)
         .eq("id", deal.id);
       if (error) {
-        toast.error(t("toastFailedSave"));
+        toast.error(error.message || t("toastFailedSave"));
         setSaving(false);
         return;
       }
@@ -399,7 +402,7 @@ export function DealForm({
         }
       } catch (err: any) {
         console.error("Deal save error:", err);
-        toast.error(t("toastFailedCreate"));
+        toast.error(err?.message || t("toastFailedCreate"));
         setSaving(false);
         return;
       }

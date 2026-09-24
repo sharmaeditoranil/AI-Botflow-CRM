@@ -569,7 +569,7 @@ Return ONLY raw valid JSON:
             contact_id: contactId,
             conversation_id: conversationId,
             title: dealTitle,
-            value: null,
+            value: 0,
             currency: 'INR',
             status: 'open',
             expected_close_date: followUpDate.toISOString().split('T')[0],
