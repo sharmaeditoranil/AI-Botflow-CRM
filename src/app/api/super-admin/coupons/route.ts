@@ -60,9 +60,8 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    let { code, discount_type = 'percentage', discount_value, max_redemptions, expires_at, is_active = true } = body;
-
-    code = (code || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+    const { discount_type = 'percentage', discount_value, max_redemptions, expires_at, is_active = true } = body;
+    const code = (body.code || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
     if (!code || code.length < 3) {
       return NextResponse.json({ error: 'Coupon code must be at least 3 characters (alphanumeric).' }, { status: 400 });
     }
