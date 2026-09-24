@@ -99,7 +99,7 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
         </div>
         {deal.contact_id && !deal.contact?.phone && (
           <Link
-            href={`/inbox?contactId=${deal.contact_id}`}
+            href={`/inbox?${deal.conversation_id ? `c=${deal.conversation_id}&` : ""}contactId=${deal.contact_id}`}
             onClick={(e) => e.stopPropagation()}
             className="inline-flex shrink-0 items-center gap-1 rounded-md bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/20 transition-colors"
             title="Open WhatsApp chat in Inbox"
@@ -121,7 +121,7 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
           </div>
           {deal.contact_id && (
             <Link
-              href={`/inbox?contactId=${deal.contact_id}`}
+              href={`/inbox?${deal.conversation_id ? `c=${deal.conversation_id}&` : ""}contactId=${deal.contact_id}${deal.contact?.phone ? `&phone=${encodeURIComponent(deal.contact.phone)}` : ""}`}
               onClick={(e) => e.stopPropagation()}
               className="inline-flex shrink-0 items-center gap-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-0.5 text-[10px] font-semibold transition-colors shadow-xs"
               title="Open WhatsApp chat with this customer"
@@ -129,6 +129,33 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
               <MessageSquare className="h-2.5 w-2.5" />
               <span>Chat</span>
             </Link>
+          )}
+        </div>
+      )}
+
+      {/* Contact Tags on card */}
+      {deal.contact?.tags && deal.contact.tags.length > 0 && (
+        <div className="mt-2 flex flex-wrap items-center gap-1">
+          {deal.contact.tags.slice(0, 3).map((tag) => (
+            <span
+              key={tag.id}
+              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9.5px] font-medium"
+              style={{
+                backgroundColor: `${tag.color || "#6366f1"}20`,
+                color: tag.color || "#6366f1",
+              }}
+            >
+              <span
+                className="h-1.5 w-1.5 rounded-full shrink-0"
+                style={{ backgroundColor: tag.color || "#6366f1" }}
+              />
+              {tag.name}
+            </span>
+          ))}
+          {deal.contact.tags.length > 3 && (
+            <span className="text-[9.5px] text-muted-foreground font-medium self-center">
+              +{deal.contact.tags.length - 3}
+            </span>
           )}
         </div>
       )}

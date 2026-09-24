@@ -44,10 +44,12 @@ import {
   ChevronUp,
   Clock,
   Phone,
+  Tag as TagIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { AssignAutomationWidget } from "@/components/automations/assign-automation-widget";
+import { ContactTagBar } from "@/components/inbox/contact-tag-bar";
 
 interface NoteEntry {
   id: string;
@@ -516,7 +518,7 @@ export function DealForm({
                     </div>
                   </div>
                   <Link
-                    href={activeContact.id ? `/inbox?contactId=${activeContact.id}` : "/inbox"}
+                    href={`/inbox?${(linkedConversation?.id || deal?.conversation_id) ? `c=${linkedConversation?.id || deal?.conversation_id}&` : ""}contactId=${activeContact.id}${activeContact.phone ? `&phone=${encodeURIComponent(activeContact.phone)}` : ""}`}
                     className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 text-xs font-semibold transition-colors shadow-xs"
                     title="Open WhatsApp chat with this customer"
                   >
@@ -526,9 +528,25 @@ export function DealForm({
                 </div>
               )}
 
+              {/* Customer Tags: Add & Remove option directly inside Deal */}
+              {activeContact?.id && (
+                <div className="rounded-lg border border-border/60 bg-muted/30 p-2.5 space-y-2">
+                  <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                    <TagIcon className="h-3.5 w-3.5 text-primary" />
+                    <span>Customer Tags</span>
+                  </div>
+                  <ContactTagBar
+                    contactId={activeContact.id}
+                    onTagsUpdated={() => {
+                      onSaved();
+                    }}
+                  />
+                </div>
+              )}
+
               {linkedConversation && !activeContact?.phone && (
                 <Link
-                  href="/inbox"
+                  href={`/inbox?c=${linkedConversation.id}&contactId=${activeContact?.id || ""}`}
                   className="mt-1 inline-flex items-center gap-1.5 self-start rounded-md bg-primary/10 px-2 py-1 text-xs text-primary hover:bg-primary/20"
                 >
                   <MessageSquare className="h-3 w-3" />

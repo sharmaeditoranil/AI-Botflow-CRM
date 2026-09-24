@@ -42,17 +42,29 @@ export default function InboxPage() {
   );
 }
 
+function phoneMatches(p1?: string | null, p2?: string | null): boolean {
+  if (!p1 || !p2) return false;
+  const d1 = p1.replace(/\D/g, "");
+  const d2 = p2.replace(/\D/g, "");
+  if (!d1 || !d2) return false;
+  if (d1 === d2) return true;
+  return d1.endsWith(d2) || d2.endsWith(d1);
+}
+
 function InboxPageInner() {
   const t = useTranslations("Inbox.page");
   const router = useRouter();
   const { openSidebar } = useDashboardShell();
   const searchParams = useSearchParams();
   /**
-   * `?c=<id>` deep-link support. Used when landing here from the
-   * dashboard's recent-conversations list so the right thread opens
-   * automatically instead of showing the empty center panel.
+   * Deep-link support: `?c=<id>`, `?contactId=<id>`, `?phone=<number>`.
+   * Used when landing here from Pipelines deals or contacts so the right thread opens
+   * automatically instead of showing the empty center panel or defaulting to a random contact.
    */
   const deepLinkConvId = searchParams.get("c");
+  const deepLinkContactId = searchParams.get("contactId");
+  const deepLinkPhone = searchParams.get("phone");
+  const hasDeepLink = Boolean(deepLinkConvId || deepLinkContactId || deepLinkPhone);
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversation, setActiveConversation] =
@@ -441,14 +453,41 @@ function InboxPageInner() {
   const handleConversationsLoaded = useCallback(
     (loaded: Conversation[]) => {
       setConversations(loaded);
-      // On desktop, automatically select the deep-linked conversation or the first conversation
-      // so the chat thread and message typing section are immediately open and visible.
-      const isDesktop = typeof window !== "undefined" && window.innerWidth >= 1024;
-      if (isDesktop && loaded.length > 0 && !activeConversation) {
-        const targetConv = deepLinkConvId
-          ? loaded.find((c) => c.id === deepLinkConvId) || loaded[0]
-          : loaded[0];
 
+      const isDesktop = typeof window !== "undefined" && window.innerWidth >= 1024;
+
+      if (hasDeepLink) {
+        // Find matching conversation in loaded list
+        const targetConv = loaded.find((c) => {
+          if (deepLinkConvId && c.id === deepLinkConvId) return true;
+          if (
+            deepLinkContactId &&
+            (c.contact_id === deepLinkContactId || c.contact?.id === deepLinkContactId)
+          )
+            return true;
+          if (deepLinkPhone && phoneMatches(c.contact?.phone, deepLinkPhone)) return true;
+          return false;
+        });
+
+        if (targetConv && autoSelectedForDeepLinkRef.current !== targetConv.id) {
+          autoSelectedForDeepLinkRef.current = targetConv.id;
+          setActiveConversation(targetConv);
+          setActiveContact(targetConv.contact ?? null);
+          setMessages([]);
+          if (targetConv.unread_count > 0) {
+            setConversations((prev) =>
+              prev.map((c) =>
+                c.id === targetConv.id ? { ...c, unread_count: 0 } : c,
+              ),
+            );
+          }
+          return;
+        }
+      }
+
+      // Default desktop auto-select if NO deep link is requested
+      if (!hasDeepLink && isDesktop && loaded.length > 0 && !activeConversation) {
+        const targetConv = loaded[0];
         if (targetConv && autoSelectedForDeepLinkRef.current !== targetConv.id) {
           autoSelectedForDeepLinkRef.current = targetConv.id;
           setActiveConversation(targetConv);
@@ -464,8 +503,210 @@ function InboxPageInner() {
         }
       }
     },
-    [deepLinkConvId, activeConversation]
+    [deepLinkConvId, deepLinkContactId, deepLinkPhone, hasDeepLink, activeConversation]
   );
+
+  // Deep-link resolver: when arriving via ?contactId=... or ?phone=... or ?c=...,
+  // if the target conversation is not in the initially loaded list or doesn't exist yet in DB,
+  // locate or create it and immediately open the chat.
+  const deepLinkResolvedRef = useRef(false);
+  useEffect(() => {
+    if (!hasDeepLink || deepLinkResolvedRef.current) return;
+
+    // If already active and matches deep link, mark resolved
+    if (activeConversation) {
+      if (deepLinkConvId && activeConversation.id === deepLinkConvId) {
+        deepLinkResolvedRef.current = true;
+        return;
+      }
+      if (
+        deepLinkContactId &&
+        (activeConversation.contact_id === deepLinkContactId ||
+          activeConversation.contact?.id === deepLinkContactId)
+      ) {
+        deepLinkResolvedRef.current = true;
+        return;
+      }
+      if (deepLinkPhone && phoneMatches(activeConversation.contact?.phone, deepLinkPhone)) {
+        deepLinkResolvedRef.current = true;
+        return;
+      }
+    }
+
+    // Check if matching conversation is already present in conversations state
+    const inList = conversations.find((c) => {
+      if (deepLinkConvId && c.id === deepLinkConvId) return true;
+      if (
+        deepLinkContactId &&
+        (c.contact_id === deepLinkContactId || c.contact?.id === deepLinkContactId)
+      )
+        return true;
+      if (deepLinkPhone && phoneMatches(c.contact?.phone, deepLinkPhone)) return true;
+      return false;
+    });
+
+    if (inList) {
+      deepLinkResolvedRef.current = true;
+      autoSelectedForDeepLinkRef.current = inList.id;
+      setActiveConversation(inList);
+      setActiveContact(inList.contact ?? null);
+      setMessages([]);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const supabase = createClient();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session?.user || cancelled) return;
+        const user = session.user;
+
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("account_id")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        const accountId = profile?.account_id as string | undefined;
+
+        let targetConv: Conversation | null = null;
+
+        // 1. Try by conversation id
+        if (deepLinkConvId) {
+          const { data } = await supabase
+            .from("conversations")
+            .select(CONVERSATION_SELECT)
+            .eq("id", deepLinkConvId)
+            .maybeSingle();
+          if (data) {
+            targetConv = normalizeConversation(data as any);
+          }
+        }
+
+        // 2. Try by contact_id
+        if (!targetConv && deepLinkContactId) {
+          const { data } = await supabase
+            .from("conversations")
+            .select(CONVERSATION_SELECT)
+            .eq("contact_id", deepLinkContactId)
+            .order("last_message_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (data) {
+            targetConv = normalizeConversation(data as any);
+          }
+        }
+
+        // 3. Try by phone
+        if (!targetConv && deepLinkPhone && accountId) {
+          const cleanPhone = deepLinkPhone.replace(/\D/g, "");
+          const { data: contacts } = await supabase
+            .from("contacts")
+            .select("id, phone")
+            .eq("account_id", accountId)
+            .limit(25);
+          const matched = (contacts || []).find((c) => phoneMatches(c.phone, cleanPhone));
+          if (matched) {
+            const { data } = await supabase
+              .from("conversations")
+              .select(CONVERSATION_SELECT)
+              .eq("contact_id", matched.id)
+              .order("last_message_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (data) {
+              targetConv = normalizeConversation(data as any);
+            }
+          }
+        }
+
+        // 4. If no conversation exists in DB yet, create one for this contact/phone so chat opens immediately
+        if (!targetConv && (deepLinkContactId || deepLinkPhone) && accountId) {
+          let resolvedContactId = deepLinkContactId;
+
+          if (!resolvedContactId && deepLinkPhone) {
+            const cleanPhone = deepLinkPhone.replace(/\D/g, "");
+            const { data: existingContact } = await supabase
+              .from("contacts")
+              .select("id")
+              .eq("account_id", accountId)
+              .ilike("phone", `%${cleanPhone.slice(-10)}%`)
+              .maybeSingle();
+
+            if (existingContact) {
+              resolvedContactId = existingContact.id;
+            } else {
+              const formattedPhone = deepLinkPhone.startsWith("+") ? deepLinkPhone : `+${deepLinkPhone}`;
+              const { data: newContact } = await supabase
+                .from("contacts")
+                .insert({
+                  account_id: accountId,
+                  phone: formattedPhone,
+                  name: `Contact ${formattedPhone.slice(-4)}`,
+                })
+                .select("id")
+                .single();
+              if (newContact) resolvedContactId = newContact.id;
+            }
+          }
+
+          if (resolvedContactId) {
+            const { data: newConvRow, error: insertErr } = await supabase
+              .from("conversations")
+              .insert({
+                user_id: user.id,
+                account_id: accountId,
+                contact_id: resolvedContactId,
+                status: "open",
+              })
+              .select(CONVERSATION_SELECT)
+              .single();
+
+            if (newConvRow) {
+              targetConv = normalizeConversation(newConvRow as any);
+            } else if (insertErr) {
+              const { data: existing } = await supabase
+                .from("conversations")
+                .select(CONVERSATION_SELECT)
+                .eq("account_id", accountId)
+                .eq("contact_id", resolvedContactId)
+                .maybeSingle();
+              if (existing) {
+                targetConv = normalizeConversation(existing as any);
+              }
+            }
+          }
+        }
+
+        if (cancelled || !targetConv) return;
+
+        deepLinkResolvedRef.current = true;
+        autoSelectedForDeepLinkRef.current = targetConv.id;
+        setConversations((prev) => {
+          if (prev.some((c) => c.id === targetConv!.id)) return prev;
+          return [targetConv!, ...prev];
+        });
+        setActiveConversation(targetConv);
+        setActiveContact(targetConv.contact ?? null);
+        setMessages([]);
+      } catch (err) {
+        console.error("Deep link resolution error:", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    hasDeepLink,
+    deepLinkConvId,
+    deepLinkContactId,
+    deepLinkPhone,
+    conversations,
+    activeConversation,
+  ]);
 
   const handleSelectConversation = useCallback(
     (conv: Conversation) => {
@@ -517,6 +758,7 @@ function InboxPageInner() {
     // Clearing the ref lets the deep-link auto-selector fire again if
     // the user later visits /inbox?c=<same-id> — desirable UX.
     autoSelectedForDeepLinkRef.current = null;
+    deepLinkResolvedRef.current = false;
     try {
       window.history.replaceState(null, "", "/inbox");
     } catch {
