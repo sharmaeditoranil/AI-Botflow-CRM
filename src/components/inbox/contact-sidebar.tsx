@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import type { Contact, Deal, ContactNote, Tag } from "@/types";
+import { findAndMergeOrCreateDeal } from "@/lib/pipelines/deal-merger";
 import {
   Phone,
   Mail,
@@ -273,7 +274,7 @@ export function ContactSidebar({
         initialNotes = `${existingNotesCompiled}\n[Note ${new Date().toLocaleDateString()}]: Created from Inbox chat.`;
       }
 
-      const { error } = await supabase.from("deals").insert({
+      const result = await findAndMergeOrCreateDeal(supabase, {
         user_id: user.id,
         account_id: accountId,
         pipeline_id: pipeline.id,
@@ -289,12 +290,12 @@ export function ContactSidebar({
         ai_followup_enabled: true,
       });
 
-      if (!error) {
-        toast.success("New deal created in Pipeline!");
-        fetchContactData();
-      } else {
-        toast.error(error.message);
-      }
+      toast.success(
+        result.merged
+          ? "Existing customer deal found! Merged notes and follow-ups."
+          : "New deal created in Pipeline!"
+      );
+      fetchContactData();
     } catch (err: any) {
       toast.error(err.message || "Error creating deal");
     }

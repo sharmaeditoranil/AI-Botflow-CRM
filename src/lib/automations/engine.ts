@@ -25,6 +25,7 @@ import { engineSendText, engineSendTemplate, engineSendInteractive } from './met
 import { validateInteractivePayload } from '@/lib/whatsapp/interactive'
 import { isDeliverableUrl } from '@/lib/webhooks/ssrf'
 import { extractVariableIndices } from '@/lib/whatsapp/template-validators'
+import { findAndMergeOrCreateDeal } from '@/lib/pipelines/deal-merger'
 
 // ------------------------------------------------------------
 // Public API
@@ -603,19 +604,28 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         .select('default_currency')
         .eq('id', args.automation.account_id)
         .maybeSingle()
-      await db.from('deals').insert({
-        // Tenancy + audit, same split as automation_logs above.
+      const title = interpolate(cfg.title, args)
+      const incomingNote = args.context?.message_text
+        ? `[Automation "${args.automation.name}"]: "${args.context.message_text}"`
+        : `[Automation "${args.automation.name}"]: Triggered deal update`
+
+      const result = await findAndMergeOrCreateDeal(db, {
         account_id: args.automation.account_id,
         user_id: args.automation.user_id,
         pipeline_id: cfg.pipeline_id,
         stage_id: cfg.stage_id,
         contact_id: args.contactId,
-        title: interpolate(cfg.title, args),
+        title: title || 'Deal',
         value: typeof cfg.value === 'number' ? cfg.value : null,
-        currency: acct?.default_currency ?? 'USD',
+        currency: acct?.default_currency ?? 'INR',
         status: 'open',
+        notes: incomingNote,
+        conversation_id: args.context?.conversation_id ?? null,
       })
-      return 'deal created'
+
+      return result.merged
+        ? 'deal merged into existing customer deal'
+        : 'deal created'
     }
 
     case 'send_webhook': {

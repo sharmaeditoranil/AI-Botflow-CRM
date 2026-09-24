@@ -14,6 +14,10 @@ import type {
   Profile,
 } from "@/types";
 import {
+  findAndMergeOrCreateDeal,
+  findExistingDealsForCustomer,
+} from "@/lib/pipelines/deal-merger";
+import {
   Sheet,
   SheetContent,
   SheetHeader,
@@ -143,6 +147,7 @@ export function DealForm({
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [linkedConversation, setLinkedConversation] =
     useState<Conversation | null>(null);
+  const [existingDealFound, setExistingDealFound] = useState<any | null>(null);
 
   const activeContact = contacts.find((c) => c.id === contactId) || deal?.contact;
 
@@ -229,6 +234,43 @@ export function DealForm({
       cancelled = true;
     };
   }, [open, contactId, supabase]);
+
+  // If creating a new deal and contactId changes, check if a deal already exists for this contact
+  useEffect(() => {
+    if (!open || deal || !contactId || !accountId) {
+      setExistingDealFound(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const existing = await findExistingDealsForCustomer(supabase, {
+        accountId,
+        contactId,
+      });
+      if (cancelled) return;
+      if (existing && existing.length > 0) {
+        const found = existing[0];
+        setExistingDealFound(found);
+        setTitle((prev) => (prev.trim() ? prev : found.title));
+        if (found.notes) {
+          setNotes((prev) => (prev.trim() ? prev : found.notes));
+        }
+        if (found.value !== null && found.value !== undefined) {
+          setValue((prev) => (prev.trim() ? prev : String(found.value)));
+        }
+        if (found.followup_instructions) {
+          setFollowupInstructions((prev) =>
+            prev.trim() ? prev : found.followup_instructions
+          );
+        }
+      } else {
+        setExistingDealFound(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, deal, contactId, accountId, supabase]);
 
   const timelineEntries = parseNotesTimeline(notes);
   const followUpCount = timelineEntries.filter((e) => e.type === "followup").length;
@@ -341,10 +383,22 @@ export function DealForm({
         setSaving(false);
         return;
       }
-      const { error } = await supabase
-        .from("deals")
-        .insert({ ...payload, user_id: user.id, account_id: accountId, status: "open" });
-      if (error) {
+
+      try {
+        const result = await findAndMergeOrCreateDeal(supabase, {
+          ...payload,
+          user_id: user.id,
+          account_id: accountId,
+          status: "open",
+        });
+
+        if (result.merged) {
+          toast.success("Existing customer deal found! Merged notes & follow-ups successfully.");
+        } else {
+          toast.success(t("toastCreated"));
+        }
+      } catch (err: any) {
+        console.error("Deal save error:", err);
         toast.error(t("toastFailedCreate"));
         setSaving(false);
         return;
@@ -477,6 +531,18 @@ export function DealForm({
                   <MessageSquare className="h-3 w-3" />
                   {t("linkToConversation")}
                 </Link>
+              )}
+
+              {existingDealFound && !deal && (
+                <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+                  <Sparkles className="h-4 w-4 shrink-0 text-amber-400" />
+                  <div className="min-w-0 flex-1">
+                    <span className="font-semibold text-amber-200">Existing deal detected:</span>
+                    <span className="ml-1 text-amber-300/90">
+                      Previous follow-ups & notes loaded. Saving will auto-merge into this customer&apos;s deal.
+                    </span>
+                  </div>
+                </div>
               )}
             </div>
 

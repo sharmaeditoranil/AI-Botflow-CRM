@@ -9,6 +9,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AiConfig } from './types';
 import { engineSendText } from '@/lib/flows/meta-send';
 import { generateWithAdminAi } from './admin-ai';
+import { findAndMergeOrCreateDeal, findExistingDealsForCustomer } from '@/lib/pipelines/deal-merger';
 
 export interface OptOutCheckResult {
   optedOut: boolean;
@@ -389,18 +390,15 @@ export async function processFollowupIntelligence(args: {
     return;
   }
 
-  // 4. Zero-Duplication Check: Query all existing open deals for this contact in the account
+  // 4. Zero-Duplication Check: Query all existing deals for this customer (by contact_id or phone)
   let existingDeal: any = null;
   if (dealsEnabled) {
-    const { data: existingDeals } = await db
-      .from('deals')
-      .select('id, notes, title, stage_id, status, expected_close_date')
-      .eq('account_id', accountId)
-      .eq('contact_id', contactId)
-      .in('status', ['open', 'active'])
-      .order('created_at', { ascending: false });
+    const existingDeals = await findExistingDealsForCustomer(db, {
+      accountId,
+      contactId,
+    });
 
-    // Self-heal: If multiple open deals exist for this contact, delete older duplicates
+    // Self-heal: If multiple deals exist for this contact, delete older duplicates
     if (existingDeals && existingDeals.length > 1) {
       const dupeIds = existingDeals.slice(1).map((d: any) => d.id);
       await db.from('deals').delete().in('id', dupeIds);
@@ -563,7 +561,7 @@ Return ONLY raw valid JSON:
 
           const dealTitle = `Deal: ${(contact as any)?.name || (contact as any)?.phone || 'Inbound Lead'}`;
 
-          await db.from('deals').insert({
+          await findAndMergeOrCreateDeal(db, {
             user_id: configOwnerUserId,
             account_id: accountId,
             pipeline_id: pipeline.id,
