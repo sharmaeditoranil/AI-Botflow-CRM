@@ -166,6 +166,19 @@ export async function checkWalletBalance(
     return { allowed: true, balance: 999999, rates };
   }
 
+  const supabase = getAdminSupabase();
+  if (supabase) {
+    const { data: acc } = await supabase
+      .from('accounts')
+      .select('plan_id, plans(slug)')
+      .eq('id', accountId)
+      .maybeSingle();
+
+    if ((acc?.plans as any)?.slug === 'founder') {
+      return { allowed: true, balance: 999999, rates };
+    }
+  }
+
   const wallet = await getAccountWallet(accountId);
 
   return {
@@ -193,6 +206,17 @@ export async function deductWalletCredits(params: {
 
   const supabase = getAdminSupabase();
   if (!supabase) return { success: true };
+
+  // Founder/Super-Admin accounts bypass deductions (billed directly on Meta card)
+  const { data: acc } = await supabase
+    .from('accounts')
+    .select('plan_id, plans(slug)')
+    .eq('id', params.accountId)
+    .maybeSingle();
+
+  if ((acc?.plans as any)?.slug === 'founder') {
+    return { success: true, newBalance: 999999 };
+  }
 
   const { data, error } = await supabase.rpc('deduct_wallet_balance', {
     p_account_id: params.accountId,

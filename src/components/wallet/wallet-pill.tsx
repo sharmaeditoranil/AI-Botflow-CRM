@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 
 export function WalletPill() {
   const [balance, setBalance] = useState<number | null>(null);
+  const [isFounder, setIsFounder] = useState(false);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -17,6 +18,9 @@ export function WalletPill() {
         const data = await res.json();
         if (data.wallet) {
           setBalance(Number(data.wallet.balance || 0));
+          if (data.wallet.is_founder) {
+            setIsFounder(true);
+          }
         }
       }
     } catch (err) {
@@ -42,15 +46,17 @@ export function WalletPill() {
   }, [fetchBalance]);
 
   const currentBalance = balance ?? 0;
-  const isLow = currentBalance < 50;
-  const isCritical = currentBalance <= 5;
+  const isLow = !isFounder && currentBalance < 50;
+  const isCritical = !isFounder && currentBalance <= 5;
 
   return (
     <>
       <div
         className={cn(
           'flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-all shadow-sm',
-          isCritical
+          isFounder
+            ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400 font-medium'
+            : isCritical
             ? 'border-rose-500/40 bg-rose-500/10 text-rose-400'
             : isLow
             ? 'border-amber-500/40 bg-amber-500/10 text-amber-400'
@@ -61,12 +67,14 @@ export function WalletPill() {
           type="button"
           onClick={() => setModalOpen(true)}
           className="flex items-center gap-1.5 focus:outline-none"
-          title="Click to recharge WhatsApp credits"
+          title={isFounder ? "Direct Meta Card Billing (Founder / Super-Admin)" : "Click to recharge WhatsApp credits"}
         >
           <Wallet className="h-3.5 w-3.5 shrink-0" />
           <span className="font-semibold tabular-nums text-[11px] sm:text-xs">
             {loading ? (
               <Loader2 className="h-3 w-3 animate-spin inline" />
+            ) : isFounder ? (
+              'Meta Card Active'
             ) : (
               `₹${currentBalance.toFixed(2)}`
             )}

@@ -45,6 +45,18 @@ export async function GET() {
         .limit(30),
     ]);
 
+    const { data: acc } = await adminSupabase
+      .from('accounts')
+      .select('plan_id, plans(slug)')
+      .eq('id', accountId)
+      .maybeSingle();
+
+    const isFounder = (acc?.plans as any)?.slug === 'founder' || profile.account_role === 'owner';
+    if (isFounder && (acc?.plans as any)?.slug === 'founder') {
+      wallet.balance = 999999;
+      (wallet as any).is_founder = true;
+    }
+
     return NextResponse.json({
       wallet,
       rates,
