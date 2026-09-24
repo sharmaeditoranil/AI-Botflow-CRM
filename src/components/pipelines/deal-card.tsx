@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { Deal, PipelineStage } from "@/types";
-import { Calendar, Check, X, MessageSquare, Bot, Clock } from "lucide-react";
+import { Calendar, Check, X, MessageSquare, Bot, Clock, Phone } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
@@ -89,15 +89,15 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
         )}
       </div>
 
-      {/* Contact row with direct Chat button */}
+      {/* Contact row */}
       <div className="mt-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-foreground">
             {initials(deal.contact?.name, deal.contact?.phone)}
           </span>
-          <span className="truncate text-xs text-muted-foreground">{contactLabel}</span>
+          <span className="truncate text-xs text-muted-foreground font-medium">{contactLabel}</span>
         </div>
-        {deal.contact_id && (
+        {deal.contact_id && !deal.contact?.phone && (
           <Link
             href={`/inbox?contactId=${deal.contact_id}`}
             onClick={(e) => e.stopPropagation()}
@@ -109,6 +109,29 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
           </Link>
         )}
       </div>
+
+      {/* Customer Mobile Number Box */}
+      {deal.contact?.phone && (
+        <div className="mt-2 flex items-center justify-between gap-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/[0.08] px-2.5 py-1.5 text-xs">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Phone className="h-3 w-3 text-emerald-500 shrink-0" />
+            <span className="font-mono text-[11px] font-semibold text-foreground truncate">
+              {deal.contact.phone}
+            </span>
+          </div>
+          {deal.contact_id && (
+            <Link
+              href={`/inbox?contactId=${deal.contact_id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex shrink-0 items-center gap-1 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-0.5 text-[10px] font-semibold transition-colors shadow-xs"
+              title="Open WhatsApp chat with this customer"
+            >
+              <MessageSquare className="h-2.5 w-2.5" />
+              <span>Chat</span>
+            </Link>
+          )}
+        </div>
+      )}
 
       {/* Value & Due Date status */}
       <div className="mt-2 flex items-center justify-between gap-1">

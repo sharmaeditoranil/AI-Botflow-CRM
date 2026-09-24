@@ -39,6 +39,7 @@ import {
   ChevronDown,
   ChevronUp,
   Clock,
+  Phone,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
@@ -142,6 +143,8 @@ export function DealForm({
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [linkedConversation, setLinkedConversation] =
     useState<Conversation | null>(null);
+
+  const activeContact = contacts.find((c) => c.id === contactId) || deal?.contact;
 
   const [saving, setSaving] = useState(false);
   const [statusAction, setStatusAction] = useState<DealStatus | null>(null);
@@ -435,12 +438,38 @@ export function DealForm({
                 <option value="">{t("selectContact")}</option>
                 {contacts.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name || c.phone}
+                    {c.name ? `${c.name} • ${c.phone}` : c.phone}
                   </option>
                 ))}
               </select>
 
-              {linkedConversation && (
+              {activeContact?.phone && (
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/[0.08] px-3 py-2 text-xs">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-500">
+                      <Phone className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                        Customer Mobile
+                      </div>
+                      <div className="font-mono text-xs font-semibold text-foreground truncate">
+                        {activeContact.phone}
+                      </div>
+                    </div>
+                  </div>
+                  <Link
+                    href={activeContact.id ? `/inbox?contactId=${activeContact.id}` : "/inbox"}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 text-xs font-semibold transition-colors shadow-xs"
+                    title="Open WhatsApp chat with this customer"
+                  >
+                    <MessageSquare className="h-3 w-3" />
+                    <span>Chat</span>
+                  </Link>
+                </div>
+              )}
+
+              {linkedConversation && !activeContact?.phone && (
                 <Link
                   href="/inbox"
                   className="mt-1 inline-flex items-center gap-1.5 self-start rounded-md bg-primary/10 px-2 py-1 text-xs text-primary hover:bg-primary/20"
