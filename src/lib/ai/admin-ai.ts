@@ -33,27 +33,36 @@ export async function getAdminAiCredentials(): Promise<AdminAiCredentials> {
   return { openaiApiKey, geminiApiKey, model };
 }
 
+export interface GenerateAiOptions {
+  systemPrompt?: string;
+  maxTokens?: number;
+  overrideApiKey?: string;
+  overrideModel?: string;
+}
+
 /**
- * Generate text using the Platform Master Admin AI API (OpenAI or Gemini).
+ * Generate text using the Platform Master Admin AI API (OpenAI or Gemini)
+ * or a caller-provided tenant AI key.
  * Used for CRM Follow-up, Lead Qualification, Drafts, and Review Generator.
- * Individual tenants do NOT need to provide an API key for these features.
  */
 export async function generateWithAdminAi(
   prompt: string,
-  options?: { systemPrompt?: string; maxTokens?: number }
+  options?: GenerateAiOptions
 ): Promise<string> {
   const { openaiApiKey, geminiApiKey, model } = await getAdminAiCredentials();
+  const activeOpenaiKey = options?.overrideApiKey || openaiApiKey;
+  const activeModel = options?.overrideModel || model || 'gpt-4o-mini';
 
   // 1. Try OpenAI if API key is present
-  if (openaiApiKey) {
+  if (activeOpenaiKey) {
     try {
       const isLegacy =
-        model.startsWith('gpt-3.5') ||
-        model === 'gpt-4' ||
-        model.startsWith('gpt-4-0') ||
-        model.startsWith('gpt-4-turbo');
+        activeModel.startsWith('gpt-3.5') ||
+        activeModel === 'gpt-4' ||
+        activeModel.startsWith('gpt-4-0') ||
+        activeModel.startsWith('gpt-4-turbo');
       const reqBody: Record<string, unknown> = {
-        model: model || 'gpt-4o-mini',
+        model: activeModel,
         messages: [
           ...(options?.systemPrompt ? [{ role: 'system', content: options.systemPrompt }] : []),
           { role: 'user', content: prompt },
@@ -70,7 +79,7 @@ export async function generateWithAdminAi(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${openaiApiKey}`,
+          Authorization: `Bearer ${activeOpenaiKey}`,
         },
         body: JSON.stringify(reqBody),
       });
@@ -92,7 +101,7 @@ export async function generateWithAdminAi(
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${openaiApiKey}`,
+              Authorization: `Bearer ${activeOpenaiKey}`,
             },
             body: JSON.stringify(reqBody),
           });

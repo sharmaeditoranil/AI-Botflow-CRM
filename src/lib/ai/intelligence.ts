@@ -484,6 +484,8 @@ Return ONLY raw valid JSON:
 
     const rawAi = await generateWithAdminAi(prompt, {
       systemPrompt: 'You are an expert CRM Lead Qualification and Sentiment Analysis AI. Return only valid JSON.',
+      overrideApiKey: config?.apiKey || undefined,
+      overrideModel: config?.model || undefined,
     });
 
     const cleanJson = rawAi.replace(/```json/gi, '').replace(/```/g, '').trim();
