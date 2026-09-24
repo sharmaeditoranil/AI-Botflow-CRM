@@ -360,6 +360,11 @@ export function extractTemplateVariables(
       val = fallbackName;
     }
 
+    // Ensure non-empty string so Meta template send never fails on missing/empty parameter
+    if (!val || val.trim().length === 0) {
+      val = fallbackName || 'Customer';
+    }
+
     mappedValues[mappingKey] = val;
     params.push(val);
   }

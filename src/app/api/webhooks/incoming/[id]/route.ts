@@ -154,107 +154,18 @@ export async function OPTIONS() {
 }
 
 /**
- * GET /api/webhooks/incoming/[id]
- * Helpful diagnostic endpoint for developers checking their webhook URL.
+ * Unified execution handler for incoming webhooks.
+ * Supports both POST (JSON, Form-data, URL-encoded) and GET (URL Query Parameters).
  */
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
-  const admin = supabaseAdmin();
-
-  // Check webhook_triggers table first
-  const { data: trigger } = await admin
-    .from('webhook_triggers')
-    .select('id, name, is_active, template_name, phone_path, created_at')
-    .eq('id', id)
-    .maybeSingle();
-
-  if (trigger) {
-    return NextResponse.json({
-      status: 'online',
-      type: 'webhook_bot',
-      message: 'Send a POST request with JSON or Form payload to trigger this bot.',
-      trigger: {
-        id: trigger.id,
-        name: trigger.name,
-        is_active: trigger.is_active,
-        template_name: trigger.template_name,
-        expected_phone_path: trigger.phone_path,
-      },
-      accepted_formats: [
-        'application/json',
-        'application/x-www-form-urlencoded',
-        'multipart/form-data',
-      ],
-      authentication: {
-        note: 'Secret key is optional when using the unique bot URL.',
-        methods: [
-          'Header: x-webhook-secret: <secret_key>',
-          'Header: Authorization: Bearer <secret_key>',
-          'Query param: ?secret=<secret_key>',
-        ],
-      },
-    });
-  }
-
-  // Check automations table
-  const { data: automation } = await admin
-    .from('automations')
-    .select('id, name, is_active, trigger_type, trigger_config, created_at')
-    .eq('id', id)
-    .maybeSingle();
-
-  if (automation && automation.trigger_type === 'incoming_webhook') {
-    const cfg = (automation.trigger_config || {}) as Record<string, any>;
-    return NextResponse.json({
-      status: 'online',
-      type: 'workflow_automation',
-      message: 'Send a POST request with JSON or Form payload to trigger this automation.',
-      automation: {
-        id: automation.id,
-        name: automation.name,
-        is_active: automation.is_active,
-        expected_phone_path: cfg.phone_path || 'phone',
-      },
-      accepted_formats: [
-        'application/json',
-        'application/x-www-form-urlencoded',
-        'multipart/form-data',
-      ],
-      authentication: {
-        methods: [
-          'Header: x-webhook-secret: <secret_key>',
-          'Header: Authorization: Bearer <secret_key>',
-          'Query param: ?secret=<secret_key>',
-        ],
-      },
-    });
-  }
-
-  return NextResponse.json(
-    { error: 'Webhook trigger not found' },
-    { status: 404 }
-  );
-}
-
-/**
- * POST /api/webhooks/incoming/[id]
- * Public webhook endpoint for receiving external events and sending WhatsApp templates.
- * Accepts JSON, Form URL-encoded, or Multipart data from any website or backend.
- */
-export async function POST(
+async function executeIncomingWebhook(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  id: string,
+  payload: Record<string, unknown>,
+  method: 'GET' | 'POST'
 ) {
-  const { id } = await params;
   const admin = supabaseAdmin();
 
-  // 1. Parse body from JSON, Form, or Text
-  const payload = await parseIncomingRequestBody(request);
-
-  // 2. Unpack single wrapper objects like payload, data, lead, fields if present
+  // 1. Unpack single wrapper objects like payload, data, lead, fields if present
   for (const wrapperKey of ['payload', 'data', 'lead', 'fields', 'body', 'form_data']) {
     if (
       payload[wrapperKey] &&
@@ -270,7 +181,7 @@ export async function POST(
     }
   }
 
-  // 3. Extract secret key from headers, query string, or body
+  // 2. Extract secret key from headers, query string, or body
   const url = new URL(request.url);
   const secretFromHeader = request.headers.get('x-webhook-secret');
   const authHeader = request.headers.get('authorization');
@@ -303,8 +214,8 @@ export async function POST(
     }
   });
 
-  // 4. Process the incoming webhook
-  console.log('[Webhook POST] id:', id, '| payload keys:', Object.keys(payload));
+  console.log(`[Webhook ${method}] id:`, id, '| payload keys:', Object.keys(payload));
+
   try {
     const { data: triggerCheck } = await admin
       .from('webhook_triggers')
@@ -313,7 +224,7 @@ export async function POST(
       .maybeSingle();
 
     if (triggerCheck) {
-      console.log('[Webhook POST] Found webhook_trigger, processing via processIncomingWebhook');
+      console.log(`[Webhook ${method}] Found webhook_trigger, processing via processIncomingWebhook`);
       const result = await processIncomingWebhook(admin, id, payload, providedSecret);
       return NextResponse.json(
         {
@@ -321,7 +232,7 @@ export async function POST(
           message: 'WhatsApp template message triggered successfully.',
           data: result,
         },
-        { status: 200 }
+        { status: 200, headers: CORS_HEADERS }
       );
     }
 
@@ -334,48 +245,48 @@ export async function POST(
       .maybeSingle();
 
     if (!automation) {
-      console.warn('[Webhook POST] No automation found with id:', id);
+      console.warn(`[Webhook ${method}] No automation found with id:`, id);
       return NextResponse.json(
         {
           error: 'Webhook trigger or automation not found.',
           code: 'not_found',
         },
-        { status: 404 }
+        { status: 404, headers: CORS_HEADERS }
       );
     }
 
-    console.log('[Webhook POST] Found automation:', automation.id, '| is_active:', automation.is_active);
+    console.log(`[Webhook ${method}] Found automation:`, automation.id, '| is_active:', automation.is_active);
 
     if (!automation.is_active) {
-      console.warn('[Webhook POST] Automation is inactive, skipping execution');
+      console.warn(`[Webhook ${method}] Automation is inactive, skipping execution`);
       return NextResponse.json(
         {
           error: 'Automation workflow is inactive/paused. Please enable it in the Automations dashboard.',
           code: 'inactive',
         },
-        { status: 400 }
+        { status: 400, headers: CORS_HEADERS }
       );
     }
 
     const cfg = (automation.trigger_config || {}) as Record<string, any>;
     if (cfg.secret && !safeCompareSecrets(providedSecret, cfg.secret)) {
-      console.warn('[Webhook POST] Secret mismatch for automation:', id);
+      console.warn(`[Webhook ${method}] Secret mismatch for automation:`, id);
       return NextResponse.json(
         {
           error: 'Invalid or missing webhook secret key.',
           code: 'unauthorized',
         },
-        { status: 401 }
+        { status: 401, headers: CORS_HEADERS }
       );
     }
 
     const phonePath = cfg.phone_path || 'phone';
     const rawPhone = findSmartPhone(payload, phonePath);
-    console.log('[Webhook POST] phonePath:', phonePath, '| rawPhone found:', rawPhone);
+    console.log(`[Webhook ${method}] phonePath:`, phonePath, '| rawPhone found:', rawPhone);
 
     if (!rawPhone) {
       if (isLikelyTestPing(payload)) {
-        console.log('[Webhook POST] Test ping detected, returning ping_ok');
+        console.log(`[Webhook ${method}] Test ping detected, returning ping_ok`);
         return NextResponse.json(
           {
             success: true,
@@ -383,24 +294,24 @@ export async function POST(
             message: 'Automation webhook test received successfully. Ready to receive leads.',
             data: { automation_id: automation.id },
           },
-          { status: 200 }
+          { status: 200, headers: CORS_HEADERS }
         );
       }
 
-      console.warn('[Webhook POST] Phone not found in payload. phonePath:', phonePath, '| payload:', JSON.stringify(payload).slice(0, 300));
+      console.warn(`[Webhook ${method}] Phone not found in payload. phonePath:`, phonePath, '| payload:', JSON.stringify(payload).slice(0, 300));
       return NextResponse.json(
         {
           error: `Recipient phone number could not be found. Please include a phone field named "${phonePath}" (e.g. ${phonePath}: "919876543210").`,
           code: 'missing_phone',
           debug: { expected_phone_field: phonePath, received_fields: Object.keys(payload) },
         },
-        { status: 400 }
+        { status: 400, headers: CORS_HEADERS }
       );
     }
 
     const namePath = cfg.name_path || 'name';
     const contactName = findSmartName(payload, namePath) || 'Webhook Lead';
-    console.log('[Webhook POST] contactName:', contactName, '| phone:', rawPhone);
+    console.log(`[Webhook ${method}] contactName:`, contactName, '| phone:', rawPhone);
 
     // Resolve or create contact and conversation
     let resolved;
@@ -412,17 +323,17 @@ export async function POST(
         contactName
       );
     } catch (e: any) {
-      console.error('[Webhook POST] resolveConversationByPhone failed:', e.message);
+      console.error(`[Webhook ${method}] resolveConversationByPhone failed:`, e.message);
       return NextResponse.json(
         {
           error: e.message || 'Failed to resolve contact with provided phone number.',
           code: 'phone_error',
         },
-        { status: e.status || 400 }
+        { status: e.status || 400, headers: CORS_HEADERS }
       );
     }
 
-    console.log('[Webhook POST] Resolved contact:', resolved.contactId, '| conversation:', resolved.conversationId);
+    console.log(`[Webhook ${method}] Resolved contact:`, resolved.contactId, '| conversation:', resolved.conversationId);
 
     // Execute automation workflow
     try {
@@ -435,15 +346,15 @@ export async function POST(
           conversation_id: resolved.conversationId,
         },
       });
-      console.log('[Webhook POST] executeAutomation completed for automation:', automation.id);
+      console.log(`[Webhook ${method}] executeAutomation completed for automation:`, automation.id);
     } catch (execErr: any) {
-      console.error('[Webhook POST] executeAutomation failed:', execErr.message || execErr);
+      console.error(`[Webhook ${method}] executeAutomation failed:`, execErr.message || execErr);
       return NextResponse.json(
         {
           error: `Automation executed but failed: ${execErr.message || 'Unknown error'}`,
           code: 'execution_error',
         },
-        { status: 500 }
+        { status: 500, headers: CORS_HEADERS }
       );
     }
 
@@ -458,7 +369,7 @@ export async function POST(
           phone: String(rawPhone),
         },
       },
-      { status: 200 }
+      { status: 200, headers: CORS_HEADERS }
     );
   } catch (err) {
     if (err instanceof IncomingWebhookError) {
@@ -467,7 +378,7 @@ export async function POST(
           error: err.message,
           code: err.code,
         },
-        { status: err.status }
+        { status: err.status, headers: CORS_HEADERS }
       );
     }
 
@@ -477,8 +388,134 @@ export async function POST(
         error: message,
         code: 'internal_error',
       },
-      { status: 500 }
+      { status: 500, headers: CORS_HEADERS }
     );
   }
+}
+
+/**
+ * GET /api/webhooks/incoming/[id]
+ * Supports both:
+ * 1. Diagnostic endpoint (when opened in browser with no query params)
+ * 2. GET-based webhooks (when parameters like phone/name are passed in query string)
+ */
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const url = new URL(request.url);
+
+  // If query parameters contain form fields or lead data, process as webhook event!
+  const queryKeys = Array.from(url.searchParams.keys()).filter(
+    (k) => !['format', 'pretty'].includes(k.toLowerCase())
+  );
+
+  if (queryKeys.length > 0) {
+    const payload: Record<string, unknown> = {};
+    url.searchParams.forEach((value, key) => {
+      payload[key] = value;
+    });
+    return executeIncomingWebhook(request, id, payload, 'GET');
+  }
+
+  // Otherwise, return diagnostic / documentation status
+  const admin = supabaseAdmin();
+
+  // Check webhook_triggers table first
+  const { data: trigger } = await admin
+    .from('webhook_triggers')
+    .select('id, name, is_active, template_name, phone_path, created_at')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (trigger) {
+    return NextResponse.json(
+      {
+        status: 'online',
+        type: 'webhook_bot',
+        message: 'Webhook trigger is active. Accepts POST (JSON, Form-data) or GET (Query parameters).',
+        trigger: {
+          id: trigger.id,
+          name: trigger.name,
+          is_active: trigger.is_active,
+          template_name: trigger.template_name,
+          expected_phone_path: trigger.phone_path,
+        },
+        accepted_formats: [
+          'GET query parameters (?phone=...&name=...)',
+          'application/json',
+          'application/x-www-form-urlencoded',
+          'multipart/form-data',
+        ],
+        authentication: {
+          note: 'Secret key is optional when using the unique bot URL.',
+          methods: [
+            'Header: x-webhook-secret: <secret_key>',
+            'Header: Authorization: Bearer <secret_key>',
+            'Query param: ?secret=<secret_key>',
+          ],
+        },
+      },
+      { headers: CORS_HEADERS }
+    );
+  }
+
+  // Check automations table
+  const { data: automation } = await admin
+    .from('automations')
+    .select('id, name, is_active, trigger_type, trigger_config, created_at')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (automation && automation.trigger_type === 'incoming_webhook') {
+    const cfg = (automation.trigger_config || {}) as Record<string, any>;
+    return NextResponse.json(
+      {
+        status: 'online',
+        type: 'workflow_automation',
+        message: 'Automation webhook is active. Accepts POST (JSON, Form-data) or GET (Query parameters).',
+        automation: {
+          id: automation.id,
+          name: automation.name,
+          is_active: automation.is_active,
+          expected_phone_path: cfg.phone_path || 'phone',
+        },
+        accepted_formats: [
+          'GET query parameters (?phone=...&name=...)',
+          'application/json',
+          'application/x-www-form-urlencoded',
+          'multipart/form-data',
+        ],
+        authentication: {
+          methods: [
+            'Header: x-webhook-secret: <secret_key>',
+            'Header: Authorization: Bearer <secret_key>',
+            'Query param: ?secret=<secret_key>',
+          ],
+        },
+      },
+      { headers: CORS_HEADERS }
+    );
+  }
+
+  return NextResponse.json(
+    { error: 'Webhook trigger not found' },
+    { status: 404, headers: CORS_HEADERS }
+  );
+}
+
+/**
+ * POST /api/webhooks/incoming/[id]
+ * Public webhook endpoint for receiving external events and sending WhatsApp templates.
+ * Accepts JSON, Form URL-encoded, or Multipart data from any website or backend.
+ */
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const payload = await parseIncomingRequestBody(request);
+  return executeIncomingWebhook(request, id, payload, 'POST');
 }
 
