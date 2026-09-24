@@ -281,6 +281,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Template not found.' }, { status: 404 })
     }
 
+    let metaDeleteError: string | null = null
     if (existing.meta_template_id && !isDryRun()) {
       const { data: config, error: configError } = await supabase
         .from('whatsapp_config')
@@ -302,8 +303,8 @@ export async function DELETE(
           metaTemplateId: existing.meta_template_id,
         })
       } catch (e) {
-        const message = e instanceof Error ? e.message : 'Meta delete failed.'
-        return NextResponse.json({ error: message }, { status: 502 })
+        metaDeleteError = e instanceof Error ? e.message : 'Meta delete failed.'
+        console.warn('[templates/delete] Meta delete failed, proceeding with local CRM delete:', metaDeleteError)
       }
     }
 
@@ -314,13 +315,20 @@ export async function DELETE(
     if (delErr) {
       return NextResponse.json(
         {
-          error: `Deleted on Meta but failed to delete locally: ${delErr.message}.`,
+          error: `Failed to delete template from database: ${delErr.message}.`,
         },
         { status: 500 },
       )
     }
 
-    return NextResponse.json({ success: true, dry_run: isDryRun() })
+    return NextResponse.json({
+      success: true,
+      meta_deleted: !metaDeleteError,
+      warning: metaDeleteError
+        ? `Deleted from CRM. (Meta note: ${metaDeleteError})`
+        : undefined,
+      dry_run: isDryRun(),
+    })
   } catch (error) {
     console.error('Error deleting template:', error)
     return NextResponse.json(

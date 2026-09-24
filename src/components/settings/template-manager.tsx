@@ -477,7 +477,11 @@ export function TemplateManager() {
       if (!res.ok) {
         throw new Error(data?.error || `Delete failed (HTTP ${res.status})`);
       }
-      toast.success(t('toastDeleteSuccess'));
+      if (data?.warning) {
+        toast.info(data.warning);
+      } else {
+        toast.success(t('toastDeleteSuccess'));
+      }
       setTemplates((prev) => prev.filter((t) => t.id !== target.id));
       setTemplateToDelete(null);
     } catch (err) {
