@@ -4,12 +4,15 @@ import {
   createContext,
   useContext,
   useEffect,
+  useMemo,
   useState,
   type ReactNode,
 } from "react"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
+import { Badge } from "@/components/ui/badge"
+import { extractVariableIndices } from "@/lib/whatsapp/template-validators"
 import {
   ArrowLeft,
   ChevronDown,
@@ -562,15 +565,35 @@ function DealPipelineFields({
 function SendTemplateFields({
   templateName,
   language,
+  variables = {},
   onChange,
   t,
 }: {
   templateName: string
   language: string
-  onChange: (patch: { template_name: string; language: string }) => void
+  variables?: Record<string, string>
+  onChange: (patch: { template_name: string; language: string; variables?: Record<string, string> }) => void
   t: ReturnType<typeof useTranslations>
 }) {
   const { templates } = useResources()
+
+  // Find currently selected template
+  const selectedTemplate = useMemo(() => {
+    if (!templateName) return null
+    return (
+      templates.find(
+        (tmpl) =>
+          tmpl.name === templateName &&
+          (!language || tmpl.language === language || tmpl.language?.startsWith(language))
+      ) || null
+    )
+  }, [templateName, language, templates])
+
+  // Extract variable indices from body text (e.g. [1, 2])
+  const detectedIndices = useMemo(() => {
+    if (!selectedTemplate?.body_text) return []
+    return extractVariableIndices(selectedTemplate.body_text)
+  }, [selectedTemplate])
 
   if (templates.length === 0) {
     return (
@@ -579,7 +602,7 @@ function SendTemplateFields({
           <Input
             value={templateName}
             onChange={(e) =>
-              onChange({ template_name: e.target.value, language })
+              onChange({ template_name: e.target.value, language, variables })
             }
             className="bg-muted text-foreground"
           />
@@ -588,7 +611,7 @@ function SendTemplateFields({
           <Input
             value={language}
             onChange={(e) =>
-              onChange({ template_name: templateName, language: e.target.value })
+              onChange({ template_name: templateName, language: e.target.value, variables })
             }
             className="bg-muted text-foreground"
           />
@@ -602,35 +625,113 @@ function SendTemplateFields({
   const toValue = (name: string, lang: string) => `${name}::${lang}`
   const current = templateName ? toValue(templateName, language) : ""
   const hasMatch = templates.some(
-    (t) => toValue(t.name, t.language ?? "en_US") === current,
+    (tmpl) => toValue(tmpl.name, tmpl.language ?? "en_US") === current,
   )
 
+  const handleVarChange = (idx: number, val: string) => {
+    const updated = { ...variables, [String(idx)]: val }
+    onChange({ template_name: templateName, language, variables: updated })
+  }
+
   return (
-    <FieldBlock label={t("templates.templateLabel")}>
-      <select
-        value={current}
-        onChange={(e) => {
-          const [name, lang] = e.target.value.split("::")
-          onChange({ template_name: name ?? "", language: lang ?? "" })
-        }}
-        className={SELECT_CLASS}
-      >
-        <option value="">{t("templates.select")}</option>
-        {templates.map((tmpl) => {
-          const lang = tmpl.language ?? "en_US"
-          return (
-            <option key={tmpl.id} value={toValue(tmpl.name, lang)}>
-              {tmpl.name} ({lang})
+    <div className="space-y-3">
+      <FieldBlock label={t("templates.templateLabel")}>
+        <select
+          value={current}
+          onChange={(e) => {
+            const [name, lang] = e.target.value.split("::")
+            onChange({ template_name: name ?? "", language: lang ?? "", variables })
+          }}
+          className={SELECT_CLASS}
+        >
+          <option value="">{t("templates.select")}</option>
+          {templates.map((tmpl) => {
+            const lang = tmpl.language ?? "en_US"
+            return (
+              <option key={tmpl.id} value={toValue(tmpl.name, lang)}>
+                {tmpl.name} ({lang})
+              </option>
+            )
+          })}
+          {current && !hasMatch && (
+            <option value={current}>
+              {t("templates.unknown", { name: templateName, lang: language || t("templates.unknownLang") })}
             </option>
-          )
-        })}
-        {current && !hasMatch && (
-          <option value={current}>
-            {t("templates.unknown", { name: templateName, lang: language || t("templates.unknownLang") })}
-          </option>
-        )}
-      </select>
-    </FieldBlock>
+          )}
+        </select>
+      </FieldBlock>
+
+      {/* Template Preview (if selected) */}
+      {selectedTemplate && (
+        <div className="rounded border border-border/40 bg-muted/20 p-2.5 text-xs">
+          <div className="text-[11px] font-medium text-muted-foreground mb-1">
+            Template Preview:
+          </div>
+          <p className="whitespace-pre-line text-muted-foreground/90 font-mono text-[11px]">
+            {selectedTemplate.body_text}
+          </p>
+        </div>
+      )}
+
+      {/* Variables Mapping UI */}
+      {detectedIndices.length > 0 && (
+        <div className="space-y-2 rounded-md border border-border bg-card/60 p-3">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold text-foreground">
+              Template Variables ({detectedIndices.length})
+            </label>
+            <span className="text-[10px] text-muted-foreground">
+              Map values for template placeholders
+            </span>
+          </div>
+
+          <div className="space-y-2.5">
+            {detectedIndices.map((idx) => {
+              const strIdx = String(idx)
+              const val = variables[strIdx] ?? ""
+              return (
+                <div key={idx} className="space-y-1.5 rounded border border-border/50 bg-background/50 p-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="outline" className="font-mono text-[11px] bg-primary/10 text-primary border-primary/20">
+                        {`{{${idx}}}`}
+                      </Badge>
+                      <span className="text-[11px] text-muted-foreground font-medium">Variable {idx}</span>
+                    </div>
+                    {/* Quick chips */}
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => handleVarChange(idx, "{{contact.name}}")}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground transition-colors"
+                      >
+                        + Name
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleVarChange(idx, "{{contact.phone}}")}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground transition-colors"
+                      >
+                        + Phone
+                      </button>
+                    </div>
+                  </div>
+                  <Input
+                    value={val}
+                    onChange={(e) => handleVarChange(idx, e.target.value)}
+                    placeholder="e.g. {{contact.name}}, {{vars.name}}, or static text"
+                    className="font-mono text-xs h-8 bg-muted/60"
+                  />
+                </div>
+              )
+            })}
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            Note: If left blank, it will automatically use the lead&apos;s name or fallback value.
+          </p>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -1570,6 +1671,7 @@ function StepEditor({
         <SendTemplateFields
           templateName={(cfg.template_name as string) ?? ""}
           language={(cfg.language as string) ?? ""}
+          variables={(cfg.variables as Record<string, string>) ?? {}}
           onChange={(patch) => set(patch)}
           t={t}
         />

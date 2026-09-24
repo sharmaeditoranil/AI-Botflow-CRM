@@ -24,6 +24,7 @@ import { MAX_TAG_CHAIN_DEPTH, getTagChainDepth } from '@/lib/contacts/tag-chain'
 import { engineSendText, engineSendTemplate, engineSendInteractive } from './meta-send'
 import { validateInteractivePayload } from '@/lib/whatsapp/interactive'
 import { isDeliverableUrl } from '@/lib/webhooks/ssrf'
+import { extractVariableIndices } from '@/lib/whatsapp/template-validators'
 
 // ------------------------------------------------------------
 // Public API
@@ -400,24 +401,57 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       if (!args.contactId) throw new Error('send_template needs a contact')
       if (!cfg.template_name) throw new Error('send_template needs template_name')
       const conversationId = await resolveConversationId(args)
-      // Meta templates use positional {{1}}, {{2}}, … placeholders, so
-      // we MUST emit params in strict numeric order. Lexicographic sort
-      // of "1", "2", …, "10" yields "1", "10", "2", … which silently
-      // scrambles every template with ≥10 variables.
-      const params = cfg.variables
-        ? Object.keys(cfg.variables)
-            .sort((a, b) => {
-              const na = Number(a)
-              const nb = Number(b)
-              const aNum = Number.isFinite(na)
-              const bNum = Number.isFinite(nb)
-              if (aNum && bNum) return na - nb
-              if (aNum) return -1
-              if (bNum) return 1
-              return a.localeCompare(b)
-            })
-            .map((k) => String(cfg.variables![k]))
-        : []
+
+      // Fetch contact details for smart variable fallbacks
+      let contactName = ''
+      let contactPhone = ''
+      if (args.contactId) {
+        const { data: contactRow } = await db
+          .from('contacts')
+          .select('name, phone')
+          .eq('id', args.contactId)
+          .maybeSingle()
+        if (contactRow) {
+          contactName = contactRow.name || ''
+          contactPhone = contactRow.phone || ''
+        }
+      }
+
+      // Fetch template definition to know expected variables
+      let expectedVarCount = 0
+      const { data: tmplRow } = await db
+        .from('message_templates')
+        .select('body_text')
+        .eq('account_id', args.automation.account_id)
+        .eq('name', cfg.template_name)
+        .maybeSingle()
+
+      if (tmplRow?.body_text) {
+        const indices = extractVariableIndices(tmplRow.body_text)
+        expectedVarCount = indices.length > 0 ? Math.max(...indices) : 0
+      }
+
+      // Build positional parameters in order (1, 2, ..., totalParamsNeeded)
+      const varKeys = cfg.variables ? Object.keys(cfg.variables) : []
+      const numericKeys = varKeys.map((k) => Number(k)).filter((n) => Number.isFinite(n) && n > 0)
+      const maxConfigured = numericKeys.length > 0 ? Math.max(...numericKeys) : 0
+      const totalParamsNeeded = Math.max(expectedVarCount, maxConfigured)
+
+      const params: string[] = []
+      for (let i = 1; i <= totalParamsNeeded; i++) {
+        const rawMapping = cfg.variables?.[String(i)] || ''
+        let resolved = resolveVariableValue(rawMapping, args, contactName, contactPhone)
+        // If resolved is still empty, provide a safe fallback so Meta API never rejects with "missing variable"
+        if (!resolved || resolved.trim().length === 0) {
+          resolved =
+            (args.context.vars?.name as string) ||
+            (args.context.vars?.['customer name'] as string) ||
+            contactName ||
+            'Customer'
+        }
+        params.push(resolved)
+      }
+
       const { whatsapp_message_id } = await engineSendTemplate({
         accountId: args.automation.account_id,
         userId: args.automation.user_id,
@@ -790,11 +824,77 @@ function waitMs(cfg: WaitStepConfig): number {
   return Math.max(1_000, cfg.amount * unitMs)
 }
 
+function resolveVariableValue(
+  templateVar: string,
+  args: ExecuteArgs,
+  contactName?: string | null,
+  contactPhone?: string | null
+): string {
+  if (!templateVar) return ''
+  const trimmed = templateVar.trim()
+  if (trimmed.startsWith('static:')) {
+    return trimmed.slice(7).trim()
+  }
+
+  // Handle {{contact.name}}, {{name}}, etc.
+  const match = trimmed.match(/^\{\{\s*([\w.\s-]+)\s*\}\}$/)
+  const key = match ? match[1].trim() : trimmed
+  const lower = key.toLowerCase()
+
+  if (
+    lower === 'contact.name' ||
+    lower === 'name' ||
+    lower === 'customer.name' ||
+    lower === 'customer name'
+  ) {
+    return (
+      (args.context.vars?.name as string) ||
+      (args.context.vars?.['customer name'] as string) ||
+      contactName ||
+      'Customer'
+    )
+  }
+
+  if (
+    lower === 'contact.phone' ||
+    lower === 'phone' ||
+    lower === 'customer.phone' ||
+    lower === 'mobile'
+  ) {
+    return (args.context.vars?.phone as string) || contactPhone || ''
+  }
+
+  // Check in context.vars (exact match or case-insensitive)
+  if (args.context.vars) {
+    if (args.context.vars[key] !== undefined) {
+      return String(args.context.vars[key])
+    }
+    const matchedKey = Object.keys(args.context.vars).find((k) => k.toLowerCase() === lower)
+    if (matchedKey && args.context.vars[matchedKey] !== undefined) {
+      return String(args.context.vars[matchedKey])
+    }
+  }
+
+  // Support interpolate expression if it contains {{...}}
+  if (trimmed.includes('{{')) {
+    return interpolate(trimmed, args)
+  }
+
+  return trimmed
+}
+
 function interpolate(s: string, args: ExecuteArgs): string {
-  return s.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, key) => {
-    const [ns, prop] = String(key).split('.')
+  return s.replace(/\{\{\s*([\w.\s-]+)\s*\}\}/g, (_, key) => {
+    const trimmedKey = String(key).trim()
+    const [ns, prop] = trimmedKey.split('.')
     if (ns === 'message' && prop === 'text') return String(args.context.message_text ?? '')
     if (ns === 'vars' && prop) return String(args.context.vars?.[prop] ?? '')
+    if (ns === 'contact') {
+      if (prop === 'name') return (args.context.vars?.name as string) || ''
+      if (prop === 'phone') return (args.context.vars?.phone as string) || ''
+    }
+    if (trimmedKey.toLowerCase() === 'name') return (args.context.vars?.name as string) || ''
+    if (args.context.vars?.[trimmedKey] !== undefined) return String(args.context.vars[trimmedKey])
     return ''
   })
 }
