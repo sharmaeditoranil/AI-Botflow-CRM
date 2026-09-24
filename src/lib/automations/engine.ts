@@ -26,6 +26,7 @@ import { validateInteractivePayload } from '@/lib/whatsapp/interactive'
 import { isDeliverableUrl } from '@/lib/webhooks/ssrf'
 import { extractVariableIndices } from '@/lib/whatsapp/template-validators'
 import { findAndMergeOrCreateDeal } from '@/lib/pipelines/deal-merger'
+import { ensureDefaultPipelineForAccount } from '@/lib/pipelines/default-pipeline'
 
 // ------------------------------------------------------------
 // Public API
@@ -594,7 +595,46 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
 
     case 'create_deal': {
       const cfg = step.step_config as CreateDealStepConfig
-      if (!cfg.pipeline_id || !cfg.stage_id) throw new Error('create_deal needs pipeline + stage')
+      let pipelineId = cfg.pipeline_id
+      let stageId = cfg.stage_id
+
+      // Check if the configured pipeline and stage exist and belong to this account
+      let valid = false
+      if (pipelineId && stageId) {
+        const { data: p } = await db
+          .from('pipelines')
+          .select('id')
+          .eq('id', pipelineId)
+          .eq('account_id', args.automation.account_id)
+          .maybeSingle()
+
+        if (p) {
+          const { data: s } = await db
+            .from('pipeline_stages')
+            .select('id')
+            .eq('id', stageId)
+            .eq('pipeline_id', pipelineId)
+            .maybeSingle()
+
+          if (s) valid = true
+        }
+      }
+
+      // If missing or from another account/template, auto-provision default pipeline & stage!
+      if (!valid) {
+        const defaultPipe = await ensureDefaultPipelineForAccount(
+          db,
+          args.automation.account_id,
+          args.automation.user_id
+        )
+        if (defaultPipe) {
+          pipelineId = defaultPipe.pipelineId
+          stageId = defaultPipe.stageId
+        } else {
+          throw new Error('create_deal needs pipeline + stage')
+        }
+      }
+
       // Match the account's configured default currency rather than
       // the static `deals.currency` DB default — keeps automation-
       // created deals consistent with the one-currency-per-account
@@ -613,8 +653,8 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       const result = await findAndMergeOrCreateDeal(db, {
         account_id: args.automation.account_id,
         user_id: args.automation.user_id,
-        pipeline_id: cfg.pipeline_id,
-        stage_id: cfg.stage_id,
+        pipeline_id: pipelineId,
+        stage_id: stageId,
         contact_id: args.contactId,
         title: title || 'Deal',
         value: typeof cfg.value === 'number' ? cfg.value : null,

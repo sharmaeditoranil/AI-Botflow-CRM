@@ -10,6 +10,7 @@ import type { AiConfig } from './types';
 import { engineSendText } from '@/lib/flows/meta-send';
 import { generateWithAdminAi } from './admin-ai';
 import { findAndMergeOrCreateDeal, findExistingDealsForCustomer } from '@/lib/pipelines/deal-merger';
+import { ensureDefaultPipelineForAccount } from '@/lib/pipelines/default-pipeline';
 import { addContactTagAndDispatch } from '@/lib/contacts/tag-events';
 import { isSystemProtectedTag } from '@/lib/tags/system-tags';
 
@@ -587,29 +588,9 @@ Return ONLY raw valid JSON:
     } else {
       // No existing deal exists. ONLY create a deal if customer is genuinely interested!
       if (isInterested) {
-        let { data: pipeline } = await db
-          .from('pipelines')
-          .select('id, stages:pipeline_stages(id, position)')
-          .eq('account_id', accountId)
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .maybeSingle();
+        const pipeResult = await ensureDefaultPipelineForAccount(db, accountId, configOwnerUserId);
 
-        if (!pipeline) {
-          const { data: fallbackPipe } = await db
-            .from('pipelines')
-            .select('id, stages:pipeline_stages(id, position)')
-            .eq('user_id', configOwnerUserId)
-            .order('created_at', { ascending: true })
-            .limit(1)
-            .maybeSingle();
-          pipeline = fallbackPipe;
-        }
-
-        if (pipeline && pipeline.stages && (pipeline.stages as any[]).length > 0) {
-          const sortedStages = (pipeline.stages as any[]).sort((a: any, b: any) => a.position - b.position);
-          const firstStage = sortedStages[0];
-
+        if (pipeResult) {
           const followUpDate = new Date();
           followUpDate.setDate(followUpDate.getDate() + 2);
 
@@ -618,8 +599,8 @@ Return ONLY raw valid JSON:
           await findAndMergeOrCreateDeal(db, {
             user_id: configOwnerUserId,
             account_id: accountId,
-            pipeline_id: pipeline.id,
-            stage_id: firstStage.id,
+            pipeline_id: pipeResult.pipelineId,
+            stage_id: pipeResult.stageId,
             contact_id: contactId,
             conversation_id: conversationId,
             title: dealTitle,
