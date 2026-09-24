@@ -28,7 +28,16 @@ import {
   CheckCircle,
   XCircle,
   X,
+  Loader2,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
@@ -63,6 +72,32 @@ export function ContactSidebar({
   const [newNote, setNewNote] = useState("");
   const [addingNote, setAddingNote] = useState(false);
   const [liveContact, setLiveContact] = useState<Partial<Contact> | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deletingContact, setDeletingContact] = useState(false);
+
+  const handleDeleteContact = async () => {
+    if (!contact?.id) return;
+    setDeletingContact(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase
+        .from("contacts")
+        .delete()
+        .eq("id", contact.id);
+
+      if (error) {
+        toast.error("Failed to delete subscriber");
+      } else {
+        toast.success("Subscriber deleted successfully");
+        setDeleteConfirmOpen(false);
+        onClose?.();
+      }
+    } catch {
+      toast.error("Failed to delete subscriber");
+    } finally {
+      setDeletingContact(false);
+    }
+  };
 
   const fetchContactData = useCallback(async () => {
     if (!contact) return;
@@ -724,8 +759,55 @@ export function ContactSidebar({
               </div>
             </div>
           </div>
+
+          {/* Divider */}
+          <div className="my-4 border-t border-border" />
+
+          {/* Delete subscriber option */}
+          <div className="pt-1">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteConfirmOpen(true)}
+              className="w-full text-destructive border-destructive/20 hover:bg-destructive/10 hover:border-destructive/40 text-xs font-medium"
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+              Delete Subscriber / Number
+            </Button>
+          </div>
         </div>
       </ScrollArea>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-popover-foreground">
+              Delete Subscriber / Number
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Are you sure you want to delete {displayName}? This will permanently remove this subscriber number from your contacts along with their notes and tags.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="bg-popover border-border">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteConfirmOpen(false)}
+              className="border-border text-muted-foreground hover:bg-muted"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteContact}
+              disabled={deletingContact}
+            >
+              {deletingContact && <Loader2 className="size-4 animate-spin mr-1.5" />}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

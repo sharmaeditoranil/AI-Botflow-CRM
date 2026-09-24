@@ -24,7 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, AlertTriangle } from 'lucide-react';
+import { Loader2, AlertTriangle, Trash2 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 
 interface ContactFormProps {
@@ -36,6 +36,7 @@ interface ContactFormProps {
   /** Open an existing contact's detail view — used by the duplicate
    *  notice to jump to the contact that already owns this number. */
   onViewExisting?: (contactId: string) => void;
+  onDelete?: (contact: Contact) => void;
 }
 
 export function ContactForm({
@@ -45,6 +46,7 @@ export function ContactForm({
   contactTags = [],
   onSaved,
   onViewExisting,
+  onDelete,
 }: ContactFormProps) {
   const t = useTranslations('Contacts.form');
   const supabase = createClient();
@@ -362,23 +364,44 @@ export function ContactForm({
             )}
           </div>
 
-          <DialogFooter className="bg-popover border-border">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              className="border-border text-muted-foreground hover:bg-muted"
-            >
-              {t('cancel')}
-            </Button>
-            <Button
-              type="submit"
-              disabled={saving || checkingDup || (!isEdit && !!dupMatch?.exact)}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground"
-            >
-              {saving && <Loader2 className="size-4 animate-spin" />}
-              {isEdit ? t('update') : t('create')}
-            </Button>
+          <DialogFooter className="bg-popover border-border flex items-center justify-between sm:justify-between w-full">
+            {isEdit && onDelete ? (
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                onClick={() => {
+                  if (contact) {
+                    onOpenChange(false);
+                    onDelete(contact);
+                  }
+                }}
+                className="gap-1.5"
+              >
+                <Trash2 className="size-3.5" />
+                {t('deleteAction') || 'Delete'}
+              </Button>
+            ) : (
+              <div />
+            )}
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                className="border-border text-muted-foreground hover:bg-muted"
+              >
+                {t('cancel')}
+              </Button>
+              <Button
+                type="submit"
+                disabled={saving || checkingDup || (!isEdit && !!dupMatch?.exact)}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
+              >
+                {saving && <Loader2 className="size-4 animate-spin" />}
+                {isEdit ? t('update') : t('create')}
+              </Button>
+            </div>
           </DialogFooter>
         </form>
       </DialogContent>

@@ -18,6 +18,14 @@ import {
   SheetTitle,
   SheetDescription,
 } from '@/components/ui/sheet';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -69,6 +77,10 @@ export function ContactDetailView({
   // find-or-creates the conversation, so no inbound message is required.
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [sendingTemplate, setSendingTemplate] = useState(false);
+
+  // Delete subscriber / contact state
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deletingContact, setDeletingContact] = useState(false);
 
   // Details tab
   const [editName, setEditName] = useState('');
@@ -367,6 +379,30 @@ export function ContactDetailView({
     }
   }
 
+  async function handleDeleteContact() {
+    if (!contactId) return;
+    setDeletingContact(true);
+    try {
+      const { error } = await supabase
+        .from('contacts')
+        .delete()
+        .eq('id', contactId);
+
+      if (error) {
+        toast.error('Failed to delete subscriber');
+      } else {
+        toast.success('Subscriber deleted successfully');
+        setDeleteConfirmOpen(false);
+        onOpenChange(false);
+        onUpdated();
+      }
+    } catch {
+      toast.error('Failed to delete subscriber');
+    } finally {
+      setDeletingContact(false);
+    }
+  }
+
   function getInitials(name?: string | null) {
     if (!name) return '?';
     return name
@@ -433,7 +469,7 @@ export function ContactDetailView({
                   </div>
                 </div>
               </div>
-              <div className="mt-3">
+              <div className="mt-3 flex items-center justify-between gap-2">
                 <Button
                   size="sm"
                   onClick={() => setTemplatePickerOpen(true)}
@@ -446,6 +482,17 @@ export function ContactDetailView({
                     <LayoutTemplate className="size-4" />
                   )}
                   {t('sendTemplateBtn')}
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDeleteConfirmOpen(true)}
+                  className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50"
+                  title="Delete subscriber / number"
+                >
+                  <Trash2 className="size-4 mr-1.5" />
+                  Delete Subscriber
                 </Button>
               </div>
             </SheetHeader>
@@ -755,6 +802,37 @@ export function ContactDetailView({
       onOpenChange={setTemplatePickerOpen}
       onSelect={handleSendTemplate}
     />
+
+    {/* Delete Subscriber Confirmation Dialog */}
+    <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+      <DialogContent className="bg-popover border-border text-popover-foreground sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="text-popover-foreground">
+            Delete Subscriber / Contact
+          </DialogTitle>
+          <DialogDescription className="text-muted-foreground">
+            Are you sure you want to delete {contact?.name || contact?.phone}? This will permanently remove this subscriber number from your contacts along with all notes and tags.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="bg-popover border-border">
+          <Button
+            variant="outline"
+            onClick={() => setDeleteConfirmOpen(false)}
+            className="border-border text-muted-foreground hover:bg-muted"
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={handleDeleteContact}
+            disabled={deletingContact}
+          >
+            {deletingContact && <Loader2 className="size-4 animate-spin mr-1.5" />}
+            Delete
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </>
   );
 }

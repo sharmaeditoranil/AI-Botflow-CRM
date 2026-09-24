@@ -26,7 +26,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { SettingsPanelHead } from './settings-panel-head';
@@ -79,6 +79,31 @@ export function BillingPanel() {
   // Dedicated Subscription Checkout Modal with GST Option
   const [checkoutPlan, setCheckoutPlan] = useState<any | null>(null);
   const [showSubscriptionGst, setShowSubscriptionGst] = useState(false);
+
+  // Cancel Subscription Dialog State
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancellingSubscription, setCancellingSubscription] = useState(false);
+
+  const handleCancelSubscription = async () => {
+    try {
+      setCancellingSubscription(true);
+      const res = await fetch('/api/billing/cancel-subscription', {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error || 'Failed to cancel subscription.');
+        return;
+      }
+      toast.success(data.message || 'Subscription cancelled successfully.');
+      setCancelModalOpen(false);
+      fetchUsageAndPlans();
+    } catch (err: any) {
+      toast.error(err.message || 'Error cancelling subscription.');
+    } finally {
+      setCancellingSubscription(false);
+    }
+  };
 
   const fetchUsageAndPlans = async () => {
     try {
@@ -345,13 +370,26 @@ export function BillingPanel() {
             </CardDescription>
           </div>
 
-          <Button
-            onClick={() => setUpgradeModalOpen(true)}
-            className="bg-primary text-primary-foreground hover:bg-primary/90 font-semibold shadow-sm transition-all"
-          >
-            <Sparkles className="mr-2 h-4 w-4" />
-            Upgrade Plan
-          </Button>
+          <div className="flex items-center gap-2">
+            {subscription?.status === 'active' && currentPlan?.slug !== 'trial' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCancelModalOpen(true)}
+                className="text-xs text-rose-500 border-rose-500/30 hover:bg-rose-500/10 hover:text-rose-400"
+              >
+                Cancel Subscription
+              </Button>
+            )}
+
+            <Button
+              onClick={() => setUpgradeModalOpen(true)}
+              className="bg-primary text-primary-foreground hover:bg-primary/90 font-semibold shadow-sm transition-all"
+            >
+              <Sparkles className="mr-2 h-4 w-4" />
+              Upgrade Plan
+            </Button>
+          </div>
         </CardHeader>
 
         <CardContent className="space-y-6 pt-6">
@@ -1656,6 +1694,55 @@ export function BillingPanel() {
               </div>
             );
           })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Subscription Confirmation Dialog */}
+      <Dialog open={cancelModalOpen} onOpenChange={setCancelModalOpen}>
+        <DialogContent className="max-w-md border-border bg-card">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-rose-500">
+              <AlertTriangle className="h-5 w-5 text-rose-500" />
+              Cancel Subscription?
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground pt-1.5 space-y-2">
+              <p>
+                Are you sure you want to cancel your <strong>{currentPlan?.name || 'current'}</strong> subscription?
+              </p>
+              <div className="p-3 rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-300 text-xs">
+                ⚠️ Your account will be downgraded to the <strong>Free Trial</strong> tier, and premium features (unlimited broadcasts, high contact limits, and priority AI replies) will be paused.
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="pt-3 gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setCancelModalOpen(false)}
+              disabled={cancellingSubscription}
+              className="text-xs"
+            >
+              Keep My Plan
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={handleCancelSubscription}
+              disabled={cancellingSubscription}
+              className="text-xs bg-rose-600 hover:bg-rose-700 text-white"
+            >
+              {cancellingSubscription ? (
+                <span className="flex items-center gap-1.5">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Cancelling...
+                </span>
+              ) : (
+                'Yes, Cancel Subscription'
+              )}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </section>
