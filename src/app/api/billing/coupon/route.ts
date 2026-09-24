@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     const adminSupabase = getAdminSupabase();
     const { data: coupon, error } = await adminSupabase
       .from('coupons')
-      .select('id, code, discount_type, discount_value, expires_at, max_uses, current_uses')
+      .select('id, code, discount_type, discount_value, expires_at, max_redemptions, redemptions_count')
       .eq('code', code)
       .eq('is_active', true)
       .maybeSingle();
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'This coupon code has expired.' }, { status: 400 });
     }
 
-    if (coupon.max_uses && coupon.current_uses >= coupon.max_uses) {
+    if (coupon.max_redemptions && coupon.redemptions_count >= coupon.max_redemptions) {
       return NextResponse.json({ error: 'This coupon has reached its maximum usage limit.' }, { status: 400 });
     }
 

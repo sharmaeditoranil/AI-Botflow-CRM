@@ -78,6 +78,7 @@ export async function POST(req: NextRequest) {
     taxableAmount,
     gstAmount,
     gstRate = 18,
+    couponCode = '',
   } = body;
 
   const totalPaid = amount ? amount / 100 : 0;
@@ -85,6 +86,26 @@ export async function POST(req: NextRequest) {
   const calculatedGst = gstAmount !== undefined ? gstAmount : Math.round((totalPaid - calculatedTaxable) * 100) / 100;
 
   const invoiceNumber = `INV-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+  // If a coupon code was used, increment redemptions_count
+  if (couponCode && typeof couponCode === 'string') {
+    try {
+      const { data: cp } = await adminSupabase
+        .from('coupons')
+        .select('id, redemptions_count')
+        .eq('code', couponCode.trim().toUpperCase())
+        .maybeSingle();
+
+      if (cp) {
+        await adminSupabase
+          .from('coupons')
+          .update({ redemptions_count: (cp.redemptions_count || 0) + 1 })
+          .eq('id', cp.id);
+      }
+    } catch (cpErr) {
+      console.warn('Could not increment coupon redemptions:', cpErr);
+    }
+  }
 
   // 1. Update account (including GST details if provided)
   const accountUpdate: Record<string, any> = {

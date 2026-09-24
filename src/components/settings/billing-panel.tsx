@@ -261,6 +261,7 @@ export function BillingPanel() {
               gstNumber: gstNumber.trim().toUpperCase(),
               billingAddress: billingAddress.trim(),
               billingState: billingState.trim(),
+              couponCode: appliedCoupon?.code || couponCode.trim(),
             }),
           });
 
@@ -1223,7 +1224,10 @@ export function BillingPanel() {
                     {/* Action Button */}
                     <div className="mt-6 pt-4 border-t border-border/60">
                       <Button
-                        onClick={() => handleCheckout(p.id)}
+                        onClick={() => {
+                          setUpgradeModalOpen(false);
+                          setCheckoutPlan(p);
+                        }}
                         disabled={isCurrent || upgradingPlanId === p.id}
                         className={`w-full font-semibold shadow-sm transition-all text-sm h-11 ${
                           isGrowth
@@ -1233,17 +1237,13 @@ export function BillingPanel() {
                             : 'bg-card text-foreground border border-border hover:bg-muted'
                         }`}
                       >
-                        {upgradingPlanId === p.id ? (
-                          <span className="flex items-center justify-center gap-2">
-                            <Loader2 className="h-4 w-4 animate-spin" /> Preparing Checkout...
-                          </span>
-                        ) : isCurrent ? (
+                        {isCurrent ? (
                           <span className="flex items-center justify-center gap-2">
                             <CheckCircle2 className="h-4 w-4 text-emerald-500" /> Current Plan
                           </span>
                         ) : (
                           <span className="flex items-center justify-center gap-2">
-                            Pay ₹{(displayPrice + Math.round(displayPrice * 0.18)).toLocaleString('en-IN')} • {p.name} <ArrowRight className="h-4 w-4" />
+                            Choose {p.name} • ₹{displayPrice.toLocaleString('en-IN')}/{billingCycle === 'yearly' ? 'yr' : 'mo'} <ArrowRight className="h-4 w-4" />
                           </span>
                         )}
                       </Button>
@@ -1448,154 +1448,214 @@ export function BillingPanel() {
             </div>
           </div>
 
-          <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
-            {/* Pricing & GST Breakdown */}
-            <div className="rounded-xl border border-border/80 bg-muted/20 p-4 space-y-2 text-xs">
-              <div className="flex justify-between text-muted-foreground">
-                <span>Base Plan Price ({billingCycle})</span>
-                <span className="font-medium text-foreground">
-                  ₹{calculatePrice(billingCycle === 'yearly' ? checkoutPlan?.price_yearly : checkoutPlan?.price_monthly || 0).toLocaleString()}
-                </span>
-              </div>
-              {appliedCoupon && (
-                <div className="flex justify-between text-emerald-500 font-medium">
-                  <span>Coupon Discount ({appliedCoupon.code})</span>
-                  <span>Applied</span>
-                </div>
-              )}
-              <div className="flex justify-between text-muted-foreground">
-                <span>Government GST (18%)</span>
-                <span>
-                  +₹{Math.round(calculatePrice(billingCycle === 'yearly' ? checkoutPlan?.price_yearly : checkoutPlan?.price_monthly || 0) * 0.18).toLocaleString()}
-                </span>
-              </div>
-              <div className="border-t border-border/60 pt-2 flex justify-between font-bold text-foreground text-sm">
-                <span>Total Amount Payable</span>
-                <span className="text-primary text-base">
-                  ₹{Math.round(calculatePrice(billingCycle === 'yearly' ? checkoutPlan?.price_yearly : checkoutPlan?.price_monthly || 0) * 1.18).toLocaleString()}
-                </span>
-              </div>
-            </div>
+          {(() => {
+            const rawBasePrice = checkoutPlan
+              ? billingCycle === 'yearly'
+                ? Number(checkoutPlan.price_yearly || 0)
+                : Number(checkoutPlan.price_monthly || 0)
+              : 0;
 
-            {/* GST Details Accordion */}
-            <div className="border border-border/70 rounded-xl p-3.5 bg-muted/10 space-y-3">
-              <button
-                type="button"
-                onClick={() => setShowSubscriptionGst(!showSubscriptionGst)}
-                className="flex items-center justify-between w-full text-xs font-semibold text-foreground hover:text-primary transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  <FileText className="h-4 w-4 text-primary" />
-                  <span>Need GST Invoice for 18% Input Tax Credit (ITC)?</span>
-                </div>
-                <span className="text-primary text-[11px] font-medium">
-                  {showSubscriptionGst ? 'Hide Details' : '+ Add GST Details'}
-                </span>
-              </button>
+            let discountVal = 0;
+            if (appliedCoupon && rawBasePrice > 0) {
+              if (appliedCoupon.discount_type === 'percentage') {
+                discountVal = Math.round(rawBasePrice * (appliedCoupon.discount_value / 100));
+              } else {
+                discountVal = Math.min(rawBasePrice, Math.round(appliedCoupon.discount_value));
+              }
+            }
 
-              {showSubscriptionGst && (
-                <div className="space-y-3 pt-2 border-t border-border/50 text-xs">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    <div>
-                      <Label className="text-[11px] text-muted-foreground">GSTIN Number (15-digit)</Label>
-                      <Input
-                        placeholder="e.g. 07AAAAA0000A1Z5"
-                        value={gstNumber}
-                        onChange={(e) => setGstNumber(e.target.value.toUpperCase())}
-                        maxLength={15}
-                        className="h-8 text-xs font-mono uppercase bg-background"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-[11px] text-muted-foreground">Company / Business Name</Label>
-                      <Input
-                        placeholder="e.g. Acme Tech Solutions Pvt Ltd"
-                        value={businessName}
-                        onChange={(e) => setBusinessName(e.target.value)}
-                        className="h-8 text-xs bg-background"
-                      />
-                    </div>
+            const taxableVal = Math.max(0, rawBasePrice - discountVal);
+            const gstVal = Math.round(taxableVal * 0.18);
+            const totalPayableVal = taxableVal + gstVal;
+
+            return (
+              <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
+                {/* Promo Code Input Section */}
+                <div className="rounded-xl border border-border/70 bg-muted/20 p-3 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-semibold text-foreground">
+                    <span className="flex items-center gap-1.5">
+                      <Tag className="h-3.5 w-3.5 text-primary" />
+                      Have a Coupon / Promo Code?
+                    </span>
+                    {appliedCoupon && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveCoupon}
+                        className="text-[11px] text-destructive hover:underline font-medium"
+                      >
+                        Remove
+                      </button>
+                    )}
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                    <div className="sm:col-span-2">
-                      <Label className="text-[11px] text-muted-foreground">Billing Address</Label>
-                      <Input
-                        placeholder="Street, Area, City"
-                        value={billingAddress}
-                        onChange={(e) => setBillingAddress(e.target.value)}
-                        className="h-8 text-xs bg-background"
-                      />
-                    </div>
-                    <div>
-                      <Label className="text-[11px] text-muted-foreground">State / State Code</Label>
-                      <Input
-                        placeholder="e.g. Uttar Pradesh (09)"
-                        value={billingState}
-                        onChange={(e) => setBillingState(e.target.value)}
-                        className="h-8 text-xs bg-background"
-                      />
-                    </div>
-                  </div>
-                  <p className="text-[10px] text-muted-foreground italic">
-                    * Entering your GST number will print your company details on the official tax invoice so you can claim 18% tax credit (ITC).
-                  </p>
-                </div>
-              )}
-            </div>
 
-            {/* Promo Code Input if not applied */}
-            {!appliedCoupon && (
-              <div className="flex items-center gap-2 pt-1">
-                <Input
-                  placeholder="HAVE A COUPON CODE?"
-                  value={couponCode}
-                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                  className="h-9 text-xs uppercase bg-muted/30"
-                />
+                  {!appliedCoupon ? (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        placeholder="ENTER COUPON CODE"
+                        value={couponCode}
+                        onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                        className="h-9 text-xs uppercase font-mono tracking-wider bg-background"
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={handleApplyCoupon}
+                        disabled={validatingCoupon || !couponCode.trim()}
+                        className="h-9 text-xs shrink-0 font-semibold"
+                      >
+                        {validatingCoupon ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Apply'}
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs">
+                      <span className="font-semibold text-emerald-500 flex items-center gap-1">
+                        <Check className="h-3.5 w-3.5" />
+                        Code &quot;{appliedCoupon.code}&quot; applied! ({appliedCoupon.description})
+                      </span>
+                      <span className="text-emerald-500 font-bold">-₹{discountVal.toLocaleString('en-IN')}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* GST Details Box */}
+                <div className="border border-border/70 rounded-xl p-3.5 bg-muted/10 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-primary" />
+                      <div>
+                        <span className="text-xs font-semibold text-foreground block">
+                          Claim 18% GST Input Tax Credit (ITC)
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
+                          Enter your business GSTIN to receive an official B2B tax invoice.
+                        </span>
+                      </div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={showSubscriptionGst}
+                      onChange={(e) => setShowSubscriptionGst(e.target.checked)}
+                      className="h-4 w-4 rounded border-border accent-primary cursor-pointer shrink-0"
+                    />
+                  </div>
+
+                  {showSubscriptionGst && (
+                    <div className="space-y-3 pt-2.5 border-t border-border/50 text-xs">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                          <Label className="text-[11px] text-muted-foreground font-medium">GSTIN Number (15-digit)</Label>
+                          <Input
+                            placeholder="e.g. 07AAAAA0000A1Z5"
+                            value={gstNumber}
+                            onChange={(e) => setGstNumber(e.target.value.toUpperCase())}
+                            maxLength={15}
+                            className="h-8 text-xs font-mono uppercase bg-background"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-[11px] text-muted-foreground font-medium">Company / Business Name</Label>
+                          <Input
+                            placeholder="e.g. Acme Tech Solutions Pvt Ltd"
+                            value={businessName}
+                            onChange={(e) => setBusinessName(e.target.value)}
+                            className="h-8 text-xs bg-background"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                        <div className="sm:col-span-2">
+                          <Label className="text-[11px] text-muted-foreground font-medium">Billing Address</Label>
+                          <Input
+                            placeholder="Street, Area, City"
+                            value={billingAddress}
+                            onChange={(e) => setBillingAddress(e.target.value)}
+                            className="h-8 text-xs bg-background"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-[11px] text-muted-foreground font-medium">State / State Code</Label>
+                          <Input
+                            placeholder="e.g. Uttar Pradesh (09)"
+                            value={billingState}
+                            onChange={(e) => setBillingState(e.target.value)}
+                            className="h-8 text-xs bg-background"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground italic">
+                        * Your company details will be printed on the official GST invoice (SAC 998313) so you can claim 18% Input Tax Credit.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Pricing & GST Breakdown */}
+                <div className="rounded-xl border border-border/80 bg-muted/20 p-4 space-y-2 text-xs">
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Base Plan Price ({billingCycle === 'yearly' ? 'Annual' : 'Monthly'})</span>
+                    <span className="font-medium text-foreground">
+                      ₹{rawBasePrice.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+
+                  {appliedCoupon && (
+                    <div className="flex justify-between text-emerald-500 font-semibold">
+                      <span>Coupon Discount ({appliedCoupon.code})</span>
+                      <span>-₹{discountVal.toLocaleString('en-IN')}</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Taxable Amount</span>
+                    <span className="text-foreground">₹{taxableVal.toLocaleString('en-IN')}</span>
+                  </div>
+
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Government GST (18%)</span>
+                    <span className="text-foreground">+₹{gstVal.toLocaleString('en-IN')}</span>
+                  </div>
+
+                  <div className="border-t border-border/60 pt-2 flex justify-between font-bold text-foreground text-sm">
+                    <span>Total Amount Payable</span>
+                    <span className="text-primary text-base">
+                      ₹{totalPayableVal.toLocaleString('en-IN')}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Checkout Action Button */}
                 <Button
                   type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleApplyCoupon}
-                  disabled={validatingCoupon || !couponCode.trim()}
-                  className="h-9 text-xs shrink-0"
+                  onClick={async () => {
+                    if (!checkoutPlan) return;
+                    await handleCheckout(checkoutPlan.id);
+                  }}
+                  disabled={upgradingPlanId === checkoutPlan?.id}
+                  className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl shadow-lg shadow-primary/20 text-sm flex items-center justify-center gap-2"
                 >
-                  {validatingCoupon ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Apply'}
+                  {upgradingPlanId === checkoutPlan?.id ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Initiating Checkout...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>
+                        Pay ₹{totalPayableVal.toLocaleString('en-IN')} via UPI / Cards / NetBanking
+                      </span>
+                      <ArrowRight className="h-4 w-4" />
+                    </>
+                  )}
                 </Button>
+
+                <div className="flex items-center justify-center gap-2 text-[11px] text-muted-foreground pt-1">
+                  <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+                  <span>100% Safe & Secure Checkout via <strong>Razorpay</strong> • Instant Activation</span>
+                </div>
               </div>
-            )}
-
-            {/* Checkout Action Button */}
-            <Button
-              type="button"
-              onClick={async () => {
-                if (!checkoutPlan) return;
-                await handleCheckout(checkoutPlan.id);
-                setCheckoutPlan(null);
-              }}
-              disabled={upgradingPlanId === checkoutPlan?.id}
-              className="w-full h-11 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl shadow-lg shadow-primary/20 text-sm flex items-center justify-center gap-2"
-            >
-              {upgradingPlanId === checkoutPlan?.id ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Initiating Payment...</span>
-                </>
-              ) : (
-                <>
-                  <span>
-                    Pay ₹{Math.round(calculatePrice(billingCycle === 'yearly' ? checkoutPlan?.price_yearly : checkoutPlan?.price_monthly || 0) * 1.18).toLocaleString()} via UPI / Cards
-                  </span>
-                  <ArrowRight className="h-4 w-4" />
-                </>
-              )}
-            </Button>
-
-            <div className="flex items-center justify-center gap-2 text-[11px] text-muted-foreground pt-1">
-              <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-              <span>100% Safe & Secure Checkout via <strong>Razorpay</strong> • Instant Activation</span>
-            </div>
-          </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </section>

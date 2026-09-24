@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
   let price = billingCycle === 'yearly' ? plan.price_yearly : plan.price_monthly;
 
   // Apply coupon if valid
+  let discountAmount = 0;
   if (couponCode) {
     const { data: coupon } = await adminSupabase
       .from('coupons')
@@ -66,10 +67,15 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
 
     if (coupon) {
-      if (coupon.discount_type === 'percentage') {
-        price = price * (1 - coupon.discount_value / 100);
-      } else {
-        price = Math.max(0, price - coupon.discount_value);
+      const isExpired = coupon.expires_at && new Date(coupon.expires_at) < new Date();
+      const isExhausted = coupon.max_redemptions && coupon.redemptions_count >= coupon.max_redemptions;
+      if (!isExpired && !isExhausted) {
+        if (coupon.discount_type === 'percentage') {
+          discountAmount = Math.round(price * (coupon.discount_value / 100));
+        } else {
+          discountAmount = Math.min(price, Math.round(coupon.discount_value));
+        }
+        price = Math.max(0, price - discountAmount);
       }
     }
   }
@@ -120,6 +126,8 @@ export async function POST(req: NextRequest) {
       businessName: businessName.slice(0, 100),
       billingAddress: billingAddress.slice(0, 200),
       billingState: billingState.slice(0, 50),
+      couponCode: couponCode ? couponCode.toUpperCase().slice(0, 30) : '',
+      discountAmount: discountAmount.toString(),
     },
   });
 
@@ -137,5 +145,7 @@ export async function POST(req: NextRequest) {
     taxableAmount,
     gstAmount,
     totalAmount,
+    discountAmount,
+    couponCode: couponCode ? couponCode.toUpperCase() : null,
   });
 }
