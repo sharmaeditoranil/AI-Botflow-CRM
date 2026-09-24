@@ -338,6 +338,9 @@ export default function SuperAdminCouponsPage() {
                                 / {coupon.max_redemptions ? `${coupon.max_redemptions} max` : 'Unlimited'}
                               </span>
                             </div>
+                            <div className="text-[10px] text-muted-foreground/80 font-normal">
+                              1 use / customer
+                            </div>
                             {coupon.max_redemptions && (
                               <div className="w-24 h-1.5 rounded-full bg-muted overflow-hidden">
                                 <div
@@ -524,6 +527,11 @@ export default function SuperAdminCouponsPage() {
                   className="mt-1 text-xs"
                 />
               </div>
+            </div>
+
+            {/* One-time use protection note */}
+            <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 p-2.5 text-[11px] text-emerald-400">
+              🔒 <strong>Anti-Abuse Protection:</strong> Each coupon is automatically restricted to <strong>1 redemption per customer account</strong> so users cannot repeatedly apply the discount on every subsequent renewal.
             </div>
 
             {/* Active Toggle */}

@@ -39,6 +39,53 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid or inactive coupon code.' }, { status: 404 });
     }
 
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('account_id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    const accountId = profile?.account_id;
+
+    if (accountId) {
+      // 1. Check coupon_redemptions table
+      try {
+        const { data: directRedemption } = await adminSupabase
+          .from('coupon_redemptions')
+          .select('id')
+          .eq('coupon_id', coupon.id)
+          .eq('account_id', accountId)
+          .limit(1)
+          .maybeSingle();
+
+        if (directRedemption) {
+          return NextResponse.json(
+            { error: 'You have already redeemed this coupon code once on your account.' },
+            { status: 400 }
+          );
+        }
+      } catch {
+        // Fallback to audit_logs check below
+      }
+
+      // 2. Check audit_logs for coupon_redeemed
+      const { data: auditRedemption } = await adminSupabase
+        .from('audit_logs')
+        .select('id')
+        .eq('action', 'coupon_redeemed')
+        .eq('target_id', coupon.id)
+        .contains('details', { account_id: accountId })
+        .limit(1)
+        .maybeSingle();
+
+      if (auditRedemption) {
+        return NextResponse.json(
+          { error: 'You have already redeemed this coupon code once on your account.' },
+          { status: 400 }
+        );
+      }
+    }
+
     if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
       return NextResponse.json({ error: 'This coupon code has expired.' }, { status: 400 });
     }

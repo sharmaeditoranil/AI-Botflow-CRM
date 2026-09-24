@@ -87,12 +87,12 @@ export async function POST(req: NextRequest) {
 
   const invoiceNumber = `INV-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-  // If a coupon code was used, increment redemptions_count
+  // If a coupon code was used, increment redemptions_count and record redemption for one-time enforcement
   if (couponCode && typeof couponCode === 'string') {
     try {
       const { data: cp } = await adminSupabase
         .from('coupons')
-        .select('id, redemptions_count')
+        .select('id, code, redemptions_count')
         .eq('code', couponCode.trim().toUpperCase())
         .maybeSingle();
 
@@ -101,9 +101,39 @@ export async function POST(req: NextRequest) {
           .from('coupons')
           .update({ redemptions_count: (cp.redemptions_count || 0) + 1 })
           .eq('id', cp.id);
+
+        // Record in audit_logs to guarantee one-time use per account/user
+        await adminSupabase.from('audit_logs').insert({
+          action: 'coupon_redeemed',
+          target_type: 'coupon',
+          target_id: cp.id,
+          actor_user_id: user.id,
+          details: {
+            coupon_id: cp.id,
+            coupon_code: cp.code,
+            account_id: profile.account_id,
+            user_id: user.id,
+            order_id: razorpay_order_id,
+            payment_id: razorpay_payment_id,
+            amount: totalPaid,
+            redeemed_at: new Date().toISOString(),
+          },
+        });
+
+        // Also record in dedicated coupon_redemptions table
+        try {
+          await adminSupabase.from('coupon_redemptions').insert({
+            coupon_id: cp.id,
+            account_id: profile.account_id,
+            user_id: user.id,
+            order_id: razorpay_order_id,
+          });
+        } catch {
+          // Fallback to audit_logs if table not yet migrated
+        }
       }
     } catch (cpErr) {
-      console.warn('Could not increment coupon redemptions:', cpErr);
+      console.warn('Could not record coupon redemption:', cpErr);
     }
   }
 
