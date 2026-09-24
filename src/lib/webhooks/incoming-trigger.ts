@@ -284,15 +284,30 @@ export function findSmartName(payload: unknown, configuredPath?: string | null):
     'user',
     'fields',
     'payload.payment.entity.notes',
+    'payload.payment.entity.card',
     'payload.payment.entity',
     'payload.order.entity.notes',
     'payload.order.entity',
+    'payment.entity.notes',
+    'payment.entity.card',
+    'payment.entity',
+    'payment.notes',
+    'payment.card',
+    'payment',
+    'order',
+    'card',
   ];
   for (const prefix of nestedPrefixes) {
-    for (const key of ['name', 'full_name', 'first_name', 'customer_name']) {
+    for (const key of ['name', 'full_name', 'first_name', 'customer_name', 'cardholder_name', 'billing_name']) {
       const val = extractValueByPath(payload, `${prefix}.${key}`);
       if (val && String(val).trim()) return String(val).trim();
     }
+  }
+
+  // 5. Direct card name fallback
+  const cardName = extractValueByPath(payload, 'card.name') || extractValueByPath(payload, 'payload.payment.entity.card.name');
+  if (cardName && String(cardName).trim()) {
+    return String(cardName).trim();
   }
 
   return null;
