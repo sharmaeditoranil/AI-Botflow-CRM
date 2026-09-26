@@ -40,7 +40,6 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 import { useTranslations } from "next-intl";
 import { contactHandle } from "@/lib/whatsapp/wa-identity";
@@ -438,8 +437,7 @@ export function ContactSidebar({
           </button>
         </div>
       )}
-      <ScrollArea className="h-full min-h-0 flex-1">
-        <div className="p-4">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 overscroll-y-contain [touch-action:pan-y] [-webkit-overflow-scrolling:touch] [scrollbar-width:thin]">
           {/* Contact Info */}
           <div className="flex flex-col items-center text-center">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-lg font-semibold text-foreground">
@@ -776,8 +774,7 @@ export function ContactSidebar({
               Delete Subscriber / Number
             </Button>
           </div>
-        </div>
-      </ScrollArea>
+      </div>
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>

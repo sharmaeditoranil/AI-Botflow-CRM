@@ -27,6 +27,14 @@ import { isDeliverableUrl } from '@/lib/webhooks/ssrf'
 import { extractVariableIndices } from '@/lib/whatsapp/template-validators'
 import { findAndMergeOrCreateDeal } from '@/lib/pipelines/deal-merger'
 import { ensureDefaultPipelineForAccount } from '@/lib/pipelines/default-pipeline'
+import {
+  findSmartName,
+  findSmartService,
+  findSmartCity,
+  findSmartMessage,
+  findSmartEmail,
+  extractLeadSummary,
+} from '@/lib/webhooks/incoming-trigger'
 
 // ------------------------------------------------------------
 // Public API
@@ -645,10 +653,54 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         .select('default_currency')
         .eq('id', args.automation.account_id)
         .maybeSingle()
-      const title = interpolate(cfg.title, args)
-      const incomingNote = args.context?.message_text
-        ? `[Automation "${args.automation.name}"]: "${args.context.message_text}"`
-        : `[Automation "${args.automation.name}"]: Triggered deal update`
+
+      // Fetch contact details (name, phone) for smart title fallback
+      const { data: contactRow } = await db
+        .from('contacts')
+        .select('name, phone')
+        .eq('id', args.contactId)
+        .maybeSingle()
+
+      const contactName =
+        contactRow?.name ||
+        contactRow?.phone ||
+        (args.context.vars?.name as string) ||
+        findSmartName(args.context.vars) ||
+        'Customer'
+
+      const service =
+        (args.context.vars?.service as string) ||
+        findSmartService(args.context.vars) ||
+        ''
+      const city =
+        (args.context.vars?.city as string) ||
+        findSmartCity(args.context.vars) ||
+        ''
+
+      // Interpolate configured title or generate a smart default title
+      let title = cfg.title ? interpolate(cfg.title, args).trim() : ''
+      if (!title || title.toLowerCase() === 'deal' || title.toLowerCase() === 'new deal') {
+        const parts: string[] = []
+        if (service) parts.push(service)
+        if (city) parts.push(`(${city})`)
+        const suffix = parts.length > 0 ? ` - ${parts.join(' ')}` : ''
+        title = `Deal: ${contactName}${suffix}`
+      }
+
+      // Build rich structured incoming note containing service, city, message, and form details
+      let incomingNote = ''
+      if (args.context.vars && typeof args.context.vars === 'object') {
+        const leadSummary = extractLeadSummary(args.context.vars)
+        if (leadSummary.formattedNote) {
+          incomingNote = `[Automation "${args.automation.name}"]: [Lead Form Details]:\n${leadSummary.formattedNote}`
+        }
+      }
+
+      if (!incomingNote) {
+        incomingNote = args.context?.message_text
+          ? `[Automation "${args.automation.name}"]: "${args.context.message_text}"`
+          : `[Automation "${args.automation.name}"]: Triggered deal update`
+      }
 
       const result = await findAndMergeOrCreateDeal(db, {
         account_id: args.automation.account_id,
@@ -937,14 +989,35 @@ function resolveVariableValue(
 function interpolate(s: string, args: ExecuteArgs): string {
   return s.replace(/\{\{\s*([\w.\s-]+)\s*\}\}/g, (_, key) => {
     const trimmedKey = String(key).trim()
+    const lower = trimmedKey.toLowerCase()
     const [ns, prop] = trimmedKey.split('.')
     if (ns === 'message' && prop === 'text') return String(args.context.message_text ?? '')
-    if (ns === 'vars' && prop) return String(args.context.vars?.[prop] ?? '')
+    if (ns === 'vars' && prop) {
+      if (args.context.vars?.[prop] !== undefined) return String(args.context.vars[prop])
+      const pLower = prop.toLowerCase()
+      if (pLower === 'service') return (args.context.vars?.service as string) || findSmartService(args.context.vars) || ''
+      if (pLower === 'city') return (args.context.vars?.city as string) || findSmartCity(args.context.vars) || ''
+      if (pLower === 'message' || pLower === 'extra_message' || pLower === 'extramessage') {
+        return (args.context.vars?.extra_message as string) || (args.context.vars?.message as string) || findSmartMessage(args.context.vars) || ''
+      }
+      if (pLower === 'email') return (args.context.vars?.email as string) || findSmartEmail(args.context.vars) || ''
+    }
     if (ns === 'contact') {
-      if (prop === 'name') return (args.context.vars?.name as string) || ''
+      if (prop === 'name') return (args.context.vars?.name as string) || findSmartName(args.context.vars) || ''
       if (prop === 'phone') return (args.context.vars?.phone as string) || ''
     }
-    if (trimmedKey.toLowerCase() === 'name') return (args.context.vars?.name as string) || ''
+    if (lower === 'name') return (args.context.vars?.name as string) || findSmartName(args.context.vars) || ''
+    if (lower === 'phone' || lower === 'mobile') return (args.context.vars?.phone as string) || ''
+    if (lower === 'service' || lower === 'services' || lower === 'service_name') {
+      return (args.context.vars?.service as string) || findSmartService(args.context.vars) || ''
+    }
+    if (lower === 'city' || lower === 'location' || lower === 'town' || lower === 'address') {
+      return (args.context.vars?.city as string) || findSmartCity(args.context.vars) || ''
+    }
+    if (lower === 'message' || lower === 'extra_message' || lower === 'extramessage' || lower === 'query' || lower === 'notes') {
+      return (args.context.vars?.extra_message as string) || (args.context.vars?.message as string) || findSmartMessage(args.context.vars) || ''
+    }
+    if (lower === 'email') return (args.context.vars?.email as string) || findSmartEmail(args.context.vars) || ''
     if (args.context.vars?.[trimmedKey] !== undefined) return String(args.context.vars[trimmedKey])
     return ''
   })

@@ -314,6 +314,349 @@ export function findSmartName(payload: unknown, configuredPath?: string | null):
 }
 
 /**
+ * Smart service/product/requirement extraction from incoming webhook or form payload.
+ */
+export function findSmartService(payload: unknown, configuredPath?: string | null): string | null {
+  if (!payload || typeof payload !== 'object') return null;
+
+  if (configuredPath) {
+    const val = extractValueByPath(payload, configuredPath);
+    if (val && String(val).trim()) return String(val).trim();
+  }
+
+  const commonKeys = [
+    'service',
+    'services',
+    'service_name',
+    'servicename',
+    'service_type',
+    'servicetype',
+    'service_required',
+    'service_requested',
+    'service_needed',
+    'interested_in',
+    'interestedin',
+    'interest',
+    'requirement',
+    'requirements',
+    'product',
+    'product_name',
+    'productname',
+    'product_service',
+    'course',
+    'course_name',
+    'coursename',
+    'program',
+    'package',
+    'package_name',
+    'plan',
+    'plan_name',
+    'subject',
+    'category',
+    'inquiry_type',
+    'treatment',
+    'specialty',
+    'item_name',
+    'item',
+  ];
+
+  for (const key of commonKeys) {
+    const val = extractValueByPath(payload, key);
+    if (val && String(val).trim()) return String(val).trim();
+  }
+
+  const nestedPrefixes = [
+    'lead',
+    'customer',
+    'data',
+    'contact',
+    'user',
+    'fields',
+    'form_fields',
+    'body',
+    'form_data',
+    'notes',
+  ];
+  for (const prefix of nestedPrefixes) {
+    for (const key of ['service', 'service_name', 'product', 'requirement', 'course', 'package', 'plan', 'category']) {
+      const val = extractValueByPath(payload, `${prefix}.${key}`);
+      if (val && String(val).trim()) return String(val).trim();
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Smart city/location extraction from incoming webhook or form payload.
+ */
+export function findSmartCity(payload: unknown, configuredPath?: string | null): string | null {
+  if (!payload || typeof payload !== 'object') return null;
+
+  if (configuredPath) {
+    const val = extractValueByPath(payload, configuredPath);
+    if (val && String(val).trim()) return String(val).trim();
+  }
+
+  const commonKeys = [
+    'city',
+    'city_name',
+    'cityname',
+    'town',
+    'location',
+    'location_name',
+    'address',
+    'city_town',
+    'district',
+    'state',
+    'place',
+    'area',
+    'region',
+    'billing_city',
+    'shipping_city',
+    'user_city',
+  ];
+
+  for (const key of commonKeys) {
+    const val = extractValueByPath(payload, key);
+    if (val && String(val).trim()) return String(val).trim();
+  }
+
+  const nestedPrefixes = [
+    'lead',
+    'customer',
+    'data',
+    'contact',
+    'user',
+    'fields',
+    'form_fields',
+    'body',
+    'form_data',
+    'notes',
+  ];
+  for (const prefix of nestedPrefixes) {
+    for (const key of ['city', 'location', 'town', 'address', 'state', 'district', 'area']) {
+      const val = extractValueByPath(payload, `${prefix}.${key}`);
+      if (val && String(val).trim()) return String(val).trim();
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Smart message / extra comments extraction from incoming webhook or form payload.
+ */
+export function findSmartMessage(payload: unknown, configuredPath?: string | null): string | null {
+  if (!payload || typeof payload !== 'object') return null;
+
+  if (configuredPath) {
+    const val = extractValueByPath(payload, configuredPath);
+    if (val && String(val).trim()) return String(val).trim();
+  }
+
+  const commonKeys = [
+    'extra_message',
+    'extramessage',
+    'extra_msg',
+    'message',
+    'notes',
+    'note',
+    'msg',
+    'comment',
+    'comments',
+    'remark',
+    'remarks',
+    'description',
+    'details',
+    'query',
+    'inquiry',
+    'inquiry_details',
+    'feedback',
+    'requirement_details',
+    'user_message',
+    'customer_message',
+    'client_message',
+  ];
+
+  for (const key of commonKeys) {
+    const val = extractValueByPath(payload, key);
+    if (val && String(val).trim()) return String(val).trim();
+  }
+
+  const nestedPrefixes = [
+    'lead',
+    'customer',
+    'data',
+    'contact',
+    'user',
+    'fields',
+    'form_fields',
+    'body',
+    'form_data',
+    'notes',
+  ];
+  for (const prefix of nestedPrefixes) {
+    for (const key of ['extra_message', 'message', 'notes', 'comments', 'remark', 'query', 'description']) {
+      const val = extractValueByPath(payload, `${prefix}.${key}`);
+      if (val && String(val).trim()) return String(val).trim();
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Smart email extraction from incoming webhook or form payload.
+ */
+export function findSmartEmail(payload: unknown, configuredPath?: string | null): string | null {
+  if (!payload || typeof payload !== 'object') return null;
+
+  if (configuredPath) {
+    const val = extractValueByPath(payload, configuredPath);
+    if (val && String(val).trim()) return String(val).trim();
+  }
+
+  const commonKeys = [
+    'email',
+    'e-mail',
+    'email_address',
+    'emailaddress',
+    'user_email',
+    'customer_email',
+    'lead_email',
+    'billing_email',
+  ];
+  for (const key of commonKeys) {
+    const val = extractValueByPath(payload, key);
+    if (val && String(val).trim()) return String(val).trim();
+  }
+
+  const nestedPrefixes = [
+    'lead',
+    'customer',
+    'data',
+    'contact',
+    'user',
+    'fields',
+    'form_fields',
+    'body',
+    'form_data',
+  ];
+  for (const prefix of nestedPrefixes) {
+    for (const key of ['email', 'email_address']) {
+      const val = extractValueByPath(payload, `${prefix}.${key}`);
+      if (val && String(val).trim()) return String(val).trim();
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Collect all relevant lead form fields as human-readable key-value pairs,
+ * ignoring internal technical tokens (secret, token, api_key, etc.).
+ */
+export function extractLeadSummary(payload: unknown): {
+  service: string | null;
+  city: string | null;
+  message: string | null;
+  email: string | null;
+  extraFields: Record<string, string>;
+  formattedNote: string;
+} {
+  if (!payload || typeof payload !== 'object') {
+    return {
+      service: null,
+      city: null,
+      message: null,
+      email: null,
+      extraFields: {},
+      formattedNote: '',
+    };
+  }
+
+  const p = payload as Record<string, unknown>;
+  const service = findSmartService(p);
+  const city = findSmartCity(p);
+  const message = findSmartMessage(p);
+  const email = findSmartEmail(p);
+
+  const ignoredKeys = new Set([
+    'secret',
+    'token',
+    'api_key',
+    'apikey',
+    'auth',
+    'authorization',
+    'account_id',
+    'automation_id',
+    'id',
+    'user_id',
+    'pipeline_id',
+    'stage_id',
+    'is_active',
+    'trigger_type',
+    'format',
+    'pretty',
+    'password',
+    '_nonce',
+    'action',
+    'form_id',
+    'lead_summary',
+    'name',
+    'full_name',
+    'fullname',
+    'first_name',
+    'firstname',
+    'last_name',
+    'lastname',
+    'phone',
+    'mobile',
+    'contact',
+    'whatsapp',
+    'vars',
+  ]);
+
+  const lines: string[] = [];
+  if (service) lines.push(`• Service: ${service}`);
+  if (city) lines.push(`• City: ${city}`);
+  if (message) lines.push(`• Extra Message: ${message}`);
+  if (email) lines.push(`• Email: ${email}`);
+
+  const extraFields: Record<string, string> = {};
+  for (const [key, value] of Object.entries(p)) {
+    const lKey = key.toLowerCase();
+    if (ignoredKeys.has(lKey)) continue;
+
+    // Skip if already captured in service, city, message, email
+    if (service && (lKey === 'service' || lKey === 'service_name' || lKey === 'services' || lKey === 'product' || lKey === 'requirement')) continue;
+    if (city && (lKey === 'city' || lKey === 'location' || lKey === 'town' || lKey === 'address')) continue;
+    if (message && (lKey === 'message' || lKey === 'extra_message' || lKey === 'notes' || lKey === 'comments' || lKey === 'query' || lKey === 'msg')) continue;
+    if (email && (lKey === 'email' || lKey === 'e-mail' || lKey === 'email_address')) continue;
+
+    if (typeof value === 'string' && value.trim()) {
+      extraFields[key] = value.trim();
+      const label = key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+      lines.push(`• ${label}: ${value.trim()}`);
+    } else if (typeof value === 'number' || typeof value === 'boolean') {
+      extraFields[key] = String(value);
+      const label = key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+      lines.push(`• ${label}: ${value}`);
+    }
+  }
+
+  return {
+    service,
+    city,
+    message,
+    email,
+    extraFields,
+    formattedNote: lines.join('\n'),
+  };
+}
+
+/**
  * Determines if a webhook payload looks like a test ping, connection verification,
  * or healthcheck without actual lead data.
  */

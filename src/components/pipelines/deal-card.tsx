@@ -41,10 +41,20 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
 
   let lastSnippet = "";
   if (rawNotes.trim()) {
-    const lines = rawNotes.split(/\n+/).filter((l) => l.trim().length > 0);
-    if (lines.length > 0) {
-      const lastLine = lines[lines.length - 1].trim();
-      lastSnippet = lastLine.replace(/^\[[^\]]+\]:\s*/, "");
+    const leadFormMatch = rawNotes.match(/\[Lead Form Details\]:\s*([\s\S]*?)(?=\n\[|$)/i);
+    if (leadFormMatch) {
+      const detailsBlock = leadFormMatch[1];
+      const items = detailsBlock
+        .split('\n')
+        .map((l) => l.trim().replace(/^•\s*/, ''))
+        .filter(Boolean);
+      lastSnippet = items.slice(0, 3).join(' | ');
+    } else {
+      const lines = rawNotes.split(/\n+/).filter((l) => l.trim().length > 0);
+      if (lines.length > 0) {
+        const lastLine = lines[lines.length - 1].trim();
+        lastSnippet = lastLine.replace(/^\[[^\]]+\]:\s*/, "");
+      }
     }
   }
 
@@ -197,11 +207,13 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
                 🔄 {followUpCount} Follow-up{followUpCount > 1 ? "s" : ""}
               </span>
             ) : (
-              <span className="text-muted-foreground font-medium">Latest Note</span>
+              <span className="text-muted-foreground font-medium">
+                {rawNotes.includes("[Lead Form Details]") ? "📋 Lead Details" : "Latest Note"}
+              </span>
             )}
           </div>
           {lastSnippet && (
-            <p className="line-clamp-1 text-muted-foreground text-[10.5px] italic">
+            <p className="line-clamp-2 text-muted-foreground text-[10.5px] italic">
               &ldquo;{lastSnippet}&rdquo;
             </p>
           )}

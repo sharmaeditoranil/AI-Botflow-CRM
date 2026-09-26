@@ -7,6 +7,11 @@ import {
   safeCompareSecrets,
   findSmartPhone,
   findSmartName,
+  findSmartService,
+  findSmartCity,
+  findSmartMessage,
+  findSmartEmail,
+  extractLeadSummary,
   isLikelyTestPing,
 } from '@/lib/webhooks/incoming-trigger';
 import { executeAutomation } from '@/lib/automations/engine';
@@ -342,14 +347,81 @@ async function executeIncomingWebhook(
 
     console.log(`[Webhook ${method}] Resolved contact:`, resolved.contactId, '| conversation:', resolved.conversationId);
 
-    // Execute automation workflow
+    // Extract smart lead attributes: service, city, extra message, email, extra fields
+    const leadSummary = extractLeadSummary(payload);
+    const email = findSmartEmail(payload);
+
+    // Update contact metadata (email, AI memory) and record note
+    try {
+      const contactUpdates: Record<string, unknown> = {
+        updated_at: new Date().toISOString(),
+      };
+      if (email) {
+        contactUpdates.email = email;
+      }
+      if (leadSummary.service || leadSummary.city || leadSummary.message) {
+        const memSnippet = [
+          leadSummary.service ? `Interested Service: "${leadSummary.service}"` : null,
+          leadSummary.city ? `City/Location: "${leadSummary.city}"` : null,
+          leadSummary.message ? `Inquiry: "${leadSummary.message}"` : null,
+        ].filter(Boolean).join(' | ');
+
+        if (memSnippet) {
+          const { data: existingContact } = await admin
+            .from('contacts')
+            .select('ai_memory, email')
+            .eq('id', resolved.contactId)
+            .maybeSingle();
+
+          if (!existingContact?.email && email) {
+            contactUpdates.email = email;
+          }
+          const prevMem = (existingContact?.ai_memory || '').trim();
+          contactUpdates.ai_memory = prevMem
+            ? `${prevMem}\n[Webhook Lead]: ${memSnippet}`
+            : `[Webhook Lead]: ${memSnippet}`;
+        }
+      }
+
+      if (Object.keys(contactUpdates).length > 1) {
+        await admin
+          .from('contacts')
+          .update(contactUpdates)
+          .eq('id', resolved.contactId);
+      }
+
+      // Add structured lead note to contact notes
+      if (leadSummary.formattedNote) {
+        await admin.from('contact_notes').insert({
+          contact_id: resolved.contactId,
+          user_id: automation.user_id,
+          account_id: automation.account_id,
+          note_text: `[Webhook Lead Submission]:\n${leadSummary.formattedNote}`,
+        });
+      }
+    } catch (metaErr) {
+      console.warn(`[Webhook ${method}] Non-fatal error saving lead context to contact:`, metaErr);
+    }
+
+    // Execute automation workflow with enriched lead context
     try {
       await executeAutomation(automation as any, {
         accountId: automation.account_id,
         triggerType: 'incoming_webhook',
         contactId: resolved.contactId,
         context: {
-          vars: payload as Record<string, unknown>,
+          vars: {
+            ...payload,
+            name: contactName,
+            phone: String(rawPhone),
+            service: leadSummary.service || '',
+            city: leadSummary.city || '',
+            message: leadSummary.message || '',
+            extra_message: leadSummary.message || '',
+            email: email || '',
+            lead_summary: leadSummary.formattedNote,
+          },
+          message_text: leadSummary.message || leadSummary.formattedNote,
           conversation_id: resolved.conversationId,
         },
       });

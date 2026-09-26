@@ -53,7 +53,7 @@ import { ContactTagBar } from "@/components/inbox/contact-tag-bar";
 
 interface NoteEntry {
   id: string;
-  type: "followup" | "ai" | "general";
+  type: "followup" | "ai" | "general" | "lead";
   badge: string;
   date?: string;
   text: string;
@@ -89,6 +89,18 @@ function parseNotesTimeline(rawNotes: string): NoteEntry[] {
         type: "ai",
         badge: "✨ AI " + (aiMatch[1] ? aiMatch[1].trim() : "Note"),
         text: aiMatch[2]?.trim(),
+      });
+      return;
+    }
+
+    // Pattern 3: [Automation...] or [Lead Form...] or [Webhook...]
+    const leadMatch = trimmed.match(/^\[(Automation[^\]]*|Lead Form[^\]]*|Webhook[^\]]*)\]:\s*([\s\S]*)$/i);
+    if (leadMatch) {
+      entries.push({
+        id: `entry-${index}`,
+        type: "lead",
+        badge: "📋 " + leadMatch[1].replace(/\[Lead Form Details\]:?/i, "").trim(),
+        text: leadMatch[2]?.replace(/^\[Lead Form Details\]:?\s*/i, "").trim(),
       });
       return;
     }
@@ -678,6 +690,8 @@ export function DealForm({
                               ? "bg-blue-500/15 text-blue-600 dark:text-blue-400"
                               : entry.type === "ai"
                               ? "bg-purple-500/15 text-purple-600 dark:text-purple-400"
+                              : entry.type === "lead"
+                              ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
                               : "bg-muted text-muted-foreground"
                           }`}
                         >

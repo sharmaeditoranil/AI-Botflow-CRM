@@ -5,6 +5,11 @@ import {
   generateIncomingWebhookSecret,
   safeCompareSecrets,
   INCOMING_WEBHOOK_SECRET_PREFIX,
+  findSmartService,
+  findSmartCity,
+  findSmartMessage,
+  findSmartEmail,
+  extractLeadSummary,
 } from './incoming-trigger';
 
 describe('generateIncomingWebhookSecret', () => {
@@ -138,3 +143,51 @@ describe('extractTemplateVariables', () => {
     expect(params).toEqual(['Customer', '₹2,500']);
   });
 });
+
+describe('Smart Lead Field Extraction', () => {
+  it('extracts service, city, message, and email from common payload shapes', () => {
+
+    const formPayload = {
+      name: 'Rohan Verma',
+      mobile: '9876543210',
+      service_name: 'Digital Marketing',
+      city: 'Delhi',
+      extra_message: 'Please send pricing plans and case studies',
+      email: 'rohan@example.com',
+      budget: '25,000',
+    };
+
+    expect(findSmartService(formPayload)).toBe('Digital Marketing');
+    expect(findSmartCity(formPayload)).toBe('Delhi');
+    expect(findSmartMessage(formPayload)).toBe('Please send pricing plans and case studies');
+    expect(findSmartEmail(formPayload)).toBe('rohan@example.com');
+
+    const summary = extractLeadSummary(formPayload);
+    expect(summary.service).toBe('Digital Marketing');
+    expect(summary.city).toBe('Delhi');
+    expect(summary.message).toBe('Please send pricing plans and case studies');
+    expect(summary.email).toBe('rohan@example.com');
+    expect(summary.formattedNote).toContain('• Service: Digital Marketing');
+    expect(summary.formattedNote).toContain('• City: Delhi');
+    expect(summary.formattedNote).toContain('• Extra Message: Please send pricing plans and case studies');
+    expect(summary.formattedNote).toContain('• Budget: 25,000');
+  });
+
+  it('handles nested objects for service and city (e.g. lead.service, fields.city)', () => {
+
+    const nestedPayload = {
+      lead: {
+        service: 'Hair Transplant',
+        city: 'Jaipur',
+      },
+      notes: {
+        comments: 'Weekend consultation required',
+      },
+    };
+
+    expect(findSmartService(nestedPayload)).toBe('Hair Transplant');
+    expect(findSmartCity(nestedPayload)).toBe('Jaipur');
+    expect(findSmartMessage(nestedPayload)).toBe('Weekend consultation required');
+  });
+});
+

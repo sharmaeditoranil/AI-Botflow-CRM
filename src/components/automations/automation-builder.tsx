@@ -2015,8 +2015,12 @@ function StepEditor({
             <Input
               value={(cfg.title as string) ?? ""}
               onChange={(e) => set({ title: e.target.value })}
+              placeholder="e.g. {{name}} - {{service}} (Leave blank for auto)"
               className="bg-muted text-foreground"
             />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Supports &#123;&#123;name&#125;&#125;, &#123;&#123;service&#125;&#125;, &#123;&#123;city&#125;&#125;, &#123;&#123;message&#125;&#125;. If left empty, auto-generates with customer name, service &amp; city.
+            </p>
           </FieldBlock>
           <FieldBlock label={t("config.valueLabel")}>
             <Input
