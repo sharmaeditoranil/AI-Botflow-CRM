@@ -300,3 +300,130 @@ export async function findAndMergeOrCreateDeal(
     deal: newDeal,
   };
 }
+
+export interface ParsedDealLead {
+  cleanTitle: string;
+  service: string;
+  city: string;
+  leadMessage: string;
+}
+
+/**
+ * Separates mixed titles like "Anil ku Sharma, Wedding Album Design, Gopalganj"
+ * or notes with structured bullets into separate fields:
+ * cleanTitle, service, city, and leadMessage.
+ */
+export function parseDealLeadDetails(
+  rawTitle?: string | null,
+  rawNotes?: string | null
+): ParsedDealLead {
+  let title = (rawTitle || "").trim();
+  const notes = (rawNotes || "").trim();
+
+  let service = "";
+  let city = "";
+  let leadMessage = "";
+
+  // 1. Try parsing from notes if bullet lines exist (e.g. • Service: Wedding Album Design)
+  if (notes) {
+    const serviceMatch = notes.match(/•\s*(?:Service|Requirement|Service \/ Requirement)\s*:\s*([^\n\r]+)/i);
+    if (serviceMatch && serviceMatch[1]) {
+      service = serviceMatch[1].trim();
+    }
+
+    const cityMatch = notes.match(/•\s*(?:City|Location)\s*:\s*([^\n\r]+)/i);
+    if (cityMatch && cityMatch[1]) {
+      city = cityMatch[1].trim();
+    }
+
+    const messageMatch = notes.match(/•\s*(?:Extra Message|Message|Notes?|Requirements? Details?)\s*:\s*([^\n\r]+)/i);
+    if (messageMatch && messageMatch[1]) {
+      leadMessage = messageMatch[1].trim();
+    }
+  }
+
+  // 2. Extract from title if title is mixed with comma, hyphen, or pipe
+  // e.g. "Anil ku Sharma, Wedding Album Design, Gopalganj"
+  let cleanTitle = title;
+
+  if (title.includes(",")) {
+    const parts = title.split(",").map((p) => p.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      cleanTitle = parts[0];
+      if (!service && parts[1]) {
+        service = parts[1];
+      }
+      if (!city && parts[2]) {
+        city = parts[2];
+      }
+    }
+  } else if (title.includes(" - ")) {
+    const parts = title.split(" - ").map((p) => p.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      cleanTitle = parts[0].replace(/^Deal:\s*/i, "").trim();
+      const rest = parts.slice(1).join(" - ");
+      const cityInParenMatch = rest.match(/\(([^)]+)\)$/);
+      if (cityInParenMatch) {
+        if (!city) city = cityInParenMatch[1].trim();
+        if (!service) service = rest.replace(/\(([^)]+)\)$/, "").trim();
+      } else {
+        if (!service) service = parts[1];
+        if (!city && parts[2]) city = parts[2];
+      }
+    }
+  } else if (title.includes(" | ")) {
+    const parts = title.split(" | ").map((p) => p.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+      cleanTitle = parts[0];
+      if (!service && parts[1]) service = parts[1];
+      if (!city && parts[2]) city = parts[2];
+    }
+  }
+
+  if (cleanTitle.toLowerCase().startsWith("deal: ")) {
+    cleanTitle = cleanTitle.slice(6).trim();
+  }
+
+  return {
+    cleanTitle: cleanTitle || title || "Deal",
+    service,
+    city,
+    leadMessage,
+  };
+}
+
+/**
+ * Ensures Service, City, and Extra Message are cleanly saved in structured notes
+ * without losing existing follow-up history or duplicating blocks.
+ */
+export function formatDealLeadNotes(
+  currentNotes: string,
+  service: string,
+  city: string,
+  leadMessage: string
+): string {
+  const cleanService = (service || "").trim();
+  const cleanCity = (city || "").trim();
+  const cleanMsg = (leadMessage || "").trim();
+
+  if (!cleanService && !cleanCity && !cleanMsg) {
+    return (currentNotes || "").trim();
+  }
+
+  const lines: string[] = ["[Lead Form Details]:"];
+  if (cleanService) lines.push(`• Service: ${cleanService}`);
+  if (cleanCity) lines.push(`• City: ${cleanCity}`);
+  if (cleanMsg) lines.push(`• Extra Message: ${cleanMsg}`);
+  const leadBlock = lines.join("\n");
+
+  const notes = (currentNotes || "").trim();
+  if (!notes) return leadBlock;
+
+  const regex = /(?:\[[^\]]*\]:\s*)?\[Lead Form Details\]:\s*(?:•[^\n]*\n?)+/i;
+  if (regex.test(notes)) {
+    return notes.replace(regex, leadBlock).trim();
+  }
+
+  return `${leadBlock}\n\n${notes}`;
+}
+

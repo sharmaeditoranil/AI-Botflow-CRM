@@ -25,7 +25,10 @@ import { engineSendText, engineSendTemplate, engineSendInteractive } from './met
 import { validateInteractivePayload } from '@/lib/whatsapp/interactive'
 import { isDeliverableUrl } from '@/lib/webhooks/ssrf'
 import { extractVariableIndices } from '@/lib/whatsapp/template-validators'
-import { findAndMergeOrCreateDeal } from '@/lib/pipelines/deal-merger'
+import {
+  findAndMergeOrCreateDeal,
+  parseDealLeadDetails,
+} from '@/lib/pipelines/deal-merger'
 import { ensureDefaultPipelineForAccount } from '@/lib/pipelines/default-pipeline'
 import {
   findSmartName,
@@ -677,14 +680,16 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         findSmartCity(args.context.vars) ||
         ''
 
-      // Interpolate configured title or generate a smart default title
+      // Interpolate configured title or generate a clean default title (no mixed strings)
       let title = cfg.title ? interpolate(cfg.title, args).trim() : ''
       if (!title || title.toLowerCase() === 'deal' || title.toLowerCase() === 'new deal') {
-        const parts: string[] = []
-        if (service) parts.push(service)
-        if (city) parts.push(`(${city})`)
-        const suffix = parts.length > 0 ? ` - ${parts.join(' ')}` : ''
-        title = `Deal: ${contactName}${suffix}`
+        title = contactName || 'Deal'
+      } else {
+        // If template was written as "{{name}}, {{service}}, {{city}}", extract clean name
+        const parsed = parseDealLeadDetails(title, null)
+        if (parsed.cleanTitle && parsed.cleanTitle !== title) {
+          title = parsed.cleanTitle
+        }
       }
 
       // Build rich structured incoming note containing service, city, message, and form details

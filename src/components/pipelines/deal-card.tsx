@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { Deal, PipelineStage } from "@/types";
 import { Calendar, Check, X, MessageSquare, Bot, Clock, Phone } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
+import { parseDealLeadDetails } from "@/lib/pipelines/deal-merger";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 
@@ -29,6 +30,7 @@ function initials(name?: string, fallback?: string) {
 
 export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
   const t = useTranslations("Pipelines.card");
+  const leadDetails = parseDealLeadDetails(deal.title, deal.notes);
   const contactLabel = deal.contact?.name || deal.contact?.phone || t("noContact");
   const assigneeLabel = deal.assignee?.full_name || null;
 
@@ -83,7 +85,7 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
 
       <div className="flex items-start justify-between gap-2">
         <h4 className="flex-1 text-sm font-semibold leading-snug text-foreground break-words">
-          {deal.title}
+          {leadDetails.cleanTitle || deal.title}
         </h4>
         {deal.status === "won" && (
           <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
@@ -98,6 +100,22 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
           </span>
         )}
       </div>
+
+      {/* Service & City Pill Badges if present */}
+      {(leadDetails.service || leadDetails.city) && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+          {leadDetails.service && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+              💼 {leadDetails.service}
+            </span>
+          )}
+          {leadDetails.city && (
+            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+              📍 {leadDetails.city}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Contact row */}
       <div className="mt-2 flex items-center justify-between gap-2">

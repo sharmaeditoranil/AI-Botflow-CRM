@@ -16,6 +16,8 @@ import type {
 import {
   findAndMergeOrCreateDeal,
   findExistingDealsForCustomer,
+  parseDealLeadDetails,
+  formatDealLeadNotes,
 } from "@/lib/pipelines/deal-merger";
 import {
   Sheet,
@@ -45,6 +47,7 @@ import {
   Clock,
   Phone,
   Tag as TagIcon,
+  MapPin,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
@@ -141,6 +144,9 @@ export function DealForm({
   const { accountId, defaultCurrency } = useAuth();
 
   const [title, setTitle] = useState("");
+  const [service, setService] = useState("");
+  const [city, setCity] = useState("");
+  const [leadMessage, setLeadMessage] = useState("");
   const [value, setValue] = useState("");
   const [currency, setCurrency] = useState(defaultCurrency);
   const [contactId, setContactId] = useState("");
@@ -178,7 +184,11 @@ export function DealForm({
     if (!open) return;
     setConfirmDelete(false);
     if (deal) {
-      setTitle(deal.title);
+      const parsed = parseDealLeadDetails(deal.title, deal.notes);
+      setTitle(parsed.cleanTitle);
+      setService(parsed.service);
+      setCity(parsed.city);
+      setLeadMessage(parsed.leadMessage);
       setValue(deal.value !== null && deal.value !== undefined ? String(deal.value) : "");
       setCurrency(deal.currency || defaultCurrency);
       // contact_id is nullable when the contact has been deleted
@@ -192,6 +202,9 @@ export function DealForm({
       setFollowupInstructions((deal as any).followup_instructions ?? "");
     } else {
       setTitle("");
+      setService("");
+      setCity("");
+      setLeadMessage("");
       setValue("");
       setCurrency(defaultCurrency);
       setContactId("");
@@ -265,7 +278,11 @@ export function DealForm({
       if (existing && existing.length > 0) {
         const found = existing[0];
         setExistingDealFound(found);
-        setTitle((prev) => (prev.trim() ? prev : found.title));
+        const parsed = parseDealLeadDetails(found.title, found.notes);
+        setTitle((prev) => (prev.trim() ? prev : parsed.cleanTitle));
+        setService((prev) => (prev.trim() ? prev : parsed.service));
+        setCity((prev) => (prev.trim() ? prev : parsed.city));
+        setLeadMessage((prev) => (prev.trim() ? prev : parsed.leadMessage));
         if (found.notes) {
           setNotes((prev) => (prev.trim() ? prev : found.notes));
         }
@@ -357,6 +374,9 @@ export function DealForm({
       setNotes(finalNotes);
       setNewFollowupText("");
     }
+
+    // Save Service, City, and Extra Message cleanly into structured notes
+    finalNotes = formatDealLeadNotes(finalNotes, service, city, leadMessage);
 
     const numericValue = value.trim() && !isNaN(parseFloat(value)) ? parseFloat(value) : 0;
     const sanitizedCloseDate = expectedCloseDate.trim() ? expectedCloseDate.trim() : null;
@@ -489,14 +509,72 @@ export function DealForm({
           </SheetHeader>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {/* Title / Deal Name */}
             <div className="grid gap-2">
-              <Label className="text-muted-foreground">{t("title")}</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-muted-foreground font-medium">{t("title")} (Lead / Customer Name)</Label>
+                <span className="text-[11px] text-muted-foreground/70">Clean Title</span>
+              </div>
               <Input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder={t("titlePlaceholder")}
-                className="border-border bg-muted text-foreground"
+                placeholder="e.g. Anil ku Sharma"
+                className="border-border bg-muted text-foreground font-medium"
               />
+            </div>
+
+            {/* Dedicated Separate Boxes for Service, City, & Extra Message */}
+            <div className="rounded-xl border border-border/80 bg-muted/20 p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
+                  Lead Requirements &amp; Location
+                </span>
+                <span className="text-[10px] bg-primary/10 text-primary font-medium px-2 py-0.5 rounded-full">
+                  Separate Boxes
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="grid gap-1.5">
+                  <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                    <span>Service / Requirement</span>
+                  </Label>
+                  <Input
+                    value={service}
+                    onChange={(e) => setService(e.target.value)}
+                    placeholder="e.g. Wedding Album Design"
+                    className="h-9 border-border bg-background text-sm text-foreground placeholder:text-muted-foreground/50"
+                  />
+                </div>
+
+                <div className="grid gap-1.5">
+                  <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                    <MapPin className="h-3 w-3 text-emerald-500" />
+                    <span>City / Location</span>
+                  </Label>
+                  <Input
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    placeholder="e.g. Gopalganj"
+                    className="h-9 border-border bg-background text-sm text-foreground placeholder:text-muted-foreground/50"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-1.5 pt-1 border-t border-border/40">
+                <Label className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                  <MessageSquare className="h-3 w-3 text-blue-500" />
+                  <span>Customer Message / Extra Requirement</span>
+                </Label>
+                <Textarea
+                  value={leadMessage}
+                  onChange={(e) => setLeadMessage(e.target.value)}
+                  placeholder="Customer requirements or message from lead form..."
+                  rows={2}
+                  className="min-h-[56px] text-xs border-border bg-background text-foreground resize-none"
+                />
+              </div>
             </div>
 
             <div className="grid gap-2">
