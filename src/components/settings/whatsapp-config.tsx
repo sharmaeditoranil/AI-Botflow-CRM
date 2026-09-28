@@ -32,6 +32,7 @@ import {
   AccordionContent,
 } from '@/components/ui/accordion';
 import { EmbeddedSignupButton } from './embedded-signup-button';
+import { WhatsAppBusinessProfileManager } from './whatsapp-business-profile';
 import type { WhatsAppConfig as WhatsAppConfigType } from '@/types';
 
 const MASKED_TOKEN = '••••••••••••••••';
@@ -740,6 +741,11 @@ export function WhatsAppConfig() {
               if (accountId) fetchConfig(accountId);
             }}
           />
+        )}
+
+        {/* WhatsApp Business Profile & Catalog Manager */}
+        {phoneNumberId && (
+          <WhatsAppBusinessProfileManager />
         )}
 
         {/* API Credentials */}

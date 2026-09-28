@@ -1223,3 +1223,126 @@ export async function downloadMedia(
   const buffer = Buffer.from(await response.arrayBuffer())
   return { buffer, contentType }
 }
+
+// ============================================================
+// Business Profile & Commerce Settings
+// ============================================================
+
+export interface WhatsAppBusinessProfile {
+  about?: string
+  address?: string
+  description?: string
+  email?: string
+  profile_picture_url?: string
+  websites?: string[]
+  vertical?: string
+}
+
+export interface GetBusinessProfileArgs {
+  phoneNumberId: string
+  accessToken: string
+}
+
+export async function getWhatsAppBusinessProfile(
+  args: GetBusinessProfileArgs
+): Promise<WhatsAppBusinessProfile> {
+  const { phoneNumberId, accessToken } = args
+  const response = await fetch(
+    `${META_API_BASE}/${phoneNumberId}/whatsapp_business_profile?fields=about,address,description,email,profile_picture_url,websites,vertical`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }
+  )
+  if (!response.ok) {
+    await throwMetaError(response, `Failed to fetch WhatsApp business profile: ${response.status}`)
+  }
+  const data = await response.json()
+  return data?.data?.[0] || {}
+}
+
+export interface UpdateBusinessProfileArgs {
+  phoneNumberId: string
+  accessToken: string
+  about?: string
+  address?: string
+  description?: string
+  email?: string
+  websites?: string[]
+  vertical?: string
+}
+
+export async function updateWhatsAppBusinessProfile(
+  args: UpdateBusinessProfileArgs
+): Promise<{ success: boolean }> {
+  const { phoneNumberId, accessToken, about, address, description, email, websites, vertical } = args
+  const body: Record<string, unknown> = {
+    messaging_product: 'whatsapp',
+  }
+  if (about !== undefined) body.about = about
+  if (address !== undefined) body.address = address
+  if (description !== undefined) body.description = description
+  if (email !== undefined) body.email = email
+  if (websites !== undefined) body.websites = websites
+  if (vertical !== undefined) body.vertical = vertical
+
+  const response = await fetch(
+    `${META_API_BASE}/${phoneNumberId}/whatsapp_business_profile`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    }
+  )
+  if (!response.ok) {
+    await throwMetaError(response, `Failed to update WhatsApp business profile: ${response.status}`)
+  }
+  return { success: true }
+}
+
+export interface WhatsAppCommerceSettings {
+  is_cart_enabled?: boolean
+  is_catalog_visible?: boolean
+}
+
+export async function getWhatsAppCommerceSettings(
+  args: GetBusinessProfileArgs
+): Promise<WhatsAppCommerceSettings> {
+  const { phoneNumberId, accessToken } = args
+  const response = await fetch(
+    `${META_API_BASE}/${phoneNumberId}/whatsapp_commerce_settings`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }
+  )
+  if (!response.ok) {
+    return { is_cart_enabled: false, is_catalog_visible: false }
+  }
+  const data = await response.json()
+  return data?.data?.[0] || { is_cart_enabled: false, is_catalog_visible: false }
+}
+
+export async function updateWhatsAppCommerceSettings(
+  args: {
+    phoneNumberId: string
+    accessToken: string
+    isCatalogVisible: boolean
+    isCartEnabled: boolean
+  }
+): Promise<{ success: boolean }> {
+  const { phoneNumberId, accessToken, isCatalogVisible, isCartEnabled } = args
+  const response = await fetch(
+    `${META_API_BASE}/${phoneNumberId}/whatsapp_commerce_settings?is_catalog_visible=${isCatalogVisible}&is_cart_enabled=${isCartEnabled}`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }
+  )
+  if (!response.ok) {
+    await throwMetaError(response, `Failed to update WhatsApp commerce settings: ${response.status}`)
+  }
+  return { success: true }
+}
+
