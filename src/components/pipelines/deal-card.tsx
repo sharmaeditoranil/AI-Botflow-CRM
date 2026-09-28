@@ -4,7 +4,12 @@ import Link from "next/link";
 import type { Deal, PipelineStage } from "@/types";
 import { Calendar, Check, X, MessageSquare, Bot, Clock, Phone } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
-import { parseDealLeadDetails } from "@/lib/pipelines/deal-merger";
+import {
+  parseDealLeadDetails,
+  formatCaptureDate,
+  formatTimeAgo,
+  formatFullDateTime,
+} from "@/lib/pipelines/deal-merger";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 
@@ -185,6 +190,27 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
               +{deal.contact.tags.length - 3}
             </span>
           )}
+        </div>
+      )}
+
+      {/* Lead Capture Date & Time Box */}
+      {deal.created_at && (
+        <div
+          className="mt-2 flex items-center justify-between gap-1.5 rounded-lg border border-sky-500/25 bg-sky-500/[0.07] px-2.5 py-1.5 text-xs"
+          title={`Lead Captured: ${formatFullDateTime(deal.created_at)}`}
+        >
+          <div className="flex items-center gap-1.5 min-w-0">
+            <Calendar className="h-3.5 w-3.5 text-sky-500 shrink-0" />
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Captured:
+            </span>
+            <span className="font-semibold text-foreground text-[11px] truncate">
+              {formatCaptureDate(deal.created_at)}
+            </span>
+          </div>
+          <span className="shrink-0 rounded-md bg-sky-500/15 px-1.5 py-0.5 text-[9.5px] font-semibold text-sky-600 dark:text-sky-400">
+            {formatTimeAgo(deal.created_at)}
+          </span>
         </div>
       )}
 

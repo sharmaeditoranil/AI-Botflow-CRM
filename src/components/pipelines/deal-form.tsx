@@ -18,6 +18,9 @@ import {
   findExistingDealsForCustomer,
   parseDealLeadDetails,
   formatDealLeadNotes,
+  formatCaptureDate,
+  formatTimeAgo,
+  formatFullDateTime,
 } from "@/lib/pipelines/deal-merger";
 import {
   Sheet,
@@ -30,6 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  Calendar,
   Check,
   X,
   Trash2,
@@ -509,6 +513,40 @@ export function DealForm({
           </SheetHeader>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {/* Lead Capture Information Banner */}
+            {deal?.created_at && (
+              <div className="rounded-xl border border-sky-500/30 bg-sky-500/[0.08] p-3 text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-foreground flex items-center gap-1.5">
+                    <Calendar className="h-4 w-4 text-sky-500" />
+                    <span>Lead Capture Information</span>
+                  </span>
+                  <span className="text-[10.5px] font-semibold bg-sky-500/20 text-sky-600 dark:text-sky-400 px-2 py-0.5 rounded-full">
+                    {formatTimeAgo(deal.created_at)}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-sky-500/15">
+                  <div className="space-y-0.5">
+                    <span className="block text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Captured Date &amp; Time
+                    </span>
+                    <span className="font-bold text-foreground text-xs">
+                      {formatFullDateTime(deal.created_at)}
+                    </span>
+                  </div>
+                  <div className="space-y-0.5">
+                    <span className="block text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Capture Recency
+                    </span>
+                    <span className="font-semibold text-foreground text-xs">
+                      {formatCaptureDate(deal.created_at)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Title / Deal Name */}
             <div className="grid gap-2">
               <div className="flex items-center justify-between">

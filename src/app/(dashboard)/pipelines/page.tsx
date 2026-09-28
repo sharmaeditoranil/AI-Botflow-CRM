@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Pipeline, PipelineStage, Deal } from "@/types";
 import { PipelineBoard } from "@/components/pipelines/pipeline-board";
@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { GitBranch, Plus, ChevronDown, Settings, Sparkles, Tag } from "lucide-react";
+import { GitBranch, Plus, ChevronDown, Settings, Sparkles, Tag, Search, Calendar, X } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { useCan } from "@/hooks/use-can";
@@ -76,6 +76,65 @@ export default function PipelinesPage() {
   const [tagsEnabled, setTagsEnabled] = useState(true);
   const [togglingDeals, setTogglingDeals] = useState(false);
   const [togglingTags, setTogglingTags] = useState(false);
+
+  // Search & Lead Capture Date Filter states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dateFilter, setDateFilter] = useState<"all" | "today" | "yesterday" | "week">("all");
+
+  const counts = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const startOfYesterday = startOfToday - 86400000;
+    const startOfWeek = startOfToday - 7 * 86400000;
+
+    let today = 0;
+    let yesterday = 0;
+    let week = 0;
+
+    for (const d of deals) {
+      if (!d.created_at) continue;
+      const t = new Date(d.created_at).getTime();
+      if (t >= startOfToday) today++;
+      if (t >= startOfYesterday && t < startOfToday) yesterday++;
+      if (t >= startOfWeek) week++;
+    }
+
+    return { all: deals.length, today, yesterday, week };
+  }, [deals]);
+
+  const filteredDeals = useMemo(() => {
+    let result = deals;
+
+    if (dateFilter !== "all") {
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const startOfYesterday = startOfToday - 86400000;
+      const startOfWeek = startOfToday - 7 * 86400000;
+
+      result = result.filter((d) => {
+        if (!d.created_at) return false;
+        const dealTime = new Date(d.created_at).getTime();
+        if (dateFilter === "today") return dealTime >= startOfToday;
+        if (dateFilter === "yesterday") return dealTime >= startOfYesterday && dealTime < startOfToday;
+        if (dateFilter === "week") return dealTime >= startOfWeek;
+        return true;
+      });
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter((d) => {
+        const titleMatch = d.title?.toLowerCase().includes(q);
+        const contactMatch =
+          d.contact?.name?.toLowerCase().includes(q) ||
+          d.contact?.phone?.includes(q);
+        const notesMatch = d.notes?.toLowerCase().includes(q);
+        return Boolean(titleMatch || contactMatch || notesMatch);
+      });
+    }
+
+    return result;
+  }, [deals, dateFilter, searchQuery]);
 
   useEffect(() => {
     fetch('/api/pipelines/ai-automation')
@@ -587,9 +646,97 @@ export default function PipelinesPage() {
       ) : (
         <>
           <PipelineAnalytics stages={stages} deals={deals} />
+
+          {/* Lead Search & Date Filter Bar */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-2.5 rounded-xl border border-border/80 bg-card/60 backdrop-blur-xs">
+            {/* Search Input */}
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search leads by name, phone, service..."
+                className="pl-9 h-9 border-border bg-background text-xs sm:text-sm text-foreground"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Lead Capture Date Filter Pills */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+              <button
+                type="button"
+                onClick={() => setDateFilter("all")}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                  dateFilter === "all"
+                    ? "bg-primary text-primary-foreground font-semibold shadow-xs"
+                    : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                <span>All Leads</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${dateFilter === "all" ? "bg-primary-foreground/20" : "bg-background"}`}>
+                  {counts.all}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDateFilter("today")}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                  dateFilter === "today"
+                    ? "bg-sky-600 text-white font-semibold shadow-xs"
+                    : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                <Calendar className="h-3 w-3" />
+                <span>Captured Today</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${dateFilter === "today" ? "bg-white/20 text-white" : "bg-background"}`}>
+                  {counts.today}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDateFilter("yesterday")}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                  dateFilter === "yesterday"
+                    ? "bg-sky-600 text-white font-semibold shadow-xs"
+                    : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                <span>Yesterday</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${dateFilter === "yesterday" ? "bg-white/20 text-white" : "bg-background"}`}>
+                  {counts.yesterday}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDateFilter("week")}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                  dateFilter === "week"
+                    ? "bg-sky-600 text-white font-semibold shadow-xs"
+                    : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                <span>Last 7 Days</span>
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${dateFilter === "week" ? "bg-white/20 text-white" : "bg-background"}`}>
+                  {counts.week}
+                </span>
+              </button>
+            </div>
+          </div>
+
           <PipelineBoard
             stages={stages}
-            deals={deals}
+            deals={filteredDeals}
             onDealMoved={handleDealMoved}
             onAddDeal={handleAddDeal}
             onEditDeal={handleEditDeal}
