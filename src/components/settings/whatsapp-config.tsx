@@ -744,9 +744,7 @@ export function WhatsAppConfig() {
         )}
 
         {/* WhatsApp Business Profile & Catalog Manager */}
-        {phoneNumberId && (
-          <WhatsAppBusinessProfileManager />
-        )}
+        <WhatsAppBusinessProfileManager />
 
         {/* API Credentials */}
         <Card>

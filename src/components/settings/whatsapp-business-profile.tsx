@@ -168,9 +168,7 @@ export function WhatsAppBusinessProfileManager() {
     );
   }
 
-  if (!configured) {
-    return null; // Will show once WhatsApp is connected
-  }
+  // Always render the card so the user can see it!
 
   return (
     <Card className="border border-border/70 shadow-sm overflow-hidden">
