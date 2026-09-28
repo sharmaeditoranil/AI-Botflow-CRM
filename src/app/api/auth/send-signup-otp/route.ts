@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendBrevoOtpEmail } from "@/lib/email/brevo";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 export async function POST(request: Request) {
   try {
@@ -20,6 +21,16 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: "Password must be at least 8 characters long." },
         { status: 400 }
+      );
+    }
+
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const rlKey = `otp:signup:${cleanEmail}:${ip}`;
+    const rl = checkRateLimit(rlKey, RATE_LIMITS.authOtp);
+    if (!rl.success) {
+      return NextResponse.json(
+        { error: "Too many signup attempts. Please wait 10 minutes before trying again." },
+        { status: 429 }
       );
     }
 

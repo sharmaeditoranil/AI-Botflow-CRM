@@ -58,6 +58,7 @@ vi.mock("./admin-client", () => {
       return { data: { steps_executed: [], status: "success" }, error: null };
     }
     if (table === "automation_steps") return { data: state.steps, error: null };
+    if (table === "automation_pending_executions") return { data: [], error: null };
     return { data: null, error: null };
   }
 
@@ -76,6 +77,7 @@ vi.mock("./admin-client", () => {
       upsert: (p: unknown) => ((ops.type = "upsert"), (ops.payload = p), b),
       eq: (k: string, v: unknown) => (ops.filters.push(["eq", k, v]), b),
       gte: () => b,
+      lte: () => b,
       is: () => b,
       order: () => b,
       limit: () => b,
@@ -104,7 +106,7 @@ vi.mock("./meta-send", () => ({
   engineSendInteractive: vi.fn(async () => ({ whatsapp_message_id: "m1" })),
 }));
 
-import { runAutomationsForTrigger, triggerMatches } from "./engine";
+import { runAutomationsForTrigger, triggerMatches, drainDuePendingExecutions } from "./engine";
 import type { Automation, KeywordMatchTriggerConfig } from "@/types";
 
 const ACCOUNT = "acct-1";
@@ -550,3 +552,11 @@ describe("triggerMatches — keyword_match", () => {
     expect(on(automation({ keywords: ["hi"], match_type: "word" }), "")).toBe(false);
   });
 });
+
+describe("drainDuePendingExecutions", () => {
+  it("gracefully drains when queue is empty", async () => {
+    const res = await drainDuePendingExecutions();
+    expect(res).toEqual({ processed: 0, errors: 0 });
+  });
+});
+

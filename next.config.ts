@@ -26,6 +26,8 @@ const SECURITY_HEADERS = [
   },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
+  { key: "X-XSS-Protection", value: "1; mode=block" },
+  { key: "X-DNS-Prefetch-Control", value: "on" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   {
     // Microphone is allowed for same-origin (`self`) so the inbox
@@ -68,6 +70,46 @@ const nextConfig: NextConfig = {
   // Docker image can run without node_modules or the Next CLI.
   // Harmless outside Docker: `next start` keeps working as before.
   output: "standalone",
+
+  // Security: Remove X-Powered-By: Next.js header
+  poweredByHeader: false,
+
+  // Speed: Enable Brotli / Gzip compression
+  compress: true,
+
+  reactStrictMode: true,
+
+  // Speed: Serve next-gen AVIF and WebP images with caching
+  images: {
+    formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 86400,
+    remotePatterns: [
+      { protocol: "https", hostname: "**.supabase.co" },
+      { protocol: "https", hostname: "**.fbcdn.net" },
+      { protocol: "https", hostname: "**.whatsapp.net" },
+    ],
+  },
+
+  // Speed: Tree-shake and split heavy libraries into smaller chunks
+  experimental: {
+    optimizePackageImports: [
+      "lucide-react",
+      "date-fns",
+      "recharts",
+      "@dnd-kit/core",
+      "@dnd-kit/sortable",
+      "@dnd-kit/utilities",
+      "@xyflow/react",
+    ],
+  },
+
+  // Security & Speed: Remove noisy console logs in production builds
+  compiler: {
+    removeConsole:
+      process.env.NODE_ENV === "production"
+        ? { exclude: ["error", "warn"] }
+        : false,
+  },
 
   /**
    * Cross-origin dev access (Next.js 16).

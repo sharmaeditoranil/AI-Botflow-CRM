@@ -289,7 +289,7 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
 
   for (const step of steps as AutomationStep[]) {
     // `wait` is the suspension point: enqueue and stop processing this
-    // scope. The cron endpoint will pick it up later.
+    // scope. The sweeper / cron endpoint or in-memory timer will pick it up later.
     if (step.step_type === 'wait') {
       const cfg = step.step_config as WaitStepConfig
       const ms = waitMs(cfg)
@@ -315,6 +315,12 @@ async function executeStepsFrom(args: ExecuteArgs): Promise<void> {
       })
       status = 'partial'
       await appendResults(args.logId, results, status, errorMessage)
+
+      // Auto-schedule an in-process wake-up if wait duration is <= 15 minutes
+      // so executions don't stall waiting for an external cron ping.
+      if (typeof setTimeout !== 'undefined' && ms <= 15 * 60 * 1000) {
+        scheduleWaitWakeup(ms)
+      }
       return
     }
 
@@ -781,20 +787,47 @@ async function resolveConversationId(args: ExecuteArgs): Promise<string> {
   const fromCtx = args.context.conversation_id
   if (fromCtx) return fromCtx
   if (!args.contactId) throw new Error('cannot resolve conversation: no contact')
-  const { data, error } = await supabaseAdmin()
+
+  const db = supabaseAdmin()
+  const { data, error } = await db
     .from('conversations')
     .select('id')
     .eq('account_id', args.automation.account_id)
     .eq('contact_id', args.contactId)
-    .maybeSingle()
+    .order('created_at', { ascending: false })
+    .limit(1)
+
   if (error) throw new Error(`conversation lookup failed: ${error.message}`)
-  if (!data?.id) {
-    const prefix = args.triggerEvent === 'tag_added'
-      ? 'tag_added automation cannot send'
-      : 'cannot send'
-    throw new Error(`${prefix}: contact has no existing conversation`)
+  const convId = Array.isArray(data) ? data[0]?.id : (data as any)?.id
+  if (convId) return convId as string
+
+  // Auto-heal: If conversation row doesn't exist yet, create it so outbound messages can deliver
+  const { data: contact } = await db
+    .from('contacts')
+    .select('id, user_id')
+    .eq('id', args.contactId)
+    .eq('account_id', args.automation.account_id)
+    .maybeSingle()
+
+  if (contact) {
+    const { data: newConv } = await db
+      .from('conversations')
+      .insert({
+        account_id: args.automation.account_id,
+        contact_id: args.contactId,
+        user_id: contact.user_id || args.automation.user_id,
+        status: 'open',
+        unread_count: 0,
+      })
+      .select('id')
+      .maybeSingle()
+    if (newConv?.id) return newConv.id as string
   }
-  return data.id as string
+
+  const prefix = args.triggerEvent === 'tag_added'
+    ? 'tag_added automation cannot send'
+    : 'cannot send'
+  throw new Error(`${prefix}: contact has no existing conversation`)
 }
 
 /** Letter, digit or underscore in any script — the "inside a word" test. */
@@ -1072,3 +1105,75 @@ async function markPending(id: string, status: 'done' | 'failed') {
     .update({ status })
     .eq('id', id)
 }
+
+function scheduleWaitWakeup(ms: number) {
+  // Add a small buffer (1000ms) to ensure run_at <= now() in the DB query
+  const delay = Math.max(1000, ms + 1000)
+  setTimeout(() => {
+    drainDuePendingExecutions().catch((err) => {
+      console.error('[automations] scheduled wait wakeup error:', err)
+    })
+  }, delay).unref?.()
+}
+
+/**
+ * Drain due `automation_pending_executions` rows.
+ * Sweeps all pending executions where `run_at <= now()`, claims them,
+ * and resumes each execution from the next step.
+ */
+export async function drainDuePendingExecutions(): Promise<{ processed: number; errors: number }> {
+  try {
+    const admin = supabaseAdmin()
+    const nowIso = new Date().toISOString()
+    const { data: due, error } = await admin
+      .from('automation_pending_executions')
+      .select('*')
+      .eq('status', 'pending')
+      .lte('run_at', nowIso)
+      .order('run_at', { ascending: true })
+      .limit(50)
+
+    if (error) {
+      console.error('[automations] drain: fetch failed', error.message || error)
+      return { processed: 0, errors: 1 }
+    }
+    if (!due || due.length === 0) return { processed: 0, errors: 0 }
+
+    let processed = 0
+    let errors = 0
+    for (const row of due) {
+      const { data: claim } = await admin
+        .from('automation_pending_executions')
+        .update({ status: 'running' })
+        .eq('id', row.id)
+        .eq('status', 'pending')
+        .select('id')
+        .maybeSingle()
+      if (!claim) continue
+
+      try {
+        await resumePendingExecution({
+          id: row.id as string,
+          automation_id: row.automation_id as string,
+          account_id: row.account_id as string,
+          user_id: row.user_id as string,
+          contact_id: (row.contact_id as string | null) ?? null,
+          log_id: (row.log_id as string | null) ?? null,
+          parent_step_id: (row.parent_step_id as string | null) ?? null,
+          branch: (row.branch as 'yes' | 'no' | null) ?? null,
+          next_step_position: row.next_step_position as number,
+          context: (row.context as AutomationContext) ?? {},
+        })
+        processed++
+      } catch (err) {
+        console.error('[automations] drain: failed to resume pending execution', row.id, err)
+        errors++
+      }
+    }
+    return { processed, errors }
+  } catch (globalErr) {
+    console.error('[automations] drainDuePendingExecutions error:', globalErr)
+    return { processed: 0, errors: 1 }
+  }
+}
+

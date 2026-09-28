@@ -14,7 +14,8 @@ import {
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe'
 import { reopenClosedConversation } from '@/lib/conversations/reopen'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
-import { runAutomationsForTrigger } from '@/lib/automations/engine'
+import { runAutomationsForTrigger, drainDuePendingExecutions } from '@/lib/automations/engine'
+import { startAutomationSweeper } from '@/lib/automations/sweeper'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
@@ -1031,6 +1032,11 @@ async function processMessage(
     content_type: contentType,
     text: contentText,
   })
+
+  startAutomationSweeper()
+  await drainDuePendingExecutions().catch((err) =>
+    console.error('[whatsapp-webhook] Opportunistic automation drain error:', err)
+  )
 }
 
 /**

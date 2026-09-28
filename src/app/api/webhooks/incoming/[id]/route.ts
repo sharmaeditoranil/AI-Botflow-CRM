@@ -14,8 +14,10 @@ import {
   extractLeadSummary,
   isLikelyTestPing,
 } from '@/lib/webhooks/incoming-trigger';
-import { executeAutomation } from '@/lib/automations/engine';
+import { executeAutomation, drainDuePendingExecutions } from '@/lib/automations/engine';
+import { startAutomationSweeper } from '@/lib/automations/sweeper';
 import { resolveConversationByPhone } from '@/lib/whatsapp/resolve-conversation';
+import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -220,6 +222,18 @@ async function executeIncomingWebhook(
   });
 
   console.log(`[Webhook ${method}] id:`, id, '| payload keys:', Object.keys(payload));
+
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  const rl = checkRateLimit(`webhook:${id}:${ip}`, RATE_LIMITS.incomingWebhook);
+  if (!rl.success) {
+    return NextResponse.json(
+      {
+        error: 'Too many requests received for this webhook. Please reduce request frequency.',
+        code: 'rate_limited',
+      },
+      { status: 429, headers: CORS_HEADERS }
+    );
+  }
 
   try {
     const { data: triggerCheck } = await admin
@@ -426,6 +440,10 @@ async function executeIncomingWebhook(
         },
       });
       console.log(`[Webhook ${method}] executeAutomation completed for automation:`, automation.id);
+      startAutomationSweeper();
+      drainDuePendingExecutions().catch((err) =>
+        console.error('[Webhook] Opportunistic automation drain error:', err)
+      );
     } catch (execErr: any) {
       console.error(`[Webhook ${method}] executeAutomation failed:`, execErr.message || execErr);
       return NextResponse.json(

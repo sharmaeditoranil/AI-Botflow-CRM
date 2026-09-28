@@ -173,6 +173,12 @@ export const RATE_LIMITS = {
    *  capping a stampede; excess inbounds simply don't get an auto-reply
    *  (they still land in the inbox for a human). */
   aiAutoReplyAccount: { limit: 30, windowMs: 60_000 },
+  /** Auth OTP send / resend (per email or IP). 5 per 10 minutes prevents
+   *  email flood / SMS credit drain and brute-force enumeration. */
+  authOtp: { limit: 5, windowMs: 10 * 60_000 },
+  /** Incoming webhooks from external sites (Elementor, Zapier, etc.).
+   *  120 requests/minute per webhook ID / IP bounds flooding/DDoS. */
+  incomingWebhook: { limit: 120, windowMs: 60_000 },
 } as const;
 
 /** Test-only helper. Clears the in-memory state so unit tests don't
