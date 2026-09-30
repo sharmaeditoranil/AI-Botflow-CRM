@@ -830,61 +830,7 @@ export function BillingPanel() {
                     <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                       Features Included:
                     </div>
-                    <ul className="space-y-2.5">
-                      <li className="flex items-start gap-2.5 text-muted-foreground">
-                        <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
-                        <span>
-                          <strong className="text-foreground">{p.max_contacts.toLocaleString('en-IN')}</strong> Contacts
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-2.5 text-muted-foreground">
-                        <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
-                        <span>
-                          <strong className="text-foreground">{p.max_broadcasts_monthly.toLocaleString('en-IN')}</strong> Monthly Broadcasts
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-2.5 text-muted-foreground">
-                        <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
-                        <span>
-                          <strong className="text-foreground">{p.max_team_members}</strong> Team Member Seats
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-2.5 text-muted-foreground">
-                        <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
-                        <span>
-                          <strong className="text-foreground">{p.max_automations}</strong> Automations & Flows
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-2.5">
-                        {p.ai_agents_enabled ? (
-                          <>
-                            <Check className="h-4 w-4 shrink-0 text-primary mt-0.5" />
-                            <span className="font-semibold text-foreground">
-                              AI Chatbot & Knowledge Base
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <X className="h-4 w-4 shrink-0 text-muted-foreground/40 mt-0.5" />
-                            <span className="text-muted-foreground/50 line-through">
-                              AI Chatbot & Knowledge Base
-                            </span>
-                          </>
-                        )}
-                      </li>
-                      <li className="flex items-start gap-2.5 text-muted-foreground">
-                        <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
-                        <span>
-                          {p.slug === 'enterprise' ? (
-                            <strong className="text-foreground">24/7 Dedicated Support & Custom API</strong>
-                          ) : isGrowth ? (
-                            <span>Priority Support & Social Integrations</span>
-                          ) : (
-                            <span>Standard WhatsApp Support</span>
-                          )}
-                        </span>
-                      </li>
-                    </ul>
+                    <PlanFeaturesList plan={p} />
                   </div>
                 </div>
 
@@ -1227,61 +1173,7 @@ export function BillingPanel() {
                         <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                           Plan Features:
                         </div>
-                        <ul className="space-y-2.5">
-                          <li className="flex items-start gap-2.5 text-muted-foreground">
-                            <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
-                            <span className="text-xs">
-                              <strong className="text-foreground">{p.max_contacts.toLocaleString('en-IN')}</strong> Contacts
-                            </span>
-                          </li>
-                          <li className="flex items-start gap-2.5 text-muted-foreground">
-                            <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
-                            <span className="text-xs">
-                              <strong className="text-foreground">{p.max_broadcasts_monthly.toLocaleString('en-IN')}</strong> Monthly Broadcasts
-                            </span>
-                          </li>
-                          <li className="flex items-start gap-2.5 text-muted-foreground">
-                            <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
-                            <span className="text-xs">
-                              <strong className="text-foreground">{p.max_team_members}</strong> Team Member Seats
-                            </span>
-                          </li>
-                          <li className="flex items-start gap-2.5 text-muted-foreground">
-                            <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
-                            <span className="text-xs">
-                              <strong className="text-foreground">{p.max_automations}</strong> Automations & Flows
-                            </span>
-                          </li>
-                          <li className="flex items-start gap-2.5">
-                            {p.ai_agents_enabled ? (
-                              <>
-                                <Check className="h-4 w-4 shrink-0 text-primary mt-0.5" />
-                                <span className="text-xs font-semibold text-foreground">
-                                  AI Chatbot & Knowledge Base
-                                </span>
-                              </>
-                            ) : (
-                              <>
-                                <X className="h-4 w-4 shrink-0 text-muted-foreground/40 mt-0.5" />
-                                <span className="text-xs text-muted-foreground/50 line-through">
-                                  AI Chatbot & Knowledge Base
-                                </span>
-                              </>
-                            )}
-                          </li>
-                          <li className="flex items-start gap-2.5 text-muted-foreground">
-                            <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
-                            <span className="text-xs">
-                              {p.slug === 'enterprise' ? (
-                                <strong className="text-foreground">24/7 Dedicated Support & VIP API</strong>
-                              ) : isGrowth ? (
-                                <span>Priority Support & Social Channels</span>
-                              ) : (
-                                <span>Standard WhatsApp Support</span>
-                              )}
-                            </span>
-                          </li>
-                        </ul>
+                        <PlanFeaturesList plan={p} />
                       </div>
                     </div>
 
@@ -1778,5 +1670,122 @@ export function BillingPanel() {
         </DialogContent>
       </Dialog>
     </section>
+  );
+}
+
+function PlanFeaturesList({ plan }: { plan: any }) {
+  const isGrowth = plan.slug === 'growth';
+  const isEnterprise = plan.slug === 'enterprise';
+
+  return (
+    <ul className="space-y-2.5 text-xs">
+      {/* Active Contacts */}
+      <li className="flex items-start gap-2.5 text-muted-foreground">
+        <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
+        <span>
+          <strong className="text-foreground">{plan.max_contacts?.toLocaleString('en-IN')}</strong> Active Contacts
+        </span>
+      </li>
+
+      {/* WhatsApp Cloud API */}
+      <li className="flex items-start gap-2.5 text-muted-foreground">
+        <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
+        <span>
+          <strong className="text-foreground">Official WhatsApp Cloud API</strong> (Team Inbox)
+        </span>
+      </li>
+
+      {/* Instagram & Facebook Social CRM */}
+      <li className="flex items-start gap-2.5">
+        {isGrowth || isEnterprise ? (
+          <>
+            <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
+            <span className="font-semibold text-foreground">
+              Instagram DM & Facebook Messenger CRM
+            </span>
+          </>
+        ) : (
+          <>
+            <X className="h-4 w-4 shrink-0 text-muted-foreground/40 mt-0.5" />
+            <span className="text-muted-foreground/50 line-through">
+              Instagram & Facebook Social CRM
+            </span>
+          </>
+        )}
+      </li>
+
+      {/* Google Business Profile Suite */}
+      <li className="flex items-start gap-2.5 text-muted-foreground">
+        <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
+        <span>
+          {isEnterprise ? (
+            <strong className="text-foreground">Full GMB Suite (Up to 5 Locations & AI Posts)</strong>
+          ) : isGrowth ? (
+            <span className="font-semibold text-foreground">
+              Full GMB Suite (AI Reviews + AI Posts + Magic QR)
+            </span>
+          ) : (
+            <span>GMB Magic QR Review Booster (1 Location)</span>
+          )}
+        </span>
+      </li>
+
+      {/* Monthly Broadcasts */}
+      <li className="flex items-start gap-2.5 text-muted-foreground">
+        <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
+        <span>
+          <strong className="text-foreground">{plan.max_broadcasts_monthly?.toLocaleString('en-IN')}</strong> Monthly Broadcasts
+        </span>
+      </li>
+
+      {/* Team Member Seats */}
+      <li className="flex items-start gap-2.5 text-muted-foreground">
+        <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
+        <span>
+          <strong className="text-foreground">{plan.max_team_members}</strong> Team Member Seats {isGrowth ? '(Round-Robin)' : ''}
+        </span>
+      </li>
+
+      {/* AI Agents & Knowledge Base */}
+      <li className="flex items-start gap-2.5">
+        {plan.ai_agents_enabled ? (
+          <>
+            <Check className="h-4 w-4 shrink-0 text-primary mt-0.5" />
+            <span className="font-semibold text-foreground">
+              Autonomous AI Agents (Gemini & OpenAI)
+            </span>
+          </>
+        ) : (
+          <>
+            <X className="h-4 w-4 shrink-0 text-muted-foreground/40 mt-0.5" />
+            <span className="text-muted-foreground/50 line-through">
+              Autonomous AI Agents & Knowledge Base
+            </span>
+          </>
+        )}
+      </li>
+
+      {/* Automations & Flows */}
+      <li className="flex items-start gap-2.5 text-muted-foreground">
+        <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
+        <span>
+          <strong className="text-foreground">{plan.max_automations}</strong> Chatbot Flows & Automations
+        </span>
+      </li>
+
+      {/* Support / API */}
+      <li className="flex items-start gap-2.5 text-muted-foreground">
+        <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
+        <span>
+          {isEnterprise ? (
+            <strong className="text-foreground">24/7 Dedicated Account Manager & REST API</strong>
+          ) : isGrowth ? (
+            <span>Priority WhatsApp & Email Support</span>
+          ) : (
+            <span>Standard WhatsApp Support</span>
+          )}
+        </span>
+      </li>
+    </ul>
   );
 }
