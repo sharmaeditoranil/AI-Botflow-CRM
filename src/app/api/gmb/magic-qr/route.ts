@@ -59,23 +59,41 @@ export async function GET(req: NextRequest) {
       .replace(/-+/g, "-")
       .slice(0, 30) || `biz-${profile.account_id.slice(0, 6)}`;
 
-    // If no config saved yet, return sensible defaults
-    const effectiveConfig = qrConfig || {
-      business_name: defaultBizName,
-      slug: defaultSlug,
-      google_review_url: activeLoc?.website || "",
-      place_id: activeLoc?.location_id || "",
-      min_star_for_google: 4,
-      whatsapp_alert_number: activeLoc?.phone || "",
-      heading: "How was your experience with us?",
-      subheading: "Your feedback helps us continuously improve our service.",
-      thank_you_title: "Thank you for your valuable feedback!",
-      thank_you_message: "Our team will review your feedback and get back to you shortly if needed.",
-      qr_scans_count: 0,
-      positive_redirects_count: 0,
-      negative_feedbacks_count: feedbacks?.length || 0,
-      is_active: true,
-    };
+    let effectiveConfig = qrConfig;
+
+    // If no config saved yet, auto-persist sensible defaults to DB so public slug works immediately
+    if (!effectiveConfig) {
+      const initialPayload = {
+        account_id: profile.account_id,
+        location_id: activeLoc?.id || null,
+        business_name: defaultBizName,
+        slug: defaultSlug,
+        google_review_url: activeLoc?.website || "",
+        place_id: activeLoc?.location_id || "",
+        min_star_for_google: 4,
+        whatsapp_alert_number: activeLoc?.phone || "",
+        heading: "Rate Your Experience with " + defaultBizName,
+        subheading: "Your honest feedback helps us serve you better.",
+        thank_you_title: "Thank you for your valuable feedback!",
+        thank_you_message: "Our team will review your feedback and get back to you shortly if needed.",
+        qr_scans_count: 0,
+        positive_redirects_count: 0,
+        negative_feedbacks_count: feedbacks?.length || 0,
+        is_active: true,
+      };
+
+      try {
+        const { data: created } = await adminDb
+          .from("google_business_magic_qr")
+          .upsert(initialPayload, { onConflict: "account_id,slug" })
+          .select()
+          .maybeSingle();
+
+        effectiveConfig = created || initialPayload;
+      } catch {
+        effectiveConfig = initialPayload;
+      }
+    }
 
     return NextResponse.json({
       config: effectiveConfig,

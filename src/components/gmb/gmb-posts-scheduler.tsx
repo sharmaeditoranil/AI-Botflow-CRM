@@ -42,10 +42,18 @@ interface GmbPostItem {
   created_at: string;
 }
 
-export function GmbPostsScheduler() {
+export function GmbPostsScheduler({
+  initialTab = "create",
+}: {
+  initialTab?: "create" | "scheduled" | "history";
+}) {
   const [posts, setPosts] = useState<GmbPostItem[]>([]);
   const [loadingPosts, setLoadingPosts] = useState(true);
-  const [activeTab, setActiveTab] = useState<"create" | "scheduled" | "history">("create");
+  const [activeTab, setActiveTab] = useState<"create" | "scheduled" | "history">(initialTab);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   // Generator form
   const [topicType, setTopicType] = useState<"OFFER" | "UPDATE" | "EVENT" | "FESTIVAL">("OFFER");

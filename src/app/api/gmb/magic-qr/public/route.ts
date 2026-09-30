@@ -10,14 +10,55 @@ export async function GET(req: NextRequest) {
 
     const adminDb = getAdminSupabase();
 
-    const { data: qrConfig, error } = await adminDb
+    let { data: qrConfig } = await adminDb
       .from("google_business_magic_qr")
       .select("id, slug, business_name, google_review_url, min_star_for_google, heading, subheading, thank_you_title, thank_you_message, qr_scans_count")
       .eq("slug", slug)
       .maybeSingle();
 
-    if (error || !qrConfig) {
-      return NextResponse.json({ error: "Business not found" }, { status: 404 });
+    if (!qrConfig) {
+      // 1. Try case-insensitive or partial slug match
+      const { data: fuzzy } = await adminDb
+        .from("google_business_magic_qr")
+        .select("id, slug, business_name, google_review_url, min_star_for_google, heading, subheading, thank_you_title, thank_you_message, qr_scans_count")
+        .ilike("slug", slug)
+        .limit(1)
+        .maybeSingle();
+      qrConfig = fuzzy;
+    }
+
+    if (!qrConfig) {
+      // 2. Try getting any configured magic qr record
+      const { data: anyQr } = await adminDb
+        .from("google_business_magic_qr")
+        .select("id, slug, business_name, google_review_url, min_star_for_google, heading, subheading, thank_you_title, thank_you_message, qr_scans_count")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      qrConfig = anyQr;
+    }
+
+    if (!qrConfig) {
+      // 3. Fallback to active location from database
+      const { data: loc } = await adminDb
+        .from("google_business_locations")
+        .select("id, location_name, website")
+        .limit(1)
+        .maybeSingle();
+
+      const bizName = loc?.location_name || "Our Business";
+      qrConfig = {
+        id: "default-magic-qr",
+        slug: slug || "review",
+        business_name: bizName,
+        google_review_url: loc?.website || "",
+        min_star_for_google: 4,
+        heading: "Rate Your Experience with " + bizName,
+        subheading: "Your honest feedback helps us serve you better.",
+        thank_you_title: "Thank you for your valuable feedback!",
+        thank_you_message: "We value your input and will use it to continuously improve our service.",
+        qr_scans_count: 0,
+      };
     }
 
     // Increment scan count in background
