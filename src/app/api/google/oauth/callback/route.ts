@@ -135,6 +135,7 @@ export async function GET(req: NextRequest) {
                 phone: loc.phoneNumbers?.primaryPhone || "",
                 website: loc.websiteUri || "",
                 primary_category: loc.categories?.primaryCategory?.displayName || "",
+                metadata: loc.metadata || {},
                 status: "active",
                 is_verified: true,
                 updated_at: new Date().toISOString(),

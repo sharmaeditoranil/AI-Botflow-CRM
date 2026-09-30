@@ -108,7 +108,7 @@ export async function fetchGoogleBusinessLocations(
 ): Promise<any[]> {
   try {
     // URL format: https://mybusinessbusinessinformation.googleapis.com/v1/{parent=accounts/*}/locations
-    const url = `https://mybusinessbusinessinformation.googleapis.com/v1/${accountName}/locations?readMask=name,title,storefrontAddress,phoneNumbers,websiteUri,categories,regularHours,storeCode`;
+    const url = `https://mybusinessbusinessinformation.googleapis.com/v1/${accountName}/locations?readMask=name,title,storefrontAddress,phoneNumbers,websiteUri,categories,regularHours,storeCode,metadata`;
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });

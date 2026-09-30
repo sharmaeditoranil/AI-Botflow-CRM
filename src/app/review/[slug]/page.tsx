@@ -104,12 +104,36 @@ export default function PublicReviewPage({
         // Fallback for browsers requiring explicit button click
       }
     }
+
+    // Auto-scroll to the action section on mobile smoothly
+    setTimeout(() => {
+      const targetEl = document.getElementById("generated-review-section");
+      if (targetEl) {
+        targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }, 100);
   };
 
-  // Computes genuine Google Maps review target URL (NEVER external website)
+  // Computes genuine Google Maps direct write-review target URL (NEVER external website)
   const getGoogleReviewUrl = () => {
     const rawUrl = data?.google_review_url?.trim() || "";
-    // Only use if it is an actual Google Maps / review URL
+
+    // 1. Direct write review formats (cid, placeid, /review, #lrd)
+    if (
+      rawUrl.includes("writereview") ||
+      rawUrl.includes("/review") ||
+      rawUrl.includes("cid=") ||
+      rawUrl.includes("lrd=")
+    ) {
+      return rawUrl;
+    }
+
+    // 2. If place_id is available
+    if (data?.place_id && !data.place_id.startsWith("loc_") && !data.place_id.startsWith("locations/")) {
+      return `https://search.google.com/local/writereview?placeid=${data.place_id}`;
+    }
+
+    // 3. If google maps / search url
     if (
       rawUrl.includes("google.com") ||
       rawUrl.includes("g.page") ||
@@ -118,13 +142,10 @@ export default function PublicReviewPage({
     ) {
       return rawUrl;
     }
-    // If place_id is available, direct write review link
-    if (data?.place_id && !data.place_id.startsWith("loc_") && !data.place_id.startsWith("locations/")) {
-      return `https://search.google.com/local/writereview?placeid=${data.place_id}`;
-    }
-    // Fallback: Direct Google Maps Place Search URL (Never external website)
+
+    // 4. Fallback: Direct Google Write-a-Review Box link by business name
     const biz = data?.business_name || "Local Business";
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(biz)}`;
+    return `https://search.google.com/local/writereview?query=${encodeURIComponent(biz)}`;
   };
 
   const handleCopyAndOpenGoogle = async () => {
@@ -141,7 +162,7 @@ export default function PublicReviewPage({
     // Open Google Maps review page
     setTimeout(() => {
       window.open(targetUrl, "_blank");
-    }, 350);
+    }, 300);
   };
 
   const handlePresetSelect = async (presetText: string) => {
@@ -150,6 +171,13 @@ export default function PublicReviewPage({
       await navigator.clipboard.writeText(presetText);
       setHasCopied(true);
     } catch {}
+
+    setTimeout(() => {
+      const targetEl = document.getElementById("generated-review-section");
+      if (targetEl) {
+        targetEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    }, 50);
   };
 
   const handleSubmitPrivateFeedback = async (e: React.FormEvent) => {
@@ -206,13 +234,13 @@ export default function PublicReviewPage({
   const isPositive = selectedRating !== null && selectedRating >= minStars;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-100 flex flex-col justify-between p-4 sm:p-8">
+    <div className="min-h-screen min-h-dvh bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-100 flex flex-col items-center justify-start p-3 sm:p-6 overflow-y-auto w-full">
       {/* Brand Header */}
-      <header className="max-w-md mx-auto w-full pt-4 pb-2 text-center">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold uppercase tracking-wider mb-3">
+      <header className="max-w-md mx-auto w-full pt-2 pb-1 text-center">
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold uppercase tracking-wider mb-2">
           <Sparkles className="size-3" /> Official Google Customer Review
         </div>
-        <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+        <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
           {data.business_name}
         </h1>
         <p className="text-xs text-slate-400 mt-1 flex items-center justify-center gap-1.5">
@@ -222,9 +250,9 @@ export default function PublicReviewPage({
       </header>
 
       {/* Main Review Card */}
-      <main className="max-w-md mx-auto w-full my-auto py-6">
+      <main className="max-w-md mx-auto w-full py-3 my-2 sm:my-auto">
         <Card className="bg-slate-900/90 border-slate-800 backdrop-blur-xl shadow-2xl overflow-hidden rounded-2xl">
-          <CardContent className="p-6 sm:p-8 text-center">
+          <CardContent className="p-4 sm:p-7 text-center">
             {feedbackSubmitted ? (
               // State 3: Private Feedback Submitted Successfully (1-3 Stars)
               <div className="space-y-4 py-4 animate-in fade-in zoom-in-95 duration-300">
@@ -247,12 +275,12 @@ export default function PublicReviewPage({
               </div>
             ) : isPositive ? (
               // State 2: 4-5 Stars: AUTOMATIC REVIEW READY + DIRECT GOOGLE MAPS REDIRECT
-              <div className="text-left space-y-4 animate-in fade-in zoom-in-95 duration-300">
+              <div id="generated-review-section" className="text-left space-y-3.5 animate-in fade-in zoom-in-95 duration-300 scroll-mt-6">
                 <div className="text-center space-y-1">
-                  <div className="inline-flex p-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 mb-1">
-                    <Star className="size-8 fill-amber-400 text-amber-400 animate-bounce" />
+                  <div className="inline-flex p-2 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 mb-0.5">
+                    <Star className="size-7 fill-amber-400 text-amber-400 animate-bounce" />
                   </div>
-                  <h3 className="text-xl font-extrabold text-white">
+                  <h3 className="text-lg sm:text-xl font-extrabold text-white">
                     Thank You for {selectedRating} Stars! 🎉
                   </h3>
                   <p className="text-xs text-amber-200/90 font-medium">
@@ -261,7 +289,7 @@ export default function PublicReviewPage({
                 </div>
 
                 {/* Pre-written Automatic Review Box */}
-                <div className="space-y-2.5 bg-slate-950 p-4 rounded-xl border border-amber-500/30 shadow-inner">
+                <div className="space-y-2 bg-slate-950 p-3.5 rounded-xl border border-amber-500/30 shadow-inner">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
                       <Sparkles className="size-3 text-amber-400" />
@@ -279,7 +307,7 @@ export default function PublicReviewPage({
                   />
 
                   {/* 1-Tap Quick Style Chips */}
-                  <div className="pt-2.5 border-t border-slate-800 flex flex-wrap gap-1.5">
+                  <div className="pt-2 border-t border-slate-800 flex flex-wrap gap-1.5">
                     <button
                       type="button"
                       onClick={() =>
@@ -316,34 +344,63 @@ export default function PublicReviewPage({
                   </div>
                 </div>
 
-                {/* Primary Action: Copy & Open Google Maps */}
+                {/* Primary Action: Copy & Open Google Maps Direct Review Box */}
                 <div className="space-y-2 pt-1">
                   <Button
                     type="button"
                     onClick={handleCopyAndOpenGoogle}
-                    className="w-full h-12 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-600 hover:to-amber-500 text-slate-950 font-black text-xs sm:text-sm rounded-xl shadow-lg shadow-amber-500/25 gap-2 transition-all active:scale-95"
+                    className="w-full h-12 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-600 hover:to-amber-500 text-slate-950 font-black text-xs sm:text-sm rounded-xl shadow-xl shadow-amber-500/25 gap-2 transition-all active:scale-95"
                   >
-                    {hasCopied ? (
-                      <>
-                        <Check className="size-4 text-slate-950" />
-                        Review Copied! Opening Google Profile...
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="size-4 text-slate-950" />
-                        Copy Review & Open Google Maps ➔
-                      </>
-                    )}
+                    <Sparkles className="size-4 text-slate-950" />
+                    <span>Paste on Google (Write Review Box) ➔</span>
                   </Button>
+
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(autoReviewText.trim());
+                          setHasCopied(true);
+                        } catch {}
+                      }}
+                      className="flex-1 h-9 bg-slate-900/80 hover:bg-slate-800 border-slate-700 text-slate-200 text-xs gap-1.5"
+                    >
+                      {hasCopied ? (
+                        <>
+                          <Check className="size-3.5 text-emerald-400" />
+                          Review Copied!
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="size-3.5" />
+                          Copy Review
+                        </>
+                      )}
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(getGoogleReviewUrl(), "_blank")}
+                      className="flex-1 h-9 bg-slate-900/80 hover:bg-slate-800 border-slate-700 text-slate-200 text-xs gap-1.5"
+                    >
+                      <ExternalLink className="size-3.5 text-primary" />
+                      Direct Open Box
+                    </Button>
+                  </div>
 
                   <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-200 text-xs space-y-1">
                     <p className="font-bold flex items-center gap-1.5 text-amber-300">
                       <Sparkles className="size-3.5 text-amber-400" />
-                      Kaise Post Karein (2 Easy Steps):
+                      Automatic Review Flow:
                     </p>
                     <p className="text-[11px] text-slate-300 leading-relaxed">
-                      1. Upar <strong>"Copy Review & Open Google Maps"</strong> dabayein.<br />
-                      2. Google Maps profile par 5-Star select karke <strong>Paste</strong> kar dein aur <strong>Post</strong> dabayein!
+                      1. Review text <strong>Copy ho chuka hai</strong>.<br />
+                      2. Upar <strong>"Paste on Google"</strong> button dabate hi direct <strong>Write a Review</strong> box open hoga, wahan bas <strong>Paste</strong> karein aur Post kar dein!
                     </p>
                   </div>
 
@@ -355,13 +412,9 @@ export default function PublicReviewPage({
                     >
                       Change Rating
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => window.open(getGoogleReviewUrl(), "_blank")}
-                      className="text-slate-400 hover:text-white underline inline-flex items-center gap-1"
-                    >
-                      Direct Google Maps <ExternalLink className="size-3 text-slate-500" />
-                    </button>
+                    <span className="text-slate-500 text-[10px]">
+                      Opens official Google review dialog
+                    </span>
                   </div>
                 </div>
               </div>

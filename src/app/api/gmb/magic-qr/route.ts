@@ -70,11 +70,17 @@ export async function GET(req: NextRequest) {
       );
     };
 
-    const buildGoogleMapsReviewUrl = (name: string, placeId?: string | null) => {
+    const buildGoogleMapsReviewUrl = (name: string, placeId?: string | null, metadata?: any) => {
+      if (metadata?.newReviewUri) {
+        return metadata.newReviewUri;
+      }
+      if (metadata?.placeId) {
+        return `https://search.google.com/local/writereview?placeid=${metadata.placeId}`;
+      }
       if (placeId && !placeId.startsWith("loc_") && !placeId.startsWith("locations/")) {
         return `https://search.google.com/local/writereview?placeid=${placeId}`;
       }
-      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}`;
+      return `https://search.google.com/local/writereview?query=${encodeURIComponent(name)}`;
     };
 
     let effectiveConfig = qrConfig;
@@ -86,7 +92,7 @@ export async function GET(req: NextRequest) {
         location_id: activeLoc?.id || null,
         business_name: defaultBizName,
         slug: defaultSlug,
-        google_review_url: buildGoogleMapsReviewUrl(defaultBizName, activeLoc?.location_id),
+        google_review_url: buildGoogleMapsReviewUrl(defaultBizName, activeLoc?.location_id, activeLoc?.metadata),
         place_id: activeLoc?.location_id || "",
         min_star_for_google: 4,
         whatsapp_alert_number: activeLoc?.phone || "",
@@ -115,7 +121,8 @@ export async function GET(req: NextRequest) {
       // Fix existing record if it was pointing to an external website
       const correctedGoogleUrl = buildGoogleMapsReviewUrl(
         effectiveConfig.business_name || defaultBizName,
-        effectiveConfig.place_id || activeLoc?.location_id
+        effectiveConfig.place_id || activeLoc?.location_id,
+        activeLoc?.metadata
       );
       effectiveConfig = {
         ...effectiveConfig,
