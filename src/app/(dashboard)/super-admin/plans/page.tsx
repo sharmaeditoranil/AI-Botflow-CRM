@@ -299,6 +299,19 @@ export default function SuperAdminPlansPage() {
             </DialogHeader>
 
             <form onSubmit={handleSavePlan} className="space-y-4 text-xs">
+              <div className="space-y-1">
+                <Label className="text-muted-foreground">Plan Description</Label>
+                <Input
+                  type="text"
+                  value={editingPlan.description || ''}
+                  onChange={(e) =>
+                    setEditingPlan({ ...editingPlan, description: e.target.value })
+                  }
+                  placeholder="e.g. Omnichannel CRM (WhatsApp, Instagram, FB) + AI Agents & Full GMB Suite"
+                  className="border-border bg-muted"
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-muted-foreground">Monthly Price (₹)</Label>
