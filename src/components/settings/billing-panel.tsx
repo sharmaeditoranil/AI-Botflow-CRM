@@ -75,6 +75,8 @@ export function BillingPanel() {
     transactions: any[];
   } | null>(null);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
+  const [txPage, setTxPage] = useState(1);
+  const [txPageSize, setTxPageSize] = useState(10);
 
   // Dedicated Subscription Checkout Modal with GST Option
   const [checkoutPlan, setCheckoutPlan] = useState<any | null>(null);
@@ -632,76 +634,175 @@ export function BillingPanel() {
             </div>
           </div>
 
-          {/* Transactions Passbook */}
+          {/* Transactions Passbook with Pagination */}
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                Recent Credit Activity & Passbook
-              </span>
-              <span className="text-[11px] text-muted-foreground">
-                Last {walletData?.transactions?.length || 0} transactions
-              </span>
-            </div>
+            {(() => {
+              const allTx = walletData?.transactions || [];
+              const totalTx = allTx.length;
+              const totalPages = Math.max(1, Math.ceil(totalTx / txPageSize));
+              const currentTx = allTx.slice((txPage - 1) * txPageSize, txPage * txPageSize);
 
-            {(!walletData?.transactions || walletData.transactions.length === 0) ? (
-              <div className="rounded-xl border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
-                No wallet transactions yet. Click <strong>&quot;Add Money&quot;</strong> to top-up your credits.
-              </div>
-            ) : (
-              <div className="rounded-xl border border-border/80 overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="border-b border-border/60 bg-muted/40 text-muted-foreground text-left">
-                      <th className="py-2.5 px-3">Date</th>
-                      <th className="py-2.5 px-3">Description</th>
-                      <th className="py-2.5 px-3 text-center">Type</th>
-                      <th className="py-2.5 px-3 text-right">Amount</th>
-                      <th className="py-2.5 px-3 text-right">Balance After</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/40">
-                    {walletData.transactions.map((tx: any) => {
-                      const isCredit = tx.type === 'credit';
-                      return (
-                        <tr key={tx.id} className="hover:bg-muted/20 transition-colors">
-                          <td className="py-2.5 px-3 text-muted-foreground whitespace-nowrap">
-                            {new Date(tx.created_at).toLocaleDateString('en-IN', {
-                              day: '2-digit',
-                              month: 'short',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </td>
-                          <td className="py-2.5 px-3 font-medium text-foreground">
-                            {tx.description}
-                          </td>
-                          <td className="py-2.5 px-3 text-center">
-                            <Badge
-                              variant="outline"
-                              className={`text-[10px] font-bold uppercase ${
-                                isCredit
-                                  ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-                                  : 'bg-muted text-muted-foreground border-border'
+              return (
+                <>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                    <div>
+                      <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                        Recent Credit Activity & Passbook
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {totalTx === 0
+                          ? 'No activity yet'
+                          : `Showing ${(txPage - 1) * txPageSize + 1}–${Math.min(txPage * txPageSize, totalTx)} of ${totalTx} transactions`}
+                      </span>
+                    </div>
+
+                    {totalTx > 10 && (
+                      <div className="flex items-center gap-2 self-start sm:self-auto text-xs">
+                        <span className="text-muted-foreground text-[11px]">Show:</span>
+                        <div className="flex items-center rounded-lg border border-border bg-muted/40 p-0.5">
+                          {[10, 20].map((size) => (
+                            <button
+                              key={size}
+                              type="button"
+                              onClick={() => {
+                                setTxPageSize(size);
+                                setTxPage(1);
+                              }}
+                              className={`px-2.5 py-0.5 rounded-md text-[11px] font-medium transition-colors ${
+                                txPageSize === size
+                                  ? 'bg-card text-foreground shadow-xs font-bold'
+                                  : 'text-muted-foreground hover:text-foreground'
                               }`}
                             >
-                              {tx.type}
-                            </Badge>
-                          </td>
-                          <td className={`py-2.5 px-3 text-right font-bold whitespace-nowrap ${
-                            isCredit ? 'text-emerald-500' : 'text-foreground'
-                          }`}>
-                            {isCredit ? '+' : '-'}₹{Number(tx.amount).toFixed(2)}
-                          </td>
-                          <td className="py-2.5 px-3 text-right text-muted-foreground whitespace-nowrap font-medium">
-                            ₹{Number(tx.balance_after).toFixed(2)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                              {size}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {totalTx === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
+                      No wallet transactions yet. Click <strong>&quot;Add Money&quot;</strong> to top-up your credits.
+                    </div>
+                  ) : (
+                    <>
+                      <div className="rounded-xl border border-border/80 overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="border-b border-border/60 bg-muted/40 text-muted-foreground text-left">
+                              <th className="py-2.5 px-3">Date</th>
+                              <th className="py-2.5 px-3">Description</th>
+                              <th className="py-2.5 px-3 text-center">Type</th>
+                              <th className="py-2.5 px-3 text-right">Amount</th>
+                              <th className="py-2.5 px-3 text-right">Balance After</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border/40">
+                            {currentTx.map((tx: any) => {
+                              const isCredit = tx.type === 'credit';
+                              return (
+                                <tr key={tx.id} className="hover:bg-muted/20 transition-colors">
+                                  <td className="py-2.5 px-3 text-muted-foreground whitespace-nowrap">
+                                    {new Date(tx.created_at).toLocaleDateString('en-IN', {
+                                      day: '2-digit',
+                                      month: 'short',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })}
+                                  </td>
+                                  <td className="py-2.5 px-3 font-medium text-foreground">
+                                    {tx.description}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-center">
+                                    <Badge
+                                      variant="outline"
+                                      className={`text-[10px] font-bold uppercase ${
+                                        isCredit
+                                          ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                                          : 'bg-muted text-muted-foreground border-border'
+                                      }`}
+                                    >
+                                      {tx.type}
+                                    </Badge>
+                                  </td>
+                                  <td className={`py-2.5 px-3 text-right font-bold whitespace-nowrap ${
+                                    isCredit ? 'text-emerald-500' : 'text-foreground'
+                                  }`}>
+                                    {isCredit ? '+' : '-'}₹{Number(tx.amount).toFixed(2)}
+                                  </td>
+                                  <td className="py-2.5 px-3 text-right text-muted-foreground whitespace-nowrap font-medium">
+                                    ₹{Number(tx.balance_after).toFixed(2)}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Pagination Bar with Page Next / Prev */}
+                      {totalPages > 1 && (
+                        <div className="mt-3 flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 text-xs">
+                          <div className="text-muted-foreground text-[11px]">
+                            Page <span className="font-semibold text-foreground">{txPage}</span> of{' '}
+                            <span className="font-semibold text-foreground">{totalPages}</span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setTxPage((p) => Math.max(1, p - 1))}
+                              disabled={txPage <= 1}
+                              className="h-8 text-xs px-3 rounded-lg border-border"
+                            >
+                              Previous
+                            </Button>
+
+                            <div className="flex items-center gap-1">
+                              {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                .filter((p) => p === 1 || p === totalPages || Math.abs(p - txPage) <= 1)
+                                .map((p, idx, arr) => (
+                                  <span key={p} className="flex items-center">
+                                    {idx > 0 && arr[idx - 1] !== p - 1 && (
+                                      <span className="px-1 text-muted-foreground text-xs">…</span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => setTxPage(p)}
+                                      className={`h-8 w-8 text-xs rounded-lg font-medium transition-colors ${
+                                        txPage === p
+                                          ? 'bg-primary text-primary-foreground font-bold shadow-xs'
+                                          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                      }`}
+                                    >
+                                      {p}
+                                    </button>
+                                  </span>
+                                ))}
+                            </div>
+
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setTxPage((p) => Math.min(totalPages, p + 1))}
+                              disabled={txPage >= totalPages}
+                              className="h-8 text-xs px-3 rounded-lg border-border"
+                            >
+                              Next
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </CardContent>
       </Card>

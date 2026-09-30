@@ -42,7 +42,7 @@ export async function GET() {
         .select('*')
         .eq('account_id', accountId)
         .order('created_at', { ascending: false })
-        .limit(30),
+        .limit(100),
     ]);
 
     // Only genuine Super Admin accounts bypass prepaid wallet deductions via direct Meta card
