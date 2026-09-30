@@ -44,16 +44,19 @@ export async function GET() {
       .eq("account_id", profile.account_id)
       .order("created_at", { ascending: true });
 
+    // Only resolve activeLocation if explicitly selected, or if strictly 1 single profile exists
     const activeLocation =
-      locations?.find((l) => (l.metadata as any)?.is_active) ||
-      locations?.[0] ||
-      null;
+      locations?.find((l) => (l.metadata as any)?.is_active === true) ||
+      (locations?.length === 1 && (locations[0].metadata as any)?.is_active !== false
+        ? locations[0]
+        : null);
 
     return NextResponse.json({
       googleAppConfigured,
       connected: !!googleAccount,
       account: googleAccount || null,
       locations: locations || [],
+      totalLocations: locations?.length || 0,
       activeLocation,
     });
   } catch (err: any) {

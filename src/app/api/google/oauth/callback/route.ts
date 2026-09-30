@@ -119,23 +119,57 @@ export async function GET(req: NextRequest) {
     }
 
     // 2. Fetch and save locations if available
+    let totalLocationsCount = 0;
     try {
       const gAccounts = await fetchGoogleBusinessAccounts(access_token);
       if (gAccounts && gAccounts.length > 0) {
+        // Check existing locations in DB to preserve any previously active selection
+        const { data: existingLocs } = await supabase
+          .from("google_business_locations")
+          .select("location_id, metadata")
+          .eq("account_id", accountId);
+
+        const existingActiveLocId = existingLocs?.find(
+          (l) => (l.metadata as any)?.is_active === true
+        )?.location_id;
+
         for (const gAcc of gAccounts) {
           const locations = await fetchGoogleBusinessLocations(access_token, gAcc.name);
           if (locations && locations.length > 0) {
             for (const loc of locations) {
+              totalLocationsCount++;
+              const locId = loc.name || `loc_${Date.now()}`;
+              const addrLines = loc.storefrontAddress?.addressLines || [];
+              const locality = loc.storefrontAddress?.locality || "";
+              const adminArea = loc.storefrontAddress?.administrativeArea || "";
+              const postalCode = loc.storefrontAddress?.postalCode || "";
+              const fullAddress = [
+                ...addrLines,
+                locality,
+                adminArea,
+                postalCode,
+              ]
+                .filter(Boolean)
+                .join(", ");
+
+              const wasActive = existingActiveLocId ? existingActiveLocId === locId : false;
+
               const locPayload = {
                 account_id: accountId,
                 google_account_id: savedAccount?.id || null,
-                location_id: loc.name || `loc_${Date.now()}`,
+                location_id: locId,
                 location_name: loc.title || "Business Location",
-                address: loc.storefrontAddress?.addressLines?.join(", ") || "",
+                address: fullAddress || loc.storefrontAddress?.addressLines?.join(", ") || "",
                 phone: loc.phoneNumbers?.primaryPhone || "",
                 website: loc.websiteUri || "",
                 primary_category: loc.categories?.primaryCategory?.displayName || "",
-                metadata: loc.metadata || {},
+                metadata: {
+                  ...(loc.metadata || {}),
+                  storeCode: loc.storeCode || null,
+                  locality,
+                  adminArea,
+                  is_active: wasActive,
+                },
                 status: "active",
                 is_verified: true,
                 updated_at: new Date().toISOString(),
@@ -150,6 +184,10 @@ export async function GET(req: NextRequest) {
       }
     } catch (locErr) {
       console.warn("[Google OAuth Callback] Non-fatal error while syncing locations:", locErr);
+    }
+
+    if (totalLocationsCount > 0) {
+      return NextResponse.redirect(`${computedOrigin}/gmb?select_profile=true&connected=true`);
     }
 
     return NextResponse.redirect(`${computedOrigin}/gmb?success=connected`);

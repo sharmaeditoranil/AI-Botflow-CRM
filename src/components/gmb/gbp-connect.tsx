@@ -25,6 +25,7 @@ import {
   HelpCircle,
   Layers,
 } from "lucide-react";
+import { GmbSelectProfileModal } from "./gmb-select-profile-modal";
 
 export interface GmbLocation {
   id: string;
@@ -43,6 +44,8 @@ export function GbpConnect() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [googleAppConfigured, setGoogleAppConfigured] = useState(true);
+  const [totalLocationsCount, setTotalLocationsCount] = useState<number>(0);
+  const [isSelectModalOpen, setIsSelectModalOpen] = useState(false);
 
   // Single dedicated location for this account
   const [location, setLocation] = useState<GmbLocation | null>(null);
@@ -63,6 +66,7 @@ export function GbpConnect() {
 
       if (data) {
         setGoogleAppConfigured(data.googleAppConfigured ?? true);
+        setTotalLocationsCount(data.totalLocations || data.locations?.length || 0);
         if (data.connected) {
           setIsConnected(true);
           setConnectedEmail(data.account?.email || "Google Connected");
@@ -72,7 +76,7 @@ export function GbpConnect() {
         }
 
         // 1 Account = 1 Single Primary Location
-        const primary = data.activeLocation || data.locations?.[0] || null;
+        const primary = data.activeLocation || (data.locations?.length === 1 ? data.locations[0] : null);
         if (primary) {
           setLocation(primary);
           setStoreName(primary.location_name || "");
@@ -230,6 +234,20 @@ export function GbpConnect() {
                 <Button
                   size="sm"
                   variant="outline"
+                  onClick={() => setIsSelectModalOpen(true)}
+                  className="text-xs font-bold h-9 rounded-xl border-amber-500/40 bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 hover:text-amber-400 gap-1.5 shadow-xs"
+                >
+                  <Layers className="size-3.5" />
+                  <span>Change Business Profile</span>
+                  {totalLocationsCount > 1 && (
+                    <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px] bg-background/80 text-foreground font-mono">
+                      {totalLocationsCount}
+                    </Badge>
+                  )}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
                   onClick={handleSyncWithGoogle}
                   disabled={isSyncing}
                   className="text-xs font-semibold h-9 rounded-xl border-border"
@@ -273,6 +291,30 @@ export function GbpConnect() {
           </div>
         )}
       </div>
+
+      {/* Action Banner if multiple profiles connected but none selected */}
+      {isConnected && !location && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 rounded-3xl bg-amber-500/10 border border-amber-500/30 text-foreground animate-in fade-in">
+          <div className="flex items-start sm:items-center gap-3">
+            <AlertCircle className="size-5 text-amber-500 shrink-0 mt-0.5 sm:mt-0" />
+            <div>
+              <p className="text-xs font-bold text-amber-500">Action Required: Select Google Business Profile</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {totalLocationsCount > 0
+                  ? `Your Google Account has ${totalLocationsCount} business profiles. Please choose which profile to sync with AiBotFlow.`
+                  : "Please select which Google Business Profile should be actively connected to AiBotFlow."}
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => setIsSelectModalOpen(true)}
+            className="text-xs font-bold rounded-xl h-9 px-5 bg-amber-500 hover:bg-amber-600 text-slate-950 shrink-0 shadow-sm"
+          >
+            <Layers className="size-3.5 mr-1.5" /> Select Profile Now
+          </Button>
+        </div>
+      )}
 
       {/* Profile Details Form & Overview */}
       <Card className="rounded-3xl border-border/70 shadow-sm overflow-hidden">
@@ -424,6 +466,22 @@ export function GbpConnect() {
           </form>
         </CardContent>
       </Card>
+
+      {/* Select Business Profile Modal */}
+      <GmbSelectProfileModal
+        open={isSelectModalOpen}
+        onOpenChange={setIsSelectModalOpen}
+        activeLocationId={location?.id}
+        onProfileSelected={(newLoc) => {
+          setLocation(newLoc as any);
+          setStoreName(newLoc.location_name || "");
+          setCategory(newLoc.primary_category || "Local Business");
+          setPhone(newLoc.phone || "");
+          setAddress(newLoc.address || "");
+          setWebsite(newLoc.website || "");
+          loadConfig();
+        }}
+      />
     </div>
   );
 }

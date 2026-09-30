@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getAdminSupabase } from "@/lib/auth/super-admin";
+import {
+  getGooglePlatformCredentials,
+  refreshGoogleAccessToken,
+  fetchGoogleBusinessAccounts,
+  fetchGoogleBusinessLocations,
+} from "@/lib/google/gbp-api";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const supabase = await createClient();
     const {
@@ -25,6 +31,109 @@ export async function GET() {
     }
 
     const adminDb = getAdminSupabase();
+    const shouldRefresh = req.nextUrl.searchParams.get("refresh") === "true";
+
+    if (shouldRefresh) {
+      // 1. Get Google account
+      const { data: gAccount } = await adminDb
+        .from("google_business_accounts")
+        .select("*")
+        .eq("account_id", profile.account_id)
+        .maybeSingle();
+
+      if (gAccount) {
+        let accessToken = gAccount.access_token;
+        const expiresAt = gAccount.token_expires_at
+          ? new Date(gAccount.token_expires_at).getTime()
+          : 0;
+        const isExpired = Date.now() > expiresAt - 60000;
+
+        if (isExpired && gAccount.refresh_token) {
+          const credentials = await getGooglePlatformCredentials();
+          const refreshed = await refreshGoogleAccessToken(gAccount.refresh_token, credentials);
+          if (refreshed) {
+            accessToken = refreshed.accessToken;
+            await adminDb
+              .from("google_business_accounts")
+              .update({
+                access_token: accessToken,
+                token_expires_at: new Date(Date.now() + refreshed.expiresIn * 1000).toISOString(),
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", gAccount.id);
+          }
+        }
+
+        // Fetch fresh accounts & locations from Google
+        if (accessToken) {
+          try {
+            const gAccounts = await fetchGoogleBusinessAccounts(accessToken);
+            if (gAccounts && gAccounts.length > 0) {
+              const { data: currentLocs } = await adminDb
+                .from("google_business_locations")
+                .select("location_id, metadata")
+                .eq("account_id", profile.account_id);
+
+              const activeLocId = currentLocs?.find(
+                (l) => (l.metadata as any)?.is_active === true
+              )?.location_id;
+
+              for (const gAcc of gAccounts) {
+                const locations = await fetchGoogleBusinessLocations(accessToken, gAcc.name);
+                if (locations && locations.length > 0) {
+                  for (const loc of locations) {
+                    const locId = loc.name || `loc_${Date.now()}`;
+                    const addrLines = loc.storefrontAddress?.addressLines || [];
+                    const locality = loc.storefrontAddress?.locality || "";
+                    const adminArea = loc.storefrontAddress?.administrativeArea || "";
+                    const postalCode = loc.storefrontAddress?.postalCode || "";
+                    const fullAddress = [
+                      ...addrLines,
+                      locality,
+                      adminArea,
+                      postalCode,
+                    ]
+                      .filter(Boolean)
+                      .join(", ");
+
+                    const wasActive = activeLocId ? activeLocId === locId : false;
+
+                    await adminDb
+                      .from("google_business_locations")
+                      .upsert(
+                        {
+                          account_id: profile.account_id,
+                          google_account_id: gAccount.id,
+                          location_id: locId,
+                          location_name: loc.title || "Business Location",
+                          address:
+                            fullAddress || loc.storefrontAddress?.addressLines?.join(", ") || "",
+                          phone: loc.phoneNumbers?.primaryPhone || "",
+                          website: loc.websiteUri || "",
+                          primary_category: loc.categories?.primaryCategory?.displayName || "",
+                          metadata: {
+                            ...(loc.metadata || {}),
+                            storeCode: loc.storeCode || null,
+                            locality,
+                            adminArea,
+                            is_active: wasActive,
+                          },
+                          status: "active",
+                          is_verified: true,
+                          updated_at: new Date().toISOString(),
+                        },
+                        { onConflict: "account_id,location_id" }
+                      );
+                  }
+                }
+              }
+            }
+          } catch (fetchErr) {
+            console.warn("[GMB Locations] Error refreshing from Google:", fetchErr);
+          }
+        }
+      }
+    }
 
     const { data: locations, error: locError } = await adminDb
       .from("google_business_locations")
