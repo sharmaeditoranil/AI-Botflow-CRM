@@ -120,7 +120,10 @@ export async function POST() {
 
           // Fetch reviews for this location
           if (loc.name) {
-            const reviews = await fetchGoogleBusinessReviews(accessToken, loc.name);
+            const parentName = loc.name.startsWith("accounts/")
+              ? loc.name
+              : `${gAcc.name}/${loc.name}`;
+            const reviews = await fetchGoogleBusinessReviews(accessToken, parentName, gAcc.name);
             if (reviews && reviews.length > 0) {
               for (const rev of reviews) {
                 const starMap: Record<string, number> = {

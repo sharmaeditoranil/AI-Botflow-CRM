@@ -127,6 +127,7 @@ export async function fetchGoogleBusinessLocations(
 }
 
 /**
+/**
  * Post a review reply to Google Business Profile API.
  */
 export async function postReviewReplyToGoogle(
@@ -136,7 +137,8 @@ export async function postReviewReplyToGoogle(
   replyComment: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const url = `https://mybusiness.googleapis.com/v4/${parentLocationName}/reviews/${reviewId}/reply`;
+    const cleanParent = parentLocationName.replace(/^\/+/, "");
+    const url = `https://mybusiness.googleapis.com/v4/${cleanParent}/reviews/${reviewId}/reply`;
     const res = await fetch(url, {
       method: "PUT",
       headers: {
@@ -162,16 +164,23 @@ export async function postReviewReplyToGoogle(
  */
 export async function fetchGoogleBusinessReviews(
   accessToken: string,
-  parentLocationName: string // e.g. "accounts/123/locations/456"
+  parentLocationName: string, // e.g. "accounts/123/locations/456"
+  accountName?: string
 ): Promise<any[]> {
   try {
-    const url = `https://mybusiness.googleapis.com/v4/${parentLocationName}/reviews?pageSize=50`;
+    let cleanParent = parentLocationName.replace(/^\/+/, "");
+    if (!cleanParent.startsWith("accounts/") && accountName) {
+      const cleanAcc = accountName.replace(/^\/+/, "");
+      cleanParent = `${cleanAcc}/${cleanParent}`;
+    }
+    const url = `https://mybusiness.googleapis.com/v4/${cleanParent}/reviews?pageSize=50`;
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 
     if (!res.ok) {
-      console.warn("[GBP] fetch reviews warning:", await res.text());
+      const errText = await res.text();
+      console.warn("[GBP] fetch reviews warning for", cleanParent, ":", errText);
       return [];
     }
 

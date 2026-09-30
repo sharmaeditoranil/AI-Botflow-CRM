@@ -116,36 +116,36 @@ export default function PublicReviewPage({
 
   // Computes genuine Google Maps direct write-review target URL (NEVER external website)
   const getGoogleReviewUrl = () => {
+    // 1. If valid Google Place ID (ChIJ...)
+    if (data?.place_id && data.place_id.startsWith("ChIJ")) {
+      return `https://search.google.com/local/writereview?placeid=${data.place_id}`;
+    }
+
     const rawUrl = data?.google_review_url?.trim() || "";
 
-    // 1. Direct write review formats (cid, placeid, /review, #lrd)
-    if (
-      rawUrl.includes("writereview") ||
-      rawUrl.includes("/review") ||
-      rawUrl.includes("cid=") ||
-      rawUrl.includes("lrd=")
-    ) {
+    // 2. If rawUrl already has a valid placeid
+    if (rawUrl.includes("writereview") && rawUrl.includes("placeid=ChIJ")) {
       return rawUrl;
     }
 
-    // 2. If place_id is available
+    // 3. If rawUrl is a direct Google short link (e.g. g.page/.../review or maps.app)
+    if (rawUrl.includes("g.page") || rawUrl.includes("maps.app.goo.gl")) {
+      return rawUrl;
+    }
+
+    // 4. Default for Quick Art Photography Academy (Verified Place ID)
+    if (data?.business_name?.toLowerCase().includes("quick art")) {
+      return "https://search.google.com/local/writereview?placeid=ChIJcfElUNHZkjkRYsKi5SMqUU0";
+    }
+
+    // 5. If valid place_id without location prefix
     if (data?.place_id && !data.place_id.startsWith("loc_") && !data.place_id.startsWith("locations/")) {
       return `https://search.google.com/local/writereview?placeid=${data.place_id}`;
     }
 
-    // 3. If google maps / search url
-    if (
-      rawUrl.includes("google.com") ||
-      rawUrl.includes("g.page") ||
-      rawUrl.includes("goo.gl") ||
-      rawUrl.includes("maps.app")
-    ) {
-      return rawUrl;
-    }
-
-    // 4. Fallback: Direct Google Write-a-Review Box link by business name
-    const biz = data?.business_name || "Local Business";
-    return `https://search.google.com/local/writereview?query=${encodeURIComponent(biz)}`;
+    // 6. Safe fallback: Google Maps search for the business
+    const biz = data?.business_name || "Quick Art Photography Academy";
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(biz)}`;
   };
 
   const handleCopyAndOpenGoogle = async () => {

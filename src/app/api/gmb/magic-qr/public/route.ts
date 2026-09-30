@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
         id: "default-magic-qr",
         slug: slug || "review",
         business_name: bizName,
-        google_review_url: `https://search.google.com/local/writereview?query=${encodeURIComponent(bizName)}`,
+        google_review_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(bizName)}`,
         min_star_for_google: 4,
         heading: "Rate Your Experience with " + bizName,
         subheading: "Your honest feedback helps us serve you better.",
@@ -71,8 +71,8 @@ export async function GET(req: NextRequest) {
         qr_scans_count: 0,
       };
     } else if (!isGoogleReviewUrl(qrConfig.google_review_url)) {
-      // Replace external website redirect with direct Google Review Box URL
-      qrConfig.google_review_url = `https://search.google.com/local/writereview?query=${encodeURIComponent(qrConfig.business_name || "Business")}`;
+      // Replace external website redirect with Google Maps search URL
+      qrConfig.google_review_url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(qrConfig.business_name || "Business")}`;
     }
 
     // Increment scan count in background

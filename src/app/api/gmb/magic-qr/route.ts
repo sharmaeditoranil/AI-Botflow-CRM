@@ -74,13 +74,13 @@ export async function GET(req: NextRequest) {
       if (metadata?.newReviewUri) {
         return metadata.newReviewUri;
       }
-      if (metadata?.placeId) {
-        return `https://search.google.com/local/writereview?placeid=${metadata.placeId}`;
-      }
-      if (placeId && !placeId.startsWith("loc_") && !placeId.startsWith("locations/")) {
+      if (placeId && placeId.startsWith("ChIJ")) {
         return `https://search.google.com/local/writereview?placeid=${placeId}`;
       }
-      return `https://search.google.com/local/writereview?query=${encodeURIComponent(name)}`;
+      if (metadata?.placeId && String(metadata.placeId).startsWith("ChIJ")) {
+        return `https://search.google.com/local/writereview?placeid=${metadata.placeId}`;
+      }
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}`;
     };
 
     let effectiveConfig = qrConfig;
