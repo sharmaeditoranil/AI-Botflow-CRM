@@ -116,35 +116,36 @@ export default function PublicReviewPage({
 
   // Computes genuine Google Maps direct write-review target URL (NEVER external website)
   const getGoogleReviewUrl = () => {
-    // 1. If valid Google Place ID (ChIJ...)
-    if (data?.place_id && data.place_id.startsWith("ChIJ")) {
-      return `https://search.google.com/local/writereview?placeid=${data.place_id}`;
+    let rawUrl = data?.google_review_url?.trim() || "";
+
+    // Self-healing: if legacy invalid Place ID was stored, replace with true verified Place ID
+    if (rawUrl.includes("ChIJcfElUNHZkjkRYsKi5SMqUU0")) {
+      rawUrl = rawUrl.replace("ChIJcfElUNHZkjkRYsKi5SMqUU0", "ChIJ21Snmq__kjkRO2E53cOvm54");
     }
 
-    const rawUrl = data?.google_review_url?.trim() || "";
-
-    // 2. If rawUrl already has a valid placeid
-    if (rawUrl.includes("writereview") && rawUrl.includes("placeid=ChIJ")) {
+    // 1. If valid Google review URL or shortlink from Google Business API
+    if (
+      rawUrl &&
+      (rawUrl.includes("writereview") ||
+        rawUrl.includes("g.page") ||
+        rawUrl.includes("maps.app.goo.gl") ||
+        rawUrl.includes("maps.google.com") ||
+        rawUrl.includes("google.com/maps"))
+    ) {
       return rawUrl;
     }
 
-    // 3. If rawUrl is a direct Google short link (e.g. g.page/.../review or maps.app)
-    if (rawUrl.includes("g.page") || rawUrl.includes("maps.app.goo.gl")) {
-      return rawUrl;
+    // 2. If valid Google Place ID (ChIJ...)
+    let placeId = data?.place_id?.trim();
+    if (placeId === "ChIJcfElUNHZkjkRYsKi5SMqUU0") {
+      placeId = "ChIJ21Snmq__kjkRO2E53cOvm54";
+    }
+    if (placeId && placeId.startsWith("ChIJ")) {
+      return `https://search.google.com/local/writereview?placeid=${placeId}`;
     }
 
-    // 4. Default for Quick Art Photography Academy (Verified Place ID)
-    if (data?.business_name?.toLowerCase().includes("quick art")) {
-      return "https://search.google.com/local/writereview?placeid=ChIJcfElUNHZkjkRYsKi5SMqUU0";
-    }
-
-    // 5. If valid place_id without location prefix
-    if (data?.place_id && !data.place_id.startsWith("loc_") && !data.place_id.startsWith("locations/")) {
-      return `https://search.google.com/local/writereview?placeid=${data.place_id}`;
-    }
-
-    // 6. Safe fallback: Google Maps search for the business
-    const biz = data?.business_name || "Quick Art Photography Academy";
+    // 3. Guaranteed universal fallback: search business name on Google Maps
+    const biz = data?.business_name || "Google Business";
     return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(biz)}`;
   };
 
@@ -159,10 +160,8 @@ export default function PublicReviewPage({
     setHasCopied(true);
 
     const targetUrl = getGoogleReviewUrl();
-    // Open Google Maps review page
-    setTimeout(() => {
-      window.open(targetUrl, "_blank");
-    }, 300);
+    // Direct open without timeout prevents mobile popup blockers from intercepting
+    window.open(targetUrl, "_blank");
   };
 
   const handlePresetSelect = async (presetText: string) => {

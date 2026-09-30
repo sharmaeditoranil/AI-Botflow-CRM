@@ -10,17 +10,21 @@ export async function GET(req: NextRequest) {
 
     const adminDb = getAdminSupabase();
 
-    let { data: qrConfig } = await adminDb
+    let qrConfig: any = null;
+
+    const { data: exactQr } = await adminDb
       .from("google_business_magic_qr")
-      .select("id, slug, business_name, google_review_url, min_star_for_google, heading, subheading, thank_you_title, thank_you_message, qr_scans_count")
+      .select("id, account_id, location_id, slug, business_name, google_review_url, place_id, min_star_for_google, heading, subheading, thank_you_title, thank_you_message, qr_scans_count")
       .eq("slug", slug)
       .maybeSingle();
+
+    qrConfig = exactQr;
 
     if (!qrConfig) {
       // 1. Try case-insensitive or partial slug match
       const { data: fuzzy } = await adminDb
         .from("google_business_magic_qr")
-        .select("id, slug, business_name, google_review_url, min_star_for_google, heading, subheading, thank_you_title, thank_you_message, qr_scans_count")
+        .select("id, account_id, location_id, slug, business_name, google_review_url, place_id, min_star_for_google, heading, subheading, thank_you_title, thank_you_message, qr_scans_count")
         .ilike("slug", slug)
         .limit(1)
         .maybeSingle();
@@ -31,11 +35,43 @@ export async function GET(req: NextRequest) {
       // 2. Try getting any configured magic qr record
       const { data: anyQr } = await adminDb
         .from("google_business_magic_qr")
-        .select("id, slug, business_name, google_review_url, min_star_for_google, heading, subheading, thank_you_title, thank_you_message, qr_scans_count")
+        .select("id, account_id, location_id, slug, business_name, google_review_url, place_id, min_star_for_google, heading, subheading, thank_you_title, thank_you_message, qr_scans_count")
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
       qrConfig = anyQr;
+    }
+
+    // Dynamic resolution from linked active location in google_business_locations
+    if (qrConfig?.account_id) {
+      const { data: locs } = await adminDb
+        .from("google_business_locations")
+        .select("id, location_name, address, metadata")
+        .eq("account_id", qrConfig.account_id);
+
+      const activeLoc =
+        (qrConfig.location_id ? locs?.find((l) => l.id === qrConfig.location_id) : null) ||
+        locs?.find((l) => (l.metadata as any)?.is_active === true) ||
+        locs?.[0];
+
+      if (activeLoc) {
+        const meta = (activeLoc.metadata || {}) as any;
+        const verifiedPlaceId = meta.placeId;
+        const officialReviewUri = meta.newReviewUri;
+
+        if (officialReviewUri) {
+          qrConfig.google_review_url = officialReviewUri;
+        } else if (verifiedPlaceId && String(verifiedPlaceId).startsWith("ChIJ")) {
+          qrConfig.google_review_url = `https://search.google.com/local/writereview?placeid=${verifiedPlaceId}`;
+          qrConfig.place_id = verifiedPlaceId;
+        } else if (meta.mapsUri) {
+          qrConfig.google_review_url = meta.mapsUri;
+        }
+
+        if (verifiedPlaceId) {
+          qrConfig.place_id = verifiedPlaceId;
+        }
+      }
     }
 
     const isGoogleReviewUrl = (url?: string | null) => {
@@ -53,16 +89,24 @@ export async function GET(req: NextRequest) {
       // 3. Fallback to active location from database
       const { data: loc } = await adminDb
         .from("google_business_locations")
-        .select("id, location_name, website")
+        .select("id, location_name, address, metadata")
         .limit(1)
         .maybeSingle();
 
       const bizName = loc?.location_name || "Our Business";
+      const meta = (loc?.metadata || {}) as any;
+      const reviewUrl =
+        meta.newReviewUri ||
+        (meta.placeId ? `https://search.google.com/local/writereview?placeid=${meta.placeId}` : null) ||
+        meta.mapsUri ||
+        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(bizName)}`;
+
       qrConfig = {
         id: "default-magic-qr",
         slug: slug || "review",
         business_name: bizName,
-        google_review_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(bizName)}`,
+        google_review_url: reviewUrl,
+        place_id: meta.placeId || "",
         min_star_for_google: 4,
         heading: "Rate Your Experience with " + bizName,
         subheading: "Your honest feedback helps us serve you better.",
@@ -71,8 +115,9 @@ export async function GET(req: NextRequest) {
         qr_scans_count: 0,
       };
     } else if (!isGoogleReviewUrl(qrConfig.google_review_url)) {
-      // Replace external website redirect with Google Maps search URL
-      qrConfig.google_review_url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(qrConfig.business_name || "Business")}`;
+      qrConfig.google_review_url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+        qrConfig.business_name || "Business"
+      )}`;
     }
 
     // Increment scan count in background

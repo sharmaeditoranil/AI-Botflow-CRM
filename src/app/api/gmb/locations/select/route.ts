@@ -64,7 +64,19 @@ export async function POST(req: NextRequest) {
         .eq("id", loc.id);
     }
 
-    // Synchronize Magic QR business name
+    // Synchronize Magic QR with the selected profile
+    const targetPlaceId =
+      target.metadata?.placeId ||
+      (target.location_id?.startsWith("ChIJ") ? target.location_id : null);
+
+    const targetReviewUrl =
+      target.metadata?.newReviewUri ||
+      (targetPlaceId ? `https://search.google.com/local/writereview?placeid=${targetPlaceId}` : null) ||
+      target.metadata?.mapsUri ||
+      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+        target.location_name + " " + (target.address || "")
+      )}`;
+
     const { data: existingQr } = await adminDb
       .from("google_business_magic_qr")
       .select("id")
@@ -76,6 +88,9 @@ export async function POST(req: NextRequest) {
         .from("google_business_magic_qr")
         .update({
           business_name: target.location_name,
+          location_id: target.id,
+          place_id: targetPlaceId || target.location_id,
+          google_review_url: targetReviewUrl,
           updated_at: new Date().toISOString(),
         })
         .eq("id", existingQr.id);
