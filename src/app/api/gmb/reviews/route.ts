@@ -39,197 +39,84 @@ export async function GET(req: NextRequest) {
       console.warn("[GMB Reviews] Database fetch notice:", revError.message);
     }
 
-    // If no reviews exist yet, seed authentic reviews matching active storefront
-    if (!reviews || reviews.length === 0) {
-      const { data: locations } = await adminDb
-        .from("google_business_locations")
-        .select("*")
-        .eq("account_id", profile.account_id);
-
-      const activeLoc =
-        locations?.find((l) => (l.metadata as any)?.is_active) ||
-        locations?.[0] ||
-        null;
-
-      const locName = activeLoc?.location_name || "Quick Art Photography Academy";
-      const locId = activeLoc?.id || null;
-
-      let defaultSeed: any[] = [];
-
-      if (locName.includes("Studio") || locName.includes("Color Lab")) {
-        defaultSeed = [
-          {
-            account_id: profile.account_id,
-            location_id: locId,
-            google_review_id: `gmb_rev_s1_${Date.now()}`,
-            reviewer_name: "Ravi Ranjan",
-            reviewer_photo_url: null,
-            star_rating: 5,
-            comment: "Sharma Photo Studio provides top-notch wedding photography and HD album printing! Sheet quality is awesome and delivered right on time.",
-            reply_text: "Thank you Ravi ji! It was a pleasure capturing your special wedding moments. We always aim for perfection!",
-            reply_timestamp: new Date(Date.now() - 3600000).toISOString(),
-            review_timestamp: new Date(Date.now() - 7200000).toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            account_id: profile.account_id,
-            location_id: locId,
-            google_review_id: `gmb_rev_s2_${Date.now() + 1}`,
-            reviewer_name: "Sunita Kumari",
-            reviewer_photo_url: null,
-            star_rating: 5,
-            comment: "Very fast passport photo and framing service. High quality photo prints and clean color lab output in minutes.",
-            reply_text: null,
-            review_timestamp: new Date(Date.now() - 86400000).toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            account_id: profile.account_id,
-            location_id: locId,
-            google_review_id: `gmb_rev_s3_${Date.now() + 2}`,
-            reviewer_name: "Vikas Singh",
-            reviewer_photo_url: null,
-            star_rating: 5,
-            comment: "Booked them for my brother's wedding shoot and candid video. Cinematic video editing and photobook design are outstanding!",
-            reply_text: null,
-            review_timestamp: new Date(Date.now() - 172800000).toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            account_id: profile.account_id,
-            location_id: locId,
-            google_review_id: `gmb_rev_s4_${Date.now() + 3}`,
-            reviewer_name: "Deepak Kumar",
-            reviewer_photo_url: null,
-            star_rating: 4,
-            comment: "Best color lab in the area. Color grading and matte finish prints are sharp. Great customer handling.",
-            reply_text: null,
-            review_timestamp: new Date(Date.now() - 345600000).toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-        ];
-      } else if (locName.includes("Print") || locName.includes("Press")) {
-        defaultSeed = [
-          {
-            account_id: profile.account_id,
-            location_id: locId,
-            google_review_id: `gmb_rev_p1_${Date.now()}`,
-            reviewer_name: "Abhishek Roy",
-            reviewer_photo_url: null,
-            star_rating: 5,
-            comment: "Premium quality digital printing and urgent banner press. Crisp colors, sharp typography, and super quick turnaround.",
-            reply_text: "Thank you Abhishek! We pride ourselves on fast turnaround and top-notch print accuracy.",
-            reply_timestamp: new Date(Date.now() - 3600000).toISOString(),
-            review_timestamp: new Date(Date.now() - 7200000).toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            account_id: profile.account_id,
-            location_id: locId,
-            google_review_id: `gmb_rev_p2_${Date.now() + 1}`,
-            reviewer_name: "Kavita Sharma",
-            reviewer_photo_url: null,
-            star_rating: 5,
-            comment: "Got custom wedding invitation card boxes and visiting cards printed. Excellent paper texture and gold foil embossing.",
-            reply_text: null,
-            review_timestamp: new Date(Date.now() - 86400000).toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            account_id: profile.account_id,
-            location_id: locId,
-            google_review_id: `gmb_rev_p3_${Date.now() + 2}`,
-            reviewer_name: "Pawan Kumar",
-            reviewer_photo_url: null,
-            star_rating: 5,
-            comment: "Best printing press for commercial flyers and product catalog printing at wholesale rates.",
-            reply_text: null,
-            review_timestamp: new Date(Date.now() - 172800000).toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            account_id: profile.account_id,
-            location_id: locId,
-            google_review_id: `gmb_rev_p4_${Date.now() + 3}`,
-            reviewer_name: "Sanjay Prasad",
-            reviewer_photo_url: null,
-            star_rating: 4,
-            comment: "Very reliable digital press service. Quality is always consistent across bulk prints.",
-            reply_text: null,
-            review_timestamp: new Date(Date.now() - 345600000).toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-        ];
-      } else {
-        // Photography Academy
-        defaultSeed = [
-          {
-            account_id: profile.account_id,
-            location_id: locId,
-            google_review_id: `gmb_rev_a1_${Date.now()}`,
-            reviewer_name: "Rajesh Kumar",
-            reviewer_photo_url: null,
-            star_rating: 5,
-            comment: "Best photography academy in the region! The mentorship on lighting, camera composition, and studio setup is top notch. Practical photoshoot training really boosted my confidence.",
-            reply_text: "Thank you Rajesh ji! Proud to see your photography skills growing so fast. Keep capturing great frames!",
-            reply_timestamp: new Date(Date.now() - 3600000).toISOString(),
-            review_timestamp: new Date(Date.now() - 7200000).toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            account_id: profile.account_id,
-            location_id: locId,
-            google_review_id: `gmb_rev_a2_${Date.now() + 1}`,
-            reviewer_name: "Amit Gupta",
-            reviewer_photo_url: null,
-            star_rating: 5,
-            comment: "Highly recommended for professional photography courses and wedding shoots. Very humble teachers and great practical studio sessions.",
-            reply_text: null,
-            review_timestamp: new Date(Date.now() - 86400000).toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            account_id: profile.account_id,
-            location_id: locId,
-            google_review_id: `gmb_rev_a3_${Date.now() + 2}`,
-            reviewer_name: "Pooja Verma",
-            reviewer_photo_url: null,
-            star_rating: 5,
-            comment: "Enrolled for the professional diploma batch. Faculty teaches with high-end DSLR cameras and practical studio strobe lights. Value for money!",
-            reply_text: null,
-            review_timestamp: new Date(Date.now() - 172800000).toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            account_id: profile.account_id,
-            location_id: locId,
-            google_review_id: `gmb_rev_a4_${Date.now() + 3}`,
-            reviewer_name: "Manoj Tiwari",
-            reviewer_photo_url: null,
-            star_rating: 4,
-            comment: "Great photography studio setup and framing quality. Excellent guidance for beginner photographers.",
-            reply_text: null,
-            review_timestamp: new Date(Date.now() - 345600000).toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-        ];
-      }
-
-      const { data: inserted } = await adminDb
-        .from("google_business_reviews")
-        .insert(defaultSeed)
-        .select("*");
-
-      if (inserted && inserted.length > 0) {
-        reviews = inserted;
-      }
-    }
-
     return NextResponse.json({
       reviews: reviews || [],
     });
   } catch (err: any) {
     console.error("[GMB Reviews API] error:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("account_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (!profile?.account_id) {
+      return NextResponse.json({ error: "No active account" }, { status: 400 });
+    }
+
+    const searchParams = req.nextUrl.searchParams;
+    const reviewId = searchParams.get("id");
+    const clearDummy = searchParams.get("clearDummy") === "true";
+    const clearAll = searchParams.get("clearAll") === "true";
+
+    const adminDb = getAdminSupabase();
+
+    if (clearDummy) {
+      // Delete any test/dummy reviews seeded previously
+      await adminDb
+        .from("google_business_reviews")
+        .delete()
+        .eq("account_id", profile.account_id)
+        .like("google_review_id", "gmb_rev_%");
+
+      return NextResponse.json({ success: true, message: "Cleared dummy seed reviews" });
+    }
+
+    if (clearAll) {
+      await adminDb
+        .from("google_business_reviews")
+        .delete()
+        .eq("account_id", profile.account_id);
+
+      return NextResponse.json({ success: true, message: "Cleared all reviews" });
+    }
+
+    if (reviewId) {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reviewId);
+      let query = adminDb
+        .from("google_business_reviews")
+        .delete()
+        .eq("account_id", profile.account_id);
+
+      if (isUuid) {
+        query = query.eq("id", reviewId);
+      } else {
+        query = query.eq("google_review_id", reviewId);
+      }
+
+      await query;
+      return NextResponse.json({ success: true, message: "Review deleted" });
+    }
+
+    return NextResponse.json({ error: "Missing parameter" }, { status: 400 });
+  } catch (err: any) {
+    console.error("[GMB Reviews DELETE] error:", err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

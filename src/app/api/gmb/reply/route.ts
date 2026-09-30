@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { reviewId, replyText, locationId } = body;
+    const { reviewId, replyText, locationId, googleReviewId } = body;
 
     if (!reviewId || !replyText?.trim()) {
       return NextResponse.json({ error: "Missing reviewId or replyText" }, { status: 400 });
@@ -38,7 +38,32 @@ export async function POST(req: NextRequest) {
 
     const adminDb = getAdminSupabase();
 
-    // Check if we have active Google Business Account tokens
+    // 1. Find the target review row (support either UUID or google_review_id)
+    let existingReview: any = null;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reviewId);
+
+    if (isUuid) {
+      const { data } = await adminDb
+        .from("google_business_reviews")
+        .select("*")
+        .eq("account_id", profile.account_id)
+        .eq("id", reviewId)
+        .maybeSingle();
+      existingReview = data;
+    }
+
+    if (!existingReview) {
+      const targetGid = googleReviewId || reviewId;
+      const { data } = await adminDb
+        .from("google_business_reviews")
+        .select("*")
+        .eq("account_id", profile.account_id)
+        .eq("google_review_id", targetGid)
+        .maybeSingle();
+      existingReview = data;
+    }
+
+    // 2. Check if we have active Google Business Account tokens
     const { data: googleAccount } = await adminDb
       .from("google_business_accounts")
       .select("*")
@@ -46,6 +71,9 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
 
     let postedToGoogle = false;
+    let googleError: string | null = null;
+    const resolvedLocId = locationId || existingReview?.location_id;
+    const resolvedReviewId = existingReview?.google_review_id || googleReviewId || reviewId;
 
     if (googleAccount?.access_token) {
       let accessToken = googleAccount.access_token;
@@ -71,33 +99,50 @@ export async function POST(req: NextRequest) {
       }
 
       // Try posting to Google API if location is valid
-      if (locationId) {
-        const gRes = await postReviewReplyToGoogle(accessToken, locationId, reviewId, replyText);
+      if (resolvedLocId && resolvedReviewId && !resolvedReviewId.startsWith("manual_") && !resolvedReviewId.startsWith("gmb_rev_")) {
+        const gRes = await postReviewReplyToGoogle(accessToken, resolvedLocId, resolvedReviewId, replyText.trim());
         if (gRes.success) {
           postedToGoogle = true;
         } else {
+          googleError = gRes.error || "Google GBP API write error";
           console.warn("[GMB Reply API] Google API response notice:", gRes.error);
         }
       }
     }
 
-    // Save reply to database
+    // 3. Save reply to database
     const now = new Date().toISOString();
-    await adminDb
+    let updateQuery = adminDb
       .from("google_business_reviews")
       .update({
-        reply_text: replyText,
+        reply_text: replyText.trim(),
         reply_timestamp: now,
         is_replied: true,
         updated_at: now,
       })
-      .eq("account_id", profile.account_id)
-      .eq("google_review_id", reviewId);
+      .eq("account_id", profile.account_id);
+
+    if (existingReview?.id) {
+      updateQuery = updateQuery.eq("id", existingReview.id);
+    } else if (isUuid) {
+      updateQuery = updateQuery.eq("id", reviewId);
+    } else {
+      updateQuery = updateQuery.eq("google_review_id", reviewId);
+    }
+
+    const { data: updatedData, error: saveErr } = await updateQuery.select().maybeSingle();
+
+    if (saveErr) {
+      console.error("[GMB Reply API] Database save error:", saveErr);
+      return NextResponse.json({ error: "Failed to save reply in database: " + saveErr.message }, { status: 500 });
+    }
 
     return NextResponse.json({
       success: true,
       postedToGoogle,
-      replyText,
+      googleError,
+      review: updatedData || existingReview,
+      replyText: replyText.trim(),
       replyTimestamp: now,
     });
   } catch (err: any) {

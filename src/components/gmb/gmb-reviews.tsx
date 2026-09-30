@@ -26,10 +26,14 @@ import {
   Building2,
   Plus,
   X,
+  Trash2,
+  Copy,
 } from "lucide-react";
 
 interface ReviewItem {
   id: string;
+  google_review_id?: string;
+  location_id?: string;
   name: string;
   rating: number;
   date: string;
@@ -39,49 +43,11 @@ interface ReviewItem {
   replyText?: string;
 }
 
-const INITIAL_REVIEWS: ReviewItem[] = [
-  {
-    id: "rev-1",
-    name: "Rajesh Kumar",
-    rating: 5,
-    date: "2 hours ago",
-    comment: "Best photography academy in the region! The mentorship on lighting, camera composition, and studio setup is top notch. Practical photoshoot training really boosted my confidence.",
-    sentiment: "positive",
-    replied: true,
-    replyText: "Thank you Rajesh ji! Proud to see your photography skills growing so fast. Keep capturing great frames!",
-  },
-  {
-    id: "rev-2",
-    name: "Amit Gupta",
-    rating: 5,
-    date: "1 day ago",
-    comment: "Highly recommended for professional photography courses and wedding shoots. Very humble teachers and great practical studio sessions.",
-    sentiment: "positive",
-    replied: false,
-  },
-  {
-    id: "rev-3",
-    name: "Pooja Verma",
-    rating: 5,
-    date: "3 days ago",
-    comment: "Enrolled for the professional diploma batch. Faculty teaches with high-end DSLR cameras and practical studio strobe lights. Value for money!",
-    sentiment: "positive",
-    replied: false,
-  },
-  {
-    id: "rev-4",
-    name: "Manoj Tiwari",
-    rating: 4,
-    date: "5 days ago",
-    comment: "Great photography studio setup and framing quality. Excellent guidance for beginner photographers.",
-    sentiment: "positive",
-    replied: false,
-  },
-];
-
 export function GmbReviews() {
-  const [reviews, setReviews] = useState<ReviewItem[]>(INITIAL_REVIEWS);
+  const [reviews, setReviews] = useState<ReviewItem[]>([]);
   const [activeLocationName, setActiveLocationName] = useState<string | null>(null);
+  const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
+  const [activeLocationWebsite, setActiveLocationWebsite] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const [selectedRatingFilter, setSelectedRatingFilter] = useState<number | "all">("all");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState<"all" | "unreplied" | "replied">("all");
@@ -103,7 +69,11 @@ export function GmbReviews() {
       const cfg = await cfgRes.json();
       if (cfg?.locations && cfg.locations.length > 0) {
         const active = cfg.locations.find((l: any) => l.metadata?.is_active) || cfg.locations[0];
-        if (active) setActiveLocationName(active.location_name);
+        if (active) {
+          setActiveLocationName(active.location_name);
+          setActiveLocationId(active.id || null);
+          setActiveLocationWebsite(active.website || null);
+        }
       }
 
       const revRes = await fetch("/api/gmb/reviews");
@@ -111,6 +81,8 @@ export function GmbReviews() {
       if (revData?.reviews && revData.reviews.length > 0) {
         const mapped: ReviewItem[] = revData.reviews.map((r: any) => ({
           id: r.id || r.google_review_id || r.review_id,
+          google_review_id: r.google_review_id,
+          location_id: r.location_id,
           name: r.reviewer_name || "Google User",
           rating: r.star_rating || 5,
           date: r.review_timestamp ? new Date(r.review_timestamp).toLocaleDateString() : "Recently",
@@ -120,6 +92,8 @@ export function GmbReviews() {
           replyText: r.reply_text || r.review_reply || undefined,
         }));
         setReviews(mapped);
+      } else {
+        setReviews([]);
       }
     } catch (err) {
       console.error("Error loading reviews:", err);
@@ -195,29 +169,56 @@ export function GmbReviews() {
       return;
     }
 
+    const review = reviews.find((r) => r.id === id);
+
     try {
       const res = await fetch("/api/gmb/reply", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reviewId: id, replyText: text }),
+        body: JSON.stringify({
+          reviewId: id,
+          googleReviewId: review?.google_review_id,
+          locationId: review?.location_id || activeLocationId,
+          replyText: text.trim(),
+        }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
         setReviews((prev) =>
           prev.map((r) =>
-            r.id === id ? { ...r, replied: true, replyText: text } : r
+            r.id === id ? { ...r, replied: true, replyText: text.trim() } : r
           )
         );
-        toast.success(
-          data.postedToGoogle
-            ? "Reply published live on Google Maps via Google API!"
-            : "Reply saved in CRM and synced with Google Business Profile."
-        );
+        if (data.postedToGoogle) {
+          toast.success("Reply published live on Google Maps via Google API!");
+        } else {
+          toast.success("Reply saved in CRM! You can also paste it on Google Maps.");
+        }
       } else {
         toast.error(data.error || "Failed to post reply.");
       }
     } catch (err: any) {
       toast.error(err.message || "Network error posting reply.");
+    }
+  };
+
+  const [isClearingDummy, setIsClearingDummy] = useState(false);
+  const handleClearDummyReviews = async () => {
+    if (!confirm("Are you sure you want to delete all test/dummy reviews?")) return;
+    try {
+      setIsClearingDummy(true);
+      const res = await fetch("/api/gmb/reviews?clearDummy=true", { method: "DELETE" });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        toast.success("Cleared all dummy seed reviews!");
+        await loadData();
+      } else {
+        toast.error(data.error || "Failed to clear dummy reviews");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error clearing dummy reviews");
+    } finally {
+      setIsClearingDummy(false);
     }
   };
 
@@ -237,6 +238,7 @@ export function GmbReviews() {
           reviewer_name: newRevName.trim(),
           star_rating: Number(newRevRating),
           comment: newRevComment.trim(),
+          location_id: activeLocationId,
         }),
       });
 
@@ -267,33 +269,43 @@ export function GmbReviews() {
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground font-medium">Storefront:</span>
               <span className="text-sm font-bold text-foreground">
-                {activeLocationName || "Quick Art Photography Academy"}
+                {activeLocationName || "Connected Profile"}
               </span>
               <Badge variant="outline" className="text-[10px] text-emerald-400 border-emerald-500/30 bg-emerald-500/10">
-                Connected
+                Active Storefront
               </Badge>
             </div>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              Google API application review in progress — You can manage reviews and generate instant AI replies right now.
+              Review Management Suite — AI Replies, Sentiment Tracking & Live Sync.
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleClearDummyReviews}
+            disabled={isClearingDummy}
+            className="rounded-xl text-xs text-rose-500 border-rose-500/30 hover:bg-rose-500/10 hover:text-rose-600 h-8"
+          >
+            <Trash2 className="size-3 mr-1" />
+            {isClearingDummy ? "Clearing..." : "Clear Dummy Reviews"}
+          </Button>
           <Button
             size="sm"
             onClick={() => setShowAddReview(!showAddReview)}
-            className="rounded-xl text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+            className="rounded-xl text-xs bg-primary text-primary-foreground hover:bg-primary/90 h-8"
           >
             <Plus className="size-3.5 mr-1" />
-            {showAddReview ? "Cancel" : "+ Add Customer Review"}
+            {showAddReview ? "Cancel" : "+ Add Real Review"}
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={handleSyncReviews}
             disabled={isSyncing}
-            className="rounded-xl text-xs border-border text-foreground hover:bg-muted"
+            className="rounded-xl text-xs border-border text-foreground hover:bg-muted h-8"
           >
             <RefreshCw className={`size-3.5 mr-1.5 ${isSyncing ? "animate-spin" : ""}`} />
             {isSyncing ? "Syncing..." : "Sync from Google"}
@@ -649,7 +661,27 @@ export function GmbReviews() {
                       className="text-xs rounded-xl bg-background"
                     />
 
-                    <div className="flex justify-end">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        type="button"
+                        disabled={!activeReplyTexts[rev.id]?.trim()}
+                        onClick={() => {
+                          const replyStr = activeReplyTexts[rev.id]?.trim();
+                          if (replyStr) {
+                            navigator.clipboard.writeText(replyStr);
+                            toast.success("AI reply copied to clipboard! Opening Google...");
+                          }
+                          const targetUrl =
+                            activeLocationWebsite ||
+                            `https://www.google.com/search?q=${encodeURIComponent(activeLocationName || "My Business")}+reviews`;
+                          window.open(targetUrl, "_blank");
+                        }}
+                        className="rounded-xl text-xs h-8 gap-1.5"
+                      >
+                        <Copy className="size-3 text-primary" /> Copy & Open Maps
+                      </Button>
                       <Button
                         size="sm"
                         disabled={!activeReplyTexts[rev.id]?.trim()}
