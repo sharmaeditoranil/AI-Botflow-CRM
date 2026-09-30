@@ -59,6 +59,24 @@ export async function GET(req: NextRequest) {
       .replace(/-+/g, "-")
       .slice(0, 30) || `biz-${profile.account_id.slice(0, 6)}`;
 
+    const isGoogleReviewUrl = (url?: string | null) => {
+      if (!url) return false;
+      const lower = url.toLowerCase();
+      return (
+        lower.includes("google.com") ||
+        lower.includes("g.page") ||
+        lower.includes("goo.gl") ||
+        lower.includes("maps.app")
+      );
+    };
+
+    const buildGoogleMapsReviewUrl = (name: string, placeId?: string | null) => {
+      if (placeId && !placeId.startsWith("loc_") && !placeId.startsWith("locations/")) {
+        return `https://search.google.com/local/writereview?placeid=${placeId}`;
+      }
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(name)}`;
+    };
+
     let effectiveConfig = qrConfig;
 
     // If no config saved yet, auto-persist sensible defaults to DB so public slug works immediately
@@ -68,7 +86,7 @@ export async function GET(req: NextRequest) {
         location_id: activeLoc?.id || null,
         business_name: defaultBizName,
         slug: defaultSlug,
-        google_review_url: activeLoc?.website || "",
+        google_review_url: buildGoogleMapsReviewUrl(defaultBizName, activeLoc?.location_id),
         place_id: activeLoc?.location_id || "",
         min_star_for_google: 4,
         whatsapp_alert_number: activeLoc?.phone || "",
@@ -93,6 +111,23 @@ export async function GET(req: NextRequest) {
       } catch {
         effectiveConfig = initialPayload;
       }
+    } else if (!isGoogleReviewUrl(effectiveConfig.google_review_url)) {
+      // Fix existing record if it was pointing to an external website
+      const correctedGoogleUrl = buildGoogleMapsReviewUrl(
+        effectiveConfig.business_name || defaultBizName,
+        effectiveConfig.place_id || activeLoc?.location_id
+      );
+      effectiveConfig = {
+        ...effectiveConfig,
+        google_review_url: correctedGoogleUrl,
+      };
+
+      // Update in background
+      adminDb
+        .from("google_business_magic_qr")
+        .update({ google_review_url: correctedGoogleUrl, updated_at: new Date().toISOString() })
+        .eq("id", effectiveConfig.id)
+        .then(() => {});
     }
 
     return NextResponse.json({

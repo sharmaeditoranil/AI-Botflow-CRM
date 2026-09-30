@@ -38,6 +38,17 @@ export async function GET(req: NextRequest) {
       qrConfig = anyQr;
     }
 
+    const isGoogleReviewUrl = (url?: string | null) => {
+      if (!url) return false;
+      const lower = url.toLowerCase();
+      return (
+        lower.includes("google.com") ||
+        lower.includes("g.page") ||
+        lower.includes("goo.gl") ||
+        lower.includes("maps.app")
+      );
+    };
+
     if (!qrConfig) {
       // 3. Fallback to active location from database
       const { data: loc } = await adminDb
@@ -51,7 +62,7 @@ export async function GET(req: NextRequest) {
         id: "default-magic-qr",
         slug: slug || "review",
         business_name: bizName,
-        google_review_url: loc?.website || "",
+        google_review_url: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(bizName)}`,
         min_star_for_google: 4,
         heading: "Rate Your Experience with " + bizName,
         subheading: "Your honest feedback helps us serve you better.",
@@ -59,6 +70,9 @@ export async function GET(req: NextRequest) {
         thank_you_message: "We value your input and will use it to continuously improve our service.",
         qr_scans_count: 0,
       };
+    } else if (!isGoogleReviewUrl(qrConfig.google_review_url)) {
+      // Replace external website redirect with Google Maps search link
+      qrConfig.google_review_url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(qrConfig.business_name || "Business")}`;
     }
 
     // Increment scan count in background

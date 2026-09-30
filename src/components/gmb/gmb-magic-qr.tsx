@@ -586,14 +586,49 @@ export function GmbMagicQr() {
                     Where 4 & 5 star customers will be redirected
                   </span>
                 </Label>
-                <Input
-                  value={googleReviewUrl}
-                  onChange={(e) => setGoogleReviewUrl(e.target.value)}
-                  placeholder="e.g. https://search.google.com/local/writereview?placeid=ChIJ... or https://g.page/r/.../review"
-                  className="text-xs font-mono h-9"
-                />
+                <div className="flex gap-2">
+                  <Input
+                    value={googleReviewUrl}
+                    onChange={(e) => setGoogleReviewUrl(e.target.value)}
+                    placeholder="e.g. https://search.google.com/local/writereview?placeid=... or https://g.page/r/.../review"
+                    className="text-xs font-mono h-9 flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const autoMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(bizName || "Business")}`;
+                      setGoogleReviewUrl(autoMapsUrl);
+                      toast.success("Google Maps link auto-generated!");
+                    }}
+                    className="text-xs h-9 shrink-0 gap-1"
+                  >
+                    📍 Auto-Generate
+                  </Button>
+                  {googleReviewUrl && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => window.open(googleReviewUrl, "_blank")}
+                      className="text-xs h-9 shrink-0 text-primary gap-1"
+                    >
+                      <ExternalLink className="size-3.5" /> Test Link
+                    </Button>
+                  )}
+                </div>
+                {googleReviewUrl &&
+                  !googleReviewUrl.includes("google.com") &&
+                  !googleReviewUrl.includes("g.page") &&
+                  !googleReviewUrl.includes("goo.gl") &&
+                  !googleReviewUrl.includes("maps.app") && (
+                    <p className="text-[11px] text-amber-500 flex items-center gap-1 font-medium">
+                      ⚠️ Note: This looks like an external website. It will automatically be replaced with your Google Maps profile so customers can review you directly on Google.
+                    </p>
+                  )}
                 <p className="text-[11px] text-muted-foreground">
-                  Tip: Get your review link directly from Google Business Profile Manager ("Ask for reviews" button).
+                  Tip: Get your direct review short-link from Google Business Profile Manager ("Ask for reviews" button), or click <strong>Auto-Generate</strong>.
                 </p>
               </div>
 

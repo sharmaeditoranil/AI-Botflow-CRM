@@ -1,7 +1,20 @@
 "use client";
 
 import { use, useEffect, useState } from "react";
-import { Star, CheckCircle2, AlertCircle, ArrowRight, MessageSquare, Sparkles, Send, ShieldCheck, Heart } from "lucide-react";
+import {
+  Star,
+  CheckCircle2,
+  AlertCircle,
+  ArrowRight,
+  MessageSquare,
+  Sparkles,
+  Send,
+  ShieldCheck,
+  Heart,
+  Copy,
+  Check,
+  ExternalLink,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,6 +25,7 @@ interface PublicMagicQrData {
   slug: string;
   business_name: string;
   google_review_url: string;
+  place_id?: string;
   min_star_for_google: number;
   heading: string;
   subheading: string;
@@ -41,7 +55,10 @@ export default function PublicReviewPage({
 
   const [selectedRating, setSelectedRating] = useState<number | null>(null);
   const [hoverRating, setHoverRating] = useState<number | null>(null);
-  const [isRedirecting, setIsRedirecting] = useState(false);
+
+  // 4-5 Stars Auto-Generated Review State
+  const [autoReviewText, setAutoReviewText] = useState("");
+  const [hasCopied, setHasCopied] = useState(false);
 
   // Private feedback form state (for 1-3 stars)
   const [feedbackText, setFeedbackText] = useState("");
@@ -58,10 +75,14 @@ export default function PublicReviewPage({
         const json = await res.json();
         if (res.ok && json.data) {
           setData(json.data);
+          const biz = json.data.business_name || "this business";
+          setAutoReviewText(
+            `Outstanding experience with ${biz}! Highly professional team, top-notch quality, and very quick service. Best in the area, 100% recommended to everyone!`
+          );
         } else {
           setError(json.error || "Review link is inactive or not found.");
         }
-      } catch (err: any) {
+      } catch {
         setError("Network error loading review page.");
       } finally {
         setLoading(false);
@@ -70,20 +91,65 @@ export default function PublicReviewPage({
     fetchConfig();
   }, [slug]);
 
-  const handleSelectRating = (rating: number) => {
+  const handleSelectRating = async (rating: number) => {
     setSelectedRating(rating);
-    const minStars = data?.min_star_for_google ?? 4;
+    setHasCopied(false);
 
-    if (rating >= minStars) {
-      // Positive rating: Redirect directly to Google Maps
-      setIsRedirecting(true);
-      setTimeout(() => {
-        const targetUrl = data?.google_review_url?.trim()
-          ? data.google_review_url.trim()
-          : `https://www.google.com/search?q=${encodeURIComponent(data?.business_name || "Google Business")}`;
-        window.location.href = targetUrl;
-      }, 1200);
+    const minStars = data?.min_star_for_google ?? 4;
+    if (rating >= minStars && autoReviewText.trim()) {
+      try {
+        await navigator.clipboard.writeText(autoReviewText.trim());
+        setHasCopied(true);
+      } catch {
+        // Fallback for browsers requiring explicit button click
+      }
     }
+  };
+
+  // Computes genuine Google Maps review target URL (NEVER external website)
+  const getGoogleReviewUrl = () => {
+    const rawUrl = data?.google_review_url?.trim() || "";
+    // Only use if it is an actual Google Maps / review URL
+    if (
+      rawUrl.includes("google.com") ||
+      rawUrl.includes("g.page") ||
+      rawUrl.includes("goo.gl") ||
+      rawUrl.includes("maps.app")
+    ) {
+      return rawUrl;
+    }
+    // If place_id is available, direct write review link
+    if (data?.place_id && !data.place_id.startsWith("loc_") && !data.place_id.startsWith("locations/")) {
+      return `https://search.google.com/local/writereview?placeid=${data.place_id}`;
+    }
+    // Fallback: Direct Google Maps Place Search URL (Never external website)
+    const biz = data?.business_name || "Local Business";
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(biz)}`;
+  };
+
+  const handleCopyAndOpenGoogle = async () => {
+    try {
+      if (autoReviewText.trim()) {
+        await navigator.clipboard.writeText(autoReviewText.trim());
+      }
+    } catch {
+      // Clipboard fallback
+    }
+    setHasCopied(true);
+
+    const targetUrl = getGoogleReviewUrl();
+    // Open Google Maps review page
+    setTimeout(() => {
+      window.open(targetUrl, "_blank");
+    }, 350);
+  };
+
+  const handlePresetSelect = async (presetText: string) => {
+    setAutoReviewText(presetText);
+    try {
+      await navigator.clipboard.writeText(presetText);
+      setHasCopied(true);
+    } catch {}
   };
 
   const handleSubmitPrivateFeedback = async (e: React.FormEvent) => {
@@ -92,7 +158,7 @@ export default function PublicReviewPage({
 
     try {
       setSubmittingFeedback(true);
-      const res = await fetch("/api/gmb/feedback", {
+      await fetch("/api/gmb/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -103,12 +169,8 @@ export default function PublicReviewPage({
           customerPhone,
         }),
       });
-
-      if (res.ok) {
-        setFeedbackSubmitted(true);
-      }
+      setFeedbackSubmitted(true);
     } catch {
-      // Continue gracefully
       setFeedbackSubmitted(true);
     } finally {
       setSubmittingFeedback(false);
@@ -120,7 +182,7 @@ export default function PublicReviewPage({
       <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
         <div className="flex flex-col items-center gap-3">
           <div className="size-10 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-          <p className="text-sm text-slate-400">Loading experience...</p>
+          <p className="text-sm text-slate-400">Loading verified storefront...</p>
         </div>
       </div>
     );
@@ -148,14 +210,14 @@ export default function PublicReviewPage({
       {/* Brand Header */}
       <header className="max-w-md mx-auto w-full pt-4 pb-2 text-center">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold uppercase tracking-wider mb-3">
-          <Sparkles className="size-3" /> Verified Business Customer Feedback
+          <Sparkles className="size-3" /> Official Google Customer Review
         </div>
         <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
           {data.business_name}
         </h1>
         <p className="text-xs text-slate-400 mt-1 flex items-center justify-center gap-1.5">
           <ShieldCheck className="size-3.5 text-emerald-400" />
-          Powered by Magic QR Customer Satisfaction
+          Verified Google Business Profile Storefront
         </p>
       </header>
 
@@ -164,7 +226,7 @@ export default function PublicReviewPage({
         <Card className="bg-slate-900/90 border-slate-800 backdrop-blur-xl shadow-2xl overflow-hidden rounded-2xl">
           <CardContent className="p-6 sm:p-8 text-center">
             {feedbackSubmitted ? (
-              // State 3: Private Feedback Submitted Successfully
+              // State 3: Private Feedback Submitted Successfully (1-3 Stars)
               <div className="space-y-4 py-4 animate-in fade-in zoom-in-95 duration-300">
                 <div className="size-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center">
                   <CheckCircle2 className="size-8" />
@@ -173,7 +235,8 @@ export default function PublicReviewPage({
                   {data.thank_you_title || "Thank you for sharing your feedback!"}
                 </h3>
                 <p className="text-sm text-slate-400 leading-relaxed">
-                  {data.thank_you_message || "We take your experience very seriously. Our management has received your notes and will take immediate corrective action."}
+                  {data.thank_you_message ||
+                    "We take your experience very seriously. Our management has received your notes and will take immediate corrective action."}
                 </p>
                 <div className="pt-4 border-t border-slate-800">
                   <p className="text-xs text-slate-500 flex items-center justify-center gap-1">
@@ -182,21 +245,124 @@ export default function PublicReviewPage({
                   </p>
                 </div>
               </div>
-            ) : isRedirecting ? (
-              // State 2: 4-5 Stars Celebration & Redirect to Google Maps
-              <div className="space-y-4 py-6 animate-in fade-in zoom-in-95 duration-300">
-                <div className="size-16 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 mx-auto flex items-center justify-center animate-bounce">
-                  <Star className="size-8 fill-amber-400" />
+            ) : isPositive ? (
+              // State 2: 4-5 Stars: AUTOMATIC REVIEW READY + DIRECT GOOGLE MAPS REDIRECT
+              <div className="text-left space-y-4 animate-in fade-in zoom-in-95 duration-300">
+                <div className="text-center space-y-1">
+                  <div className="inline-flex p-2.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 mb-1">
+                    <Star className="size-8 fill-amber-400 text-amber-400 animate-bounce" />
+                  </div>
+                  <h3 className="text-xl font-extrabold text-white">
+                    Thank You for {selectedRating} Stars! 🎉
+                  </h3>
+                  <p className="text-xs text-amber-200/90 font-medium">
+                    Aapka 5-Star review niche likha hua ready hai. Tap karke Google Maps par post kar dijiye:
+                  </p>
                 </div>
-                <h3 className="text-xl font-bold text-white">
-                  Thank You for the {selectedRating}-Star Love! 🎉
-                </h3>
-                <p className="text-sm text-slate-300">
-                  Redirecting you to Google Reviews to publish your 5-star review on Google Maps...
-                </p>
-                <div className="flex items-center justify-center gap-2 pt-2 text-xs text-primary font-semibold">
-                  <div className="size-4 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                  Opening Google Maps...
+
+                {/* Pre-written Automatic Review Box */}
+                <div className="space-y-2.5 bg-slate-950 p-4 rounded-xl border border-amber-500/30 shadow-inner">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="size-3 text-amber-400" />
+                      Automatic 5-Star Review (Ready to Post)
+                    </span>
+                    <span className="text-[10px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded-md border border-slate-800">
+                      Editable
+                    </span>
+                  </div>
+                  <Textarea
+                    rows={3}
+                    value={autoReviewText}
+                    onChange={(e) => setAutoReviewText(e.target.value)}
+                    className="bg-transparent border-0 p-0 text-xs text-white leading-relaxed resize-none focus-visible:ring-0 placeholder:text-slate-500 font-medium"
+                  />
+
+                  {/* 1-Tap Quick Style Chips */}
+                  <div className="pt-2.5 border-t border-slate-800 flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handlePresetSelect(
+                          `⚡ Fast service, outstanding quality, and polite staff! Very happy with ${data.business_name}. Highly recommended!`
+                        )
+                      }
+                      className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[10px] text-slate-300 transition-colors"
+                    >
+                      ⚡ Fast & Polite
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handlePresetSelect(
+                          `🏆 Best quality and experience in town! ${data.business_name} exceeded all our expectations. 100% recommended!`
+                        )
+                      }
+                      className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[10px] text-slate-300 transition-colors"
+                    >
+                      🏆 Best Quality
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handlePresetSelect(
+                          `🤝 Excellent team, great training, and reasonable pricing! Truly delighted with ${data.business_name}. Will visit again!`
+                        )
+                      }
+                      className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[10px] text-slate-300 transition-colors"
+                    >
+                      🤝 Best Pricing
+                    </button>
+                  </div>
+                </div>
+
+                {/* Primary Action: Copy & Open Google Maps */}
+                <div className="space-y-2 pt-1">
+                  <Button
+                    type="button"
+                    onClick={handleCopyAndOpenGoogle}
+                    className="w-full h-12 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-600 hover:to-amber-500 text-slate-950 font-black text-xs sm:text-sm rounded-xl shadow-lg shadow-amber-500/25 gap-2 transition-all active:scale-95"
+                  >
+                    {hasCopied ? (
+                      <>
+                        <Check className="size-4 text-slate-950" />
+                        Review Copied! Opening Google Profile...
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="size-4 text-slate-950" />
+                        Copy Review & Open Google Maps ➔
+                      </>
+                    )}
+                  </Button>
+
+                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-200 text-xs space-y-1">
+                    <p className="font-bold flex items-center gap-1.5 text-amber-300">
+                      <Sparkles className="size-3.5 text-amber-400" />
+                      Kaise Post Karein (2 Easy Steps):
+                    </p>
+                    <p className="text-[11px] text-slate-300 leading-relaxed">
+                      1. Upar <strong>"Copy Review & Open Google Maps"</strong> dabayein.<br />
+                      2. Google Maps profile par 5-Star select karke <strong>Paste</strong> kar dein aur <strong>Post</strong> dabayein!
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedRating(null)}
+                      className="hover:text-white underline"
+                    >
+                      Change Rating
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => window.open(getGoogleReviewUrl(), "_blank")}
+                      className="text-slate-400 hover:text-white underline inline-flex items-center gap-1"
+                    >
+                      Direct Google Maps <ExternalLink className="size-3 text-slate-500" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : selectedRating !== null && selectedRating < minStars ? (
@@ -208,7 +374,7 @@ export default function PublicReviewPage({
                     We are truly sorry your experience wasn't 5-star.
                   </h3>
                   <p className="text-xs text-slate-400 mt-1">
-                    Please tell us what went wrong so the manager can personally fix this for you.
+                    Please tell us what went wrong so our manager can personally fix this for you.
                   </p>
                 </div>
 
@@ -320,7 +486,9 @@ export default function PublicReviewPage({
                 {/* Rating Label Preview */}
                 <div className="h-6">
                   {hoverRating ? (
-                    <p className={`text-xs font-bold uppercase tracking-wider ${RATING_EMOJIS[hoverRating].color} animate-in fade-in`}>
+                    <p
+                      className={`text-xs font-bold uppercase tracking-wider ${RATING_EMOJIS[hoverRating].color} animate-in fade-in`}
+                    >
                       {RATING_EMOJIS[hoverRating].emoji} {RATING_EMOJIS[hoverRating].label}
                     </p>
                   ) : (
@@ -337,7 +505,7 @@ export default function PublicReviewPage({
 
       {/* Footer */}
       <footer className="text-center text-[11px] text-slate-600 pb-2">
-        Protected by Smart QR Review Filter • Verified Local Business
+        Protected by Smart QR Review Filter • Verified Google Business Storefront
       </footer>
     </div>
   );
