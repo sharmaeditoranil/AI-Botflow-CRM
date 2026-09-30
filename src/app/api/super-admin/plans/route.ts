@@ -1,21 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { assertSuperAdmin, getAdminSupabase, logSuperAdminAction } from '@/lib/auth/super-admin';
+import { getPlanFeaturesConfig, DEFAULT_PLAN_FEATURES } from '@/lib/billing/plan-features';
 
 export async function GET() {
   try {
     await assertSuperAdmin();
     const supabase = getAdminSupabase();
 
-    const { data: plans, error } = await supabase
-      .from('plans')
-      .select('*')
-      .order('sort_order', { ascending: true });
+    const [plansRes, featuresConfig] = await Promise.all([
+      supabase
+        .from('plans')
+        .select('*')
+        .order('sort_order', { ascending: true }),
+      getPlanFeaturesConfig(),
+    ]);
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+    if (plansRes.error) {
+      return NextResponse.json({ error: plansRes.error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ plans });
+    const enrichedPlans = (plansRes.data || []).map((p) => ({
+      ...p,
+      features: featuresConfig[p.slug] || DEFAULT_PLAN_FEATURES[p.slug] || DEFAULT_PLAN_FEATURES.starter,
+    }));
+
+    return NextResponse.json({ plans: enrichedPlans, featuresConfig });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 403 });
   }

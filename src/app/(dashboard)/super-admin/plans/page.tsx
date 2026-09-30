@@ -2,12 +2,34 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { CreditCard, Edit2, Check, Loader2, Users, Radio, Zap, Wallet, Save } from 'lucide-react';
+import {
+  CreditCard,
+  Edit2,
+  Check,
+  X,
+  Loader2,
+  Users,
+  Radio,
+  Zap,
+  Wallet,
+  Save,
+  Sparkles,
+  MessageCircle,
+  QrCode,
+  Globe,
+  Bot,
+  Share2,
+  SlidersHorizontal,
+} from 'lucide-react';
+import { InstagramIcon } from '@/components/icons/social-icons';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
+import type { PlanFeaturesConfig } from '@/lib/billing/plan-features';
+import { DEFAULT_PLAN_FEATURES } from '@/lib/billing/plan-features';
 
 interface Plan {
   id: string;
@@ -21,12 +43,15 @@ interface Plan {
   max_broadcasts_monthly: number;
   max_automations: number;
   is_active: boolean;
+  features?: PlanFeaturesConfig;
 }
 
 export default function SuperAdminPlansPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [featuresConfig, setFeaturesConfig] = useState<Record<string, PlanFeaturesConfig>>(DEFAULT_PLAN_FEATURES);
   const [loading, setLoading] = useState(true);
   const [editingPlan, setEditingPlan] = useState<Plan | null>(null);
+  const [editingFeatures, setEditingFeatures] = useState<PlanFeaturesConfig>(DEFAULT_PLAN_FEATURES.starter);
   const [saving, setSaving] = useState(false);
 
   // WhatsApp Per-Message Rates State
@@ -50,6 +75,9 @@ export default function SuperAdminPlansPage() {
       const data = await plansRes.json();
       if (plansRes.ok && data.plans) {
         setPlans(data.plans);
+        if (data.featuresConfig) {
+          setFeaturesConfig(data.featuresConfig);
+        }
       } else {
         toast.error(data.error || 'Failed to fetch plans.');
       }
@@ -77,21 +105,44 @@ export default function SuperAdminPlansPage() {
     fetchPlans();
   }, []);
 
+  const openEditModal = (p: Plan) => {
+    setEditingPlan({ ...p });
+    const resolved =
+      p.features ||
+      featuresConfig[p.slug] ||
+      DEFAULT_PLAN_FEATURES[p.slug] ||
+      DEFAULT_PLAN_FEATURES.starter;
+    setEditingFeatures({ ...resolved });
+  };
+
   const handleSavePlan = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingPlan) return;
 
     try {
       setSaving(true);
-      const res = await fetch('/api/super-admin/plans', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editingPlan),
-      });
+      const [planRes, featRes] = await Promise.all([
+        fetch('/api/super-admin/plans', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...editingPlan,
+            ai_agents_enabled: editingFeatures.ai_agents_enabled,
+          }),
+        }),
+        fetch('/api/super-admin/plans/features', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            planSlug: editingPlan.slug,
+            updates: editingFeatures,
+          }),
+        }),
+      ]);
 
-      const data = await res.json();
-      if (res.ok && data.success) {
-        toast.success('Plan updated successfully!');
+      const data = await planRes.json();
+      if (planRes.ok && data.success) {
+        toast.success(`Plan "${editingPlan.name}" & Features updated successfully!`);
         setEditingPlan(null);
         fetchPlans();
       } else {
@@ -224,81 +275,160 @@ export default function SuperAdminPlansPage() {
 
       <div className="flex items-center justify-between pt-2">
         <div>
-          <h2 className="text-lg font-bold text-foreground">Subscription Tiers & Quotas</h2>
+          <h2 className="text-lg font-bold text-foreground">Subscription Tiers, Quotas & Feature Toggles</h2>
           <p className="text-xs text-muted-foreground">
-            Configure plan prices, maximum contact quotas, and broadcast sending allowances.
+            Configure plan prices, maximum contact quotas, and toggle features (WhatsApp, Instagram, AI Agents, GMB) ON or OFF.
           </p>
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {plans.map((p) => (
-          <Card key={p.id} className="border-border bg-card">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base font-bold text-foreground">{p.name}</CardTitle>
+        {plans.map((p) => {
+          const planFeat = p.features || featuresConfig[p.slug] || DEFAULT_PLAN_FEATURES[p.slug] || DEFAULT_PLAN_FEATURES.starter;
+
+          return (
+            <Card key={p.id} className="border-border bg-card flex flex-col justify-between">
+              <div>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base font-bold text-foreground">{p.name}</CardTitle>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => openEditModal(p)}
+                      className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  <CardDescription className="text-xs line-clamp-2">{p.description}</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3 pb-3">
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-xl font-extrabold text-foreground">₹{p.price_monthly}</span>
+                    <span className="text-xs text-muted-foreground">/mo (₹{p.price_yearly}/yr)</span>
+                  </div>
+
+                  {/* Quotas */}
+                  <div className="space-y-1.5 border-t border-border pt-3 text-xs text-muted-foreground">
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <Users className="h-3.5 w-3.5 text-primary" /> Contacts
+                      </span>
+                      <span className="font-semibold text-foreground">{p.max_contacts.toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <Radio className="h-3.5 w-3.5 text-primary" /> Monthly Broadcasts
+                      </span>
+                      <span className="font-semibold text-foreground">{p.max_broadcasts_monthly.toLocaleString()}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <Users className="h-3.5 w-3.5 text-primary" /> Team Members
+                      </span>
+                      <span className="font-semibold text-foreground">{p.max_team_members}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <Zap className="h-3.5 w-3.5 text-primary" /> Automations
+                      </span>
+                      <span className="font-semibold text-foreground">{p.max_automations}</span>
+                    </div>
+                  </div>
+
+                  {/* Feature Status Badges (ON / OFF) */}
+                  <div className="space-y-1.5 border-t border-border pt-3 text-[11px]">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground block">
+                      Channel & Feature Status:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5 pt-0.5">
+                      {planFeat.whatsapp_enabled ? (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-medium">
+                          <Check className="h-3 w-3" /> WhatsApp
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground/50 border border-border line-through">
+                          <X className="h-3 w-3" /> WhatsApp
+                        </span>
+                      )}
+
+                      {planFeat.instagram_fb_enabled ? (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-purple-500/10 text-purple-400 border border-purple-500/20 font-medium">
+                          <Check className="h-3 w-3" /> Instagram & FB
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground/50 border border-border line-through">
+                          <X className="h-3 w-3" /> Instagram & FB
+                        </span>
+                      )}
+
+                      {planFeat.ai_agents_enabled ? (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-medium">
+                          <Check className="h-3 w-3" /> AI Agents
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground/50 border border-border line-through">
+                          <X className="h-3 w-3" /> AI Agents
+                        </span>
+                      )}
+
+                      {planFeat.gmb_ai_suite ? (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium">
+                          <Check className="h-3 w-3" /> Full GMB Suite
+                        </span>
+                      ) : planFeat.gmb_magic_qr ? (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium">
+                          <Check className="h-3 w-3" /> GMB QR
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-muted text-muted-foreground/50 border border-border line-through">
+                          <X className="h-3 w-3" /> GMB
+                        </span>
+                      )}
+
+                      {planFeat.webhooks_api_enabled && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 font-medium">
+                          <Check className="h-3 w-3" /> REST API
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </div>
+
+              {/* Action Button at bottom */}
+              <div className="p-4 pt-0">
                 <Button
+                  type="button"
+                  variant="outline"
                   size="sm"
-                  variant="ghost"
-                  onClick={() => setEditingPlan({ ...p })}
-                  className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                  onClick={() => openEditModal(p)}
+                  className="w-full text-xs font-semibold gap-1.5 border-border hover:bg-muted"
                 >
-                  <Edit2 className="h-3.5 w-3.5" />
+                  <SlidersHorizontal className="h-3.5 w-3.5 text-primary" /> Configure Plan & Features
                 </Button>
               </div>
-              <CardDescription className="text-xs">{p.description}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-baseline gap-1">
-                <span className="text-xl font-extrabold text-foreground">₹{p.price_monthly}</span>
-                <span className="text-xs text-muted-foreground">/mo (₹{p.price_yearly}/yr)</span>
-              </div>
-
-              <div className="space-y-1.5 border-t border-border pt-3 text-xs text-muted-foreground">
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1">
-                    <Users className="h-3.5 w-3.5 text-primary" /> Contacts
-                  </span>
-                  <span className="font-semibold text-foreground">{p.max_contacts.toLocaleString()}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1">
-                    <Radio className="h-3.5 w-3.5 text-primary" /> Monthly Broadcasts
-                  </span>
-                  <span className="font-semibold text-foreground">{p.max_broadcasts_monthly.toLocaleString()}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1">
-                    <Users className="h-3.5 w-3.5 text-primary" /> Team Members
-                  </span>
-                  <span className="font-semibold text-foreground">{p.max_team_members}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1">
-                    <Zap className="h-3.5 w-3.5 text-primary" /> Automations
-                  </span>
-                  <span className="font-semibold text-foreground">{p.max_automations}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Edit Plan Dialog */}
+      {/* Comprehensive Edit Plan & Feature Toggles Dialog */}
       {editingPlan && (
         <Dialog open={!!editingPlan} onOpenChange={() => setEditingPlan(null)}>
-          <DialogContent className="border-border bg-card">
+          <DialogContent className="border-border bg-card max-w-xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="text-base font-bold text-foreground">
-                Edit {editingPlan.name} Plan
+              <DialogTitle className="text-base font-bold text-foreground flex items-center gap-2">
+                <SlidersHorizontal className="h-4 w-4 text-primary" /> Edit {editingPlan.name} Plan & Features
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
-                Update limits and pricing for this tier.
+                Set prices, limits, and toggle specific features (WhatsApp, Instagram, AI Agents, GMB) ON or OFF.
               </DialogDescription>
             </DialogHeader>
 
-            <form onSubmit={handleSavePlan} className="space-y-4 text-xs">
+            <form onSubmit={handleSavePlan} className="space-y-4 text-xs pt-1">
+              {/* Description */}
               <div className="space-y-1">
                 <Label className="text-muted-foreground">Plan Description</Label>
                 <Input
@@ -312,6 +442,7 @@ export default function SuperAdminPlansPage() {
                 />
               </div>
 
+              {/* Pricing */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-muted-foreground">Monthly Price (₹)</Label>
@@ -321,7 +452,7 @@ export default function SuperAdminPlansPage() {
                     onChange={(e) =>
                       setEditingPlan({ ...editingPlan, price_monthly: Number(e.target.value) })
                     }
-                    className="border-border bg-muted"
+                    className="border-border bg-muted font-bold text-foreground"
                   />
                 </div>
                 <div className="space-y-1">
@@ -332,11 +463,12 @@ export default function SuperAdminPlansPage() {
                     onChange={(e) =>
                       setEditingPlan({ ...editingPlan, price_yearly: Number(e.target.value) })
                     }
-                    className="border-border bg-muted"
+                    className="border-border bg-muted font-bold text-foreground"
                   />
                 </div>
               </div>
 
+              {/* Contacts & Broadcasts */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-muted-foreground">Max Contacts</Label>
@@ -365,6 +497,7 @@ export default function SuperAdminPlansPage() {
                 </div>
               </div>
 
+              {/* Seats & Automations */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-muted-foreground">Max Team Members</Label>
@@ -396,7 +529,147 @@ export default function SuperAdminPlansPage() {
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              {/* Feature Toggles (ON / OFF Switches) */}
+              <div className="space-y-3 pt-3 border-t border-border">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5 text-primary" /> Feature Access & Capabilities (Turn ON / OFF)
+                    </Label>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      Toggle specific channels and superpowers on or off for this plan.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {/* WhatsApp Cloud API */}
+                  <div className="flex items-center justify-between p-2.5 rounded-xl border border-border/80 bg-muted/20">
+                    <div className="space-y-0.5 pr-2">
+                      <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                        <MessageCircle className="h-3.5 w-3.5 text-emerald-500" /> WhatsApp Cloud API
+                      </span>
+                      <span className="text-[10px] text-muted-foreground block">Team Shared Inbox</span>
+                    </div>
+                    <Switch
+                      checked={editingFeatures.whatsapp_enabled}
+                      onCheckedChange={(checked) => setEditingFeatures({ ...editingFeatures, whatsapp_enabled: checked })}
+                    />
+                  </div>
+
+                  {/* Instagram & Facebook CRM */}
+                  <div className="flex items-center justify-between p-2.5 rounded-xl border border-border/80 bg-muted/20">
+                    <div className="space-y-0.5 pr-2">
+                      <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                        <InstagramIcon className="h-3.5 w-3.5 fill-purple-400" /> Instagram & FB CRM
+                      </span>
+                      <span className="text-[10px] text-muted-foreground block">Instagram DM & Messenger</span>
+                    </div>
+                    <Switch
+                      checked={editingFeatures.instagram_fb_enabled}
+                      onCheckedChange={(checked) => setEditingFeatures({ ...editingFeatures, instagram_fb_enabled: checked })}
+                    />
+                  </div>
+
+                  {/* GMB Magic QR */}
+                  <div className="flex items-center justify-between p-2.5 rounded-xl border border-border/80 bg-muted/20">
+                    <div className="space-y-0.5 pr-2">
+                      <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                        <QrCode className="h-3.5 w-3.5 text-blue-400" /> GMB Magic QR
+                      </span>
+                      <span className="text-[10px] text-muted-foreground block">Google Reviews Booster</span>
+                    </div>
+                    <Switch
+                      checked={editingFeatures.gmb_magic_qr}
+                      onCheckedChange={(checked) => setEditingFeatures({ ...editingFeatures, gmb_magic_qr: checked })}
+                    />
+                  </div>
+
+                  {/* Full GMB AI Suite */}
+                  <div className="flex items-center justify-between p-2.5 rounded-xl border border-border/80 bg-muted/20">
+                    <div className="space-y-0.5 pr-2">
+                      <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                        <Globe className="h-3.5 w-3.5 text-amber-400" /> Full GMB AI Suite
+                      </span>
+                      <span className="text-[10px] text-muted-foreground block">AI Auto-Reply & Posts</span>
+                    </div>
+                    <Switch
+                      checked={editingFeatures.gmb_ai_suite}
+                      onCheckedChange={(checked) => setEditingFeatures({ ...editingFeatures, gmb_ai_suite: checked })}
+                    />
+                  </div>
+
+                  {/* Autonomous AI Agents */}
+                  <div className="flex items-center justify-between p-2.5 rounded-xl border border-border/80 bg-muted/20">
+                    <div className="space-y-0.5 pr-2">
+                      <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                        <Bot className="h-3.5 w-3.5 text-indigo-400" /> Autonomous AI Agents
+                      </span>
+                      <span className="text-[10px] text-muted-foreground block">OpenAI / Gemini Bot</span>
+                    </div>
+                    <Switch
+                      checked={editingFeatures.ai_agents_enabled}
+                      onCheckedChange={(checked) => setEditingFeatures({ ...editingFeatures, ai_agents_enabled: checked })}
+                    />
+                  </div>
+
+                  {/* Chatbot Flows & Automations */}
+                  <div className="flex items-center justify-between p-2.5 rounded-xl border border-border/80 bg-muted/20">
+                    <div className="space-y-0.5 pr-2">
+                      <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                        <Zap className="h-3.5 w-3.5 text-amber-400" /> Flows & Automations
+                      </span>
+                      <span className="text-[10px] text-muted-foreground block">Visual canvas builder</span>
+                    </div>
+                    <Switch
+                      checked={editingFeatures.automations_enabled}
+                      onCheckedChange={(checked) => setEditingFeatures({ ...editingFeatures, automations_enabled: checked })}
+                    />
+                  </div>
+
+                  {/* Developer Webhooks & API */}
+                  <div className="flex items-center justify-between p-2.5 rounded-xl border border-border/80 bg-muted/20 sm:col-span-2">
+                    <div className="space-y-0.5 pr-2">
+                      <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                        <Share2 className="h-3.5 w-3.5 text-cyan-400" /> Developer Webhooks & REST API
+                      </span>
+                      <span className="text-[10px] text-muted-foreground block">API Keys, Inbound & Outbound Webhooks</span>
+                    </div>
+                    <Switch
+                      checked={editingFeatures.webhooks_api_enabled}
+                      onCheckedChange={(checked) => setEditingFeatures({ ...editingFeatures, webhooks_api_enabled: checked })}
+                    />
+                  </div>
+                </div>
+
+                {/* Additional Settings: Max GMB Locations & Support Level */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div className="space-y-1">
+                    <Label className="text-muted-foreground text-[11px]">Max GMB Locations Allowed</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={editingFeatures.gmb_locations_limit || 1}
+                      onChange={(e) => setEditingFeatures({ ...editingFeatures, gmb_locations_limit: Math.max(1, Number(e.target.value)) })}
+                      className="border-border bg-muted h-8"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-muted-foreground text-[11px]">Support Level Label</Label>
+                    <Input
+                      type="text"
+                      placeholder="e.g. Priority WhatsApp & Email Support"
+                      value={editingFeatures.support_level || ''}
+                      onChange={(e) => setEditingFeatures({ ...editingFeatures, support_level: e.target.value })}
+                      className="border-border bg-muted h-8"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Form Footer */}
+              <div className="flex justify-end gap-2 pt-3 border-t border-border">
                 <Button
                   type="button"
                   variant="outline"
@@ -405,8 +678,8 @@ export default function SuperAdminPlansPage() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" size="sm" disabled={saving}>
-                  {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />} Save Changes
+                <Button type="submit" size="sm" disabled={saving} className="bg-primary text-primary-foreground font-semibold">
+                  {saving && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />} Save Plan & Features
                 </Button>
               </div>
             </form>

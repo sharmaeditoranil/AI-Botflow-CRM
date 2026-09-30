@@ -1778,6 +1778,15 @@ function PlanFeaturesList({ plan }: { plan: any }) {
   const isGrowth = plan.slug === 'growth';
   const isEnterprise = plan.slug === 'enterprise';
 
+  // Read dynamic feature flags saved by Super Admin from Supabase
+  const features = plan.features || {};
+  const hasInstagram = features.instagram_fb_enabled !== undefined ? Boolean(features.instagram_fb_enabled) : (isGrowth || isEnterprise);
+  const hasAi = features.ai_agents_enabled !== undefined ? Boolean(features.ai_agents_enabled) : Boolean(plan.ai_agents_enabled);
+  const hasGmbAi = features.gmb_ai_suite !== undefined ? Boolean(features.gmb_ai_suite) : (isGrowth || isEnterprise);
+  const hasMagicQr = features.gmb_magic_qr !== undefined ? Boolean(features.gmb_magic_qr) : true;
+  const supportText = features.support_level || (isEnterprise ? '24/7 Dedicated Account Manager & REST API' : isGrowth ? 'Priority WhatsApp & Email Support' : 'Standard WhatsApp Support');
+  const gmbLocations = features.gmb_locations_limit || (isEnterprise ? 5 : 1);
+
   return (
     <ul className="space-y-2.5 text-xs">
       {/* Active Contacts */}
@@ -1798,7 +1807,7 @@ function PlanFeaturesList({ plan }: { plan: any }) {
 
       {/* Instagram & Facebook Social CRM */}
       <li className="flex items-start gap-2.5">
-        {isGrowth || isEnterprise ? (
+        {hasInstagram ? (
           <>
             <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
             <span className="font-semibold text-foreground">
@@ -1817,18 +1826,26 @@ function PlanFeaturesList({ plan }: { plan: any }) {
 
       {/* Google Business Profile Suite */}
       <li className="flex items-start gap-2.5 text-muted-foreground">
-        <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
-        <span>
-          {isEnterprise ? (
-            <strong className="text-foreground">Full GMB Suite (Up to 5 Locations & AI Posts)</strong>
-          ) : isGrowth ? (
-            <span className="font-semibold text-foreground">
-              Full GMB Suite (AI Reviews + AI Posts + Magic QR)
+        {hasGmbAi ? (
+          <>
+            <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
+            <span>
+              <strong className="text-foreground">Full GMB Suite</strong> ({gmbLocations > 1 ? `Up to ${gmbLocations} Locations & ` : ''}AI Reviews + AI Posts)
             </span>
-          ) : (
-            <span>GMB Magic QR Review Booster (1 Location)</span>
-          )}
-        </span>
+          </>
+        ) : hasMagicQr ? (
+          <>
+            <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
+            <span>GMB Magic QR Review Booster ({gmbLocations} Location)</span>
+          </>
+        ) : (
+          <>
+            <X className="h-4 w-4 shrink-0 text-muted-foreground/40 mt-0.5" />
+            <span className="text-muted-foreground/50 line-through">
+              Google Business Profile Integration
+            </span>
+          </>
+        )}
       </li>
 
       {/* Monthly Broadcasts */}
@@ -1849,7 +1866,7 @@ function PlanFeaturesList({ plan }: { plan: any }) {
 
       {/* AI Agents & Knowledge Base */}
       <li className="flex items-start gap-2.5">
-        {plan.ai_agents_enabled ? (
+        {hasAi ? (
           <>
             <Check className="h-4 w-4 shrink-0 text-primary mt-0.5" />
             <span className="font-semibold text-foreground">
@@ -1877,14 +1894,8 @@ function PlanFeaturesList({ plan }: { plan: any }) {
       {/* Support / API */}
       <li className="flex items-start gap-2.5 text-muted-foreground">
         <Check className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
-        <span>
-          {isEnterprise ? (
-            <strong className="text-foreground">24/7 Dedicated Account Manager & REST API</strong>
-          ) : isGrowth ? (
-            <span>Priority WhatsApp & Email Support</span>
-          ) : (
-            <span>Standard WhatsApp Support</span>
-          )}
+        <span className={isEnterprise ? "font-semibold text-foreground" : ""}>
+          {supportText}
         </span>
       </li>
     </ul>
