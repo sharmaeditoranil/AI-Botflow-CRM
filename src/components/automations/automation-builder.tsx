@@ -234,6 +234,7 @@ interface AutomationResources {
   customFields: CustomField[]
   pipelines: PipelineOption[]
   stages: PipelineStageOption[]
+  webhookFields?: string[]
 }
 
 interface PipelineOption {
@@ -255,19 +256,79 @@ const ResourcesContext = createContext<AutomationResources>({
   customFields: [],
   pipelines: [],
   stages: [],
+  webhookFields: [],
 })
 
 function useResources(): AutomationResources {
   return useContext(ResourcesContext)
 }
 
-function ResourcesProvider({ children }: { children: ReactNode }) {
+function ResourcesProvider({
+  children,
+  triggerConfig,
+  triggerType,
+  automationId,
+}: {
+  children: ReactNode
+  triggerConfig?: Record<string, unknown>
+  triggerType?: AutomationTriggerType
+  automationId?: string
+}) {
   const [tags, setTags] = useState<TagRecord[]>([])
   const [members, setMembers] = useState<AccountMember[]>([])
   const [templates, setTemplates] = useState<MessageTemplate[]>([])
   const [customFields, setCustomFields] = useState<CustomField[]>([])
   const [pipelines, setPipelines] = useState<PipelineOption[]>([])
   const [stages, setStages] = useState<PipelineStageOption[]>([])
+  const [liveDetectedFields, setLiveDetectedFields] = useState<string[]>([])
+
+  useEffect(() => {
+    if (!automationId || triggerType !== "incoming_webhook") return
+    let active = true
+
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/automations/${automationId}`, { cache: "no-store" })
+        if (!res.ok || !active) return
+        const data = await res.json()
+        const fields = data?.automation?.trigger_config?.detected_fields
+        if (Array.isArray(fields) && fields.length > 0 && active) {
+          setLiveDetectedFields(fields)
+        }
+      } catch {}
+    }
+
+    const interval = setInterval(poll, 4000)
+    return () => {
+      active = false
+      clearInterval(interval)
+    }
+  }, [automationId, triggerType])
+
+  const webhookFields = useMemo(() => {
+    const detected: string[] = []
+    const sourceFields = [
+      ...(Array.isArray(triggerConfig?.detected_fields) ? triggerConfig.detected_fields : []),
+      ...liveDetectedFields,
+    ]
+    for (const f of sourceFields) {
+      if (typeof f === "string" && f.trim()) detected.push(f.trim())
+    }
+    if (triggerConfig?.sample_payload && typeof triggerConfig.sample_payload === "object") {
+      for (const k of Object.keys(triggerConfig.sample_payload)) {
+        if (typeof k === "string" && k.trim() && !detected.includes(k.trim())) {
+          detected.push(k.trim())
+        }
+      }
+    }
+    if (triggerConfig?.phone_path && typeof triggerConfig.phone_path === "string") {
+      detected.push(triggerConfig.phone_path.trim())
+    }
+    if (triggerConfig?.name_path && typeof triggerConfig.name_path === "string") {
+      detected.push(triggerConfig.name_path.trim())
+    }
+    return Array.from(new Set(detected))
+  }, [triggerConfig, liveDetectedFields])
 
   useEffect(() => {
     let cancelled = false
@@ -322,7 +383,7 @@ function ResourcesProvider({ children }: { children: ReactNode }) {
 
   return (
     <ResourcesContext.Provider
-      value={{ tags, members, templates, customFields, pipelines, stages }}
+      value={{ tags, members, templates, customFields, pipelines, stages, webhookFields }}
     >
       {children}
     </ResourcesContext.Provider>
@@ -565,6 +626,140 @@ function DealPipelineFields({
   )
 }
 
+function WebhookVariablesMenu({
+  onSelect,
+  availableFields = [],
+}: {
+  onSelect: (field: string) => void
+  availableFields?: string[]
+}) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState("")
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  // Default common webhook fields (guarantees options exist even before first webhook is received)
+  const commonWebhookFields = [
+    "name",
+    "amount",
+    "payment.id",
+    "order.id",
+    "customer.name",
+    "phone",
+    "email",
+  ]
+
+  const mergedFields = useMemo(() => {
+    const set = new Set<string>()
+    // Detected fields first
+    for (const f of availableFields) {
+      const clean = f.startsWith("webhook.") ? f.slice(8) : f
+      if (clean.trim()) set.add(clean.trim())
+    }
+    // Then common defaults
+    for (const f of commonWebhookFields) {
+      if (!set.has(f)) set.add(f)
+    }
+    const all = Array.from(set)
+    if (!search.trim()) return all
+    const q = search.toLowerCase()
+    return all.filter((f) => f.toLowerCase().includes(q))
+  }, [availableFields, search])
+
+  useEffect(() => {
+    if (!open) return
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [open])
+
+  return (
+    <div className="relative inline-block" ref={menuRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="text-[10px] px-1.5 py-0.5 rounded bg-muted hover:bg-primary/20 hover:text-primary text-muted-foreground transition-colors flex items-center gap-1 font-medium"
+      >
+        <Webhook className="h-3 w-3 text-primary" />
+        <span>Webhook Variables</span>
+        <ChevronDown className={cn("h-2.5 w-2.5 transition-transform", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full z-50 mt-1 w-64 rounded-md border border-border bg-popover p-2 shadow-xl">
+          <div className="flex items-center justify-between pb-1.5 border-b border-border/60">
+            <span className="font-semibold text-foreground text-[11px] flex items-center gap-1">
+              <Webhook className="h-3 w-3 text-primary" /> Webhook Variables
+            </span>
+            {availableFields.length > 0 && (
+              <Badge variant="outline" className="text-[9px] bg-emerald-500/10 text-emerald-500 border-emerald-500/20 py-0 px-1 font-normal">
+                {availableFields.length} detected
+              </Badge>
+            )}
+          </div>
+
+          <div className="py-1.5">
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search or enter field (e.g. amount)..."
+              className="h-7 text-xs bg-muted/60"
+              autoFocus
+            />
+          </div>
+
+          <div className="max-h-48 overflow-y-auto space-y-0.5 pr-0.5">
+            {mergedFields.map((field) => {
+              const isDetected = availableFields.some(
+                (af) => af === field || af === `webhook.${field}` || af.toLowerCase() === field.toLowerCase()
+              )
+              const varString = `webhook.${field}`
+              return (
+                <button
+                  key={field}
+                  type="button"
+                  onClick={() => {
+                    onSelect(varString)
+                    setOpen(false)
+                  }}
+                  className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left font-mono text-[11px] text-foreground hover:bg-primary/10 hover:text-primary transition-colors"
+                >
+                  <span className="truncate">{varString}</span>
+                  {isDetected && (
+                    <span className="text-[9px] font-sans px-1 rounded bg-emerald-500/15 text-emerald-500 shrink-0 ml-1">
+                      Detected
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+
+            {search.trim() && !mergedFields.includes(search.trim()) && (
+              <button
+                type="button"
+                onClick={() => {
+                  const raw = search.trim()
+                  const finalVal = raw.startsWith("webhook.") ? raw : `webhook.${raw}`
+                  onSelect(finalVal)
+                  setOpen(false)
+                }}
+                className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left font-mono text-[11px] text-primary hover:bg-primary/15 transition-colors border border-dashed border-primary/40 mt-1"
+              >
+                <span className="truncate">
+                  + Custom: {search.trim().startsWith("webhook.") ? search.trim() : `webhook.${search.trim()}`}
+                </span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 /** Template dropdown showing approved templates by name + language,
  *  storing both template_name and language. Falls back to manual name +
  *  language inputs when no approved templates are synced yet. */
@@ -588,7 +783,7 @@ function SendTemplateFields({
   }) => void
   t: ReturnType<typeof useTranslations>
 }) {
-  const { templates } = useResources()
+  const { templates, webhookFields } = useResources()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadingMedia, setUploadingMedia] = useState(false)
   const [showUrlInput, setShowUrlInput] = useState(false)
@@ -969,7 +1164,7 @@ function SendTemplateFields({
                       <span className="text-[11px] text-muted-foreground font-medium">Variable {idx}</span>
                     </div>
                     {/* Quick chips */}
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 flex-wrap">
                       <button
                         type="button"
                         onClick={() => handleVarChange(idx, "{{contact.name}}")}
@@ -984,12 +1179,16 @@ function SendTemplateFields({
                       >
                         + Phone
                       </button>
+                      <WebhookVariablesMenu
+                        onSelect={(v) => handleVarChange(idx, v)}
+                        availableFields={webhookFields}
+                      />
                     </div>
                   </div>
                   <Input
                     value={val}
                     onChange={(e) => handleVarChange(idx, e.target.value)}
-                    placeholder="e.g. {{contact.name}}, {{vars.name}}, or static text"
+                    placeholder="e.g. webhook.name, webhook.amount, {{contact.name}}"
                     className="font-mono text-xs h-8 bg-muted/60"
                   />
                 </div>
@@ -1137,7 +1336,11 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
       <div className="relative flex-1 overflow-y-auto">
         <div className="absolute inset-0 bg-[radial-gradient(circle,var(--border)_1px,transparent_1px)] [background-size:20px_20px] pointer-events-none" />
         <div className="relative mx-auto flex max-w-2xl flex-col items-center gap-0 px-4 py-10">
-          <ResourcesProvider>
+          <ResourcesProvider
+            triggerConfig={state.trigger_config}
+            triggerType={state.trigger_type}
+            automationId={initial?.id}
+          >
             <TriggerCard
               type={state.trigger_type}
               config={state.trigger_config}

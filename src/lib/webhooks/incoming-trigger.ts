@@ -43,6 +43,124 @@ export function safeCompareSecrets(a: string, b: string): boolean {
 }
 
 /**
+ * Recursively flattens an arbitrary nested JSON object/array into dot-notation paths.
+ * E.g. { customer: { name: "Anil" }, payment: { id: "pay_123", amount: 500 } }
+ * => { "customer.name": "Anil", "payment.id": "pay_123", "payment.amount": 500 }
+ */
+export function flattenPayload(
+  payload: unknown,
+  prefix = '',
+  maxDepth = 6,
+  result: Record<string, unknown> = {},
+  seen = new WeakSet<object>()
+): Record<string, unknown> {
+  if (payload === null || payload === undefined || maxDepth < 0) {
+    return result;
+  }
+
+  if (typeof payload !== 'object') {
+    if (prefix) result[prefix] = payload;
+    return result;
+  }
+
+  // Circular reference guard
+  if (seen.has(payload as object)) {
+    return result;
+  }
+  seen.add(payload as object);
+
+  if (Array.isArray(payload)) {
+    payload.forEach((item, idx) => {
+      const arrKey = prefix ? `${prefix}.${idx}` : String(idx);
+      if (typeof item === 'object' && item !== null) {
+        flattenPayload(item, arrKey, maxDepth - 1, result, seen);
+      } else if (item !== undefined && item !== null) {
+        result[arrKey] = item;
+      }
+    });
+    return result;
+  }
+
+  for (const [key, value] of Object.entries(payload as Record<string, unknown>)) {
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+
+    const fullPath = prefix ? `${prefix}.${key}` : key;
+
+    if (value !== null && typeof value === 'object') {
+      flattenPayload(value, fullPath, maxDepth - 1, result, seen);
+    } else if (value !== undefined && value !== null) {
+      result[fullPath] = value;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Filter out sensitive, technical, or internal keys from detected fields list.
+ */
+export function isSensitiveFieldKey(key: string): boolean {
+  const lower = key.toLowerCase();
+  const sensitiveTokens = [
+    'secret',
+    'token',
+    'password',
+    'api_key',
+    'apikey',
+    'auth',
+    'authorization',
+    'bearer',
+    'passcode',
+    '_nonce',
+    'signature',
+    'hash',
+  ];
+  return sensitiveTokens.some((tok) => lower.includes(tok));
+}
+
+/**
+ * Detects and formats all available variable fields from an incoming webhook payload.
+ * Returns clean dot-notation field keys sorted with high-priority keys first.
+ */
+export function detectWebhookFields(payload: unknown): string[] {
+  if (!payload || typeof payload !== 'object') return [];
+  const flattened = flattenPayload(payload);
+  const keys = Object.keys(flattened).filter((k) => !isSensitiveFieldKey(k) && k.trim().length > 0);
+
+  // Sort: high-priority common keys first, then alphabetical
+  const priorityOrder = [
+    'name',
+    'customer.name',
+    'phone',
+    'mobile',
+    'customer.phone',
+    'email',
+    'customer.email',
+    'amount',
+    'order.amount',
+    'payment.amount',
+    'total',
+    'payment.id',
+    'payment_id',
+    'order.id',
+    'order_id',
+    'service',
+    'city',
+    'message',
+    'status',
+  ];
+
+  return Array.from(new Set(keys)).sort((a, b) => {
+    const aIdx = priorityOrder.indexOf(a.toLowerCase());
+    const bIdx = priorityOrder.indexOf(b.toLowerCase());
+    if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+    if (aIdx !== -1) return -1;
+    if (bIdx !== -1) return 1;
+    return a.localeCompare(b);
+  });
+}
+
+/**
  * Tokenize a path string supporting dot-notation and brackets,
  * e.g., 'customer.billing_address.phone' or 'items[0].recipient.mobile'
  */
@@ -57,12 +175,49 @@ function tokenizePath(path: string): string[] {
 
 /**
  * Extract a scalar value (stringified) from an arbitrary JSON object using
- * a path string like "customer.phone", "order.recipient.mobile", etc.
+ * a path string like "customer.phone", "order.recipient.mobile", "webhook.name", etc.
+ * Supports dot notation, array indices, bracket notation, flattened objects,
+ * and optional "webhook." or "{{webhook. ... }}" prefixes.
  */
 export function extractValueByPath(payload: unknown, path: string): string | null {
   if (!payload || typeof payload !== 'object') return null;
-  const cleanPath = (path || '').trim();
-  if (!cleanPath) return null;
+  const rawClean = (path || '').trim();
+  if (!rawClean) return null;
+
+  // Normalize: remove {{ and }} if wrapped
+  let cleanPath = rawClean;
+  if (cleanPath.startsWith('{{') && cleanPath.endsWith('}}')) {
+    cleanPath = cleanPath.slice(2, -2).trim();
+  }
+
+  const record = payload as Record<string, unknown>;
+
+  // Check direct property match on root (supports flattened keys like "payment.id" or "webhook.payment.id")
+  if (cleanPath in record && record[cleanPath] !== undefined && record[cleanPath] !== null) {
+    const val = record[cleanPath];
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (trimmed.length > 0) return trimmed;
+    } else if (typeof val === 'number' || typeof val === 'boolean') {
+      return String(val);
+    }
+  }
+
+  // If path starts with webhook., try stripping it first
+  if (cleanPath.startsWith('webhook.')) {
+    const stripped = cleanPath.slice(8).trim();
+    if (stripped in record && record[stripped] !== undefined && record[stripped] !== null) {
+      const val = record[stripped];
+      if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (trimmed.length > 0) return trimmed;
+      } else if (typeof val === 'number' || typeof val === 'boolean') {
+        return String(val);
+      }
+    }
+    const strippedRes = extractValueByPath(payload, stripped);
+    if (strippedRes !== null) return strippedRes;
+  }
 
   const tokens = tokenizePath(cleanPath);
   if (tokens.length === 0) return null;
@@ -76,18 +231,18 @@ export function extractValueByPath(payload: unknown, path: string): string | nul
 
     const token = tokens[i];
     const isLast = i === tokens.length - 1;
-    const record = current as Record<string, unknown>;
+    const curRecord = current as Record<string, unknown>;
 
-    if (token in record) {
-      current = record[token];
+    if (token in curRecord) {
+      current = curRecord[token];
     } else if (isLast) {
       // Case-insensitive fallback on the final property
       const lowerToken = token.toLowerCase();
-      const matchedKey = Object.keys(record).find(
+      const matchedKey = Object.keys(curRecord).find(
         (k) => k.toLowerCase() === lowerToken
       );
       if (matchedKey !== undefined) {
-        current = record[matchedKey];
+        current = curRecord[matchedKey];
       } else {
         return null;
       }

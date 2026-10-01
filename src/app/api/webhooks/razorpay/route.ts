@@ -8,6 +8,7 @@ import {
   processIncomingWebhook,
   findSmartPhone,
   findSmartName,
+  flattenPayload,
 } from '@/lib/webhooks/incoming-trigger';
 import { executeAutomation } from '@/lib/automations/engine';
 import { resolveConversationByPhone } from '@/lib/whatsapp/resolve-conversation';
@@ -211,6 +212,28 @@ export async function POST(req: NextRequest) {
                 recipientName || 'Customer'
               );
 
+              const flatEvent = flattenPayload(event);
+              const formattedAmount = payment?.amount ? (payment.amount / 100).toFixed(2) : undefined;
+              const enrichedVars: Record<string, unknown> = {
+                ...(event as Record<string, unknown>),
+                ...flatEvent,
+                phone: recipientPhone,
+                name: recipientName,
+                payment_id: payment?.id,
+                amount: formattedAmount,
+                currency: payment?.currency || 'INR',
+                'webhook.name': recipientName,
+                'webhook.phone': recipientPhone,
+                'webhook.amount': formattedAmount,
+                'webhook.payment.id': payment?.id,
+                'webhook.payment_id': payment?.id,
+              };
+              for (const [k, v] of Object.entries(flatEvent)) {
+                if (enrichedVars[`webhook.${k}`] === undefined) {
+                  enrichedVars[`webhook.${k}`] = v;
+                }
+              }
+
               console.log(`[Razorpay Webhook] Executing automation "${auto.name}" (${auto.id}) for conversation ${resolved.conversationId}`);
               await executeAutomation(auto as any, {
                 accountId: auto.account_id,
@@ -218,14 +241,9 @@ export async function POST(req: NextRequest) {
                 contactId: resolved.contactId,
                 context: {
                   conversation_id: resolved.conversationId,
-                  vars: {
-                    ...(event as Record<string, unknown>),
-                    phone: recipientPhone,
-                    name: recipientName,
-                    payment_id: payment?.id,
-                    amount: payment?.amount ? (payment.amount / 100).toFixed(2) : undefined,
-                    currency: payment?.currency || 'INR',
-                  },
+                  webhook_payload: event,
+                  flattened_webhook: flatEvent,
+                  vars: enrichedVars,
                 },
               });
               console.log(`[Razorpay Webhook] Automation "${auto.name}" completed successfully`);
@@ -330,18 +348,33 @@ export async function POST(req: NextRequest) {
                 recipientName || 'Customer'
               );
 
+              const flatFailEvent = flattenPayload(event);
+              const enrichedFailVars: Record<string, unknown> = {
+                ...(event as Record<string, unknown>),
+                ...flatFailEvent,
+                phone: recipientPhone,
+                name: recipientName,
+                payment_id: payment?.id,
+                'webhook.name': recipientName,
+                'webhook.phone': recipientPhone,
+                'webhook.payment.id': payment?.id,
+                'webhook.payment_id': payment?.id,
+              };
+              for (const [k, v] of Object.entries(flatFailEvent)) {
+                if (enrichedFailVars[`webhook.${k}`] === undefined) {
+                  enrichedFailVars[`webhook.${k}`] = v;
+                }
+              }
+
               await executeAutomation(auto as any, {
                 accountId: auto.account_id,
                 triggerType: 'incoming_webhook',
                 contactId: resolved.contactId,
                 context: {
                   conversation_id: resolved.conversationId,
-                  vars: {
-                    ...(event as Record<string, unknown>),
-                    phone: recipientPhone,
-                    name: recipientName,
-                    payment_id: payment?.id,
-                  },
+                  webhook_payload: event,
+                  flattened_webhook: flatFailEvent,
+                  vars: enrichedFailVars,
                 },
               });
             } catch (autoErr: any) {

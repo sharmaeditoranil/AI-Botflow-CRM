@@ -10,6 +10,8 @@ import {
   findSmartMessage,
   findSmartEmail,
   extractLeadSummary,
+  flattenPayload,
+  detectWebhookFields,
 } from './incoming-trigger';
 
 describe('generateIncomingWebhookSecret', () => {
@@ -190,4 +192,98 @@ describe('Smart Lead Field Extraction', () => {
     expect(findSmartMessage(nestedPayload)).toBe('Weekend consultation required');
   });
 });
+
+describe('Universal Webhook Payload Flattening & Field Detection', () => {
+  const universalPayload = {
+    name: 'Anil Sharma',
+    phone: '+919876543210',
+    email: 'anil@example.com',
+    amount: '4999.00',
+    secret: 'whsec_secret123',
+    token: 'jwt_token_abc',
+    payment: {
+      id: 'pay_987654321',
+      status: 'captured',
+      method: 'upi',
+    },
+    customer: {
+      name: 'Anil Sharma',
+      address: {
+        city: 'Mumbai',
+        pincode: '400001',
+      },
+    },
+    order: {
+      id: 'ord_123456',
+      items: [
+        { name: 'CRM Pro Plan', price: 4999 },
+      ],
+    },
+  };
+
+  it('flattens complex nested payloads into dot-notation paths', () => {
+    const flat = flattenPayload(universalPayload);
+
+    expect(flat['name']).toBe('Anil Sharma');
+    expect(flat['phone']).toBe('+919876543210');
+    expect(flat['email']).toBe('anil@example.com');
+    expect(flat['amount']).toBe('4999.00');
+    expect(flat['payment.id']).toBe('pay_987654321');
+    expect(flat['payment.status']).toBe('captured');
+    expect(flat['customer.name']).toBe('Anil Sharma');
+    expect(flat['customer.address.city']).toBe('Mumbai');
+    expect(flat['order.id']).toBe('ord_123456');
+    expect(flat['order.items.0.name']).toBe('CRM Pro Plan');
+    expect(flat['order.items.0.price']).toBe(4999);
+  });
+
+  it('detects available webhook fields excluding sensitive tokens', () => {
+    const fields = detectWebhookFields(universalPayload);
+
+    expect(fields).toContain('name');
+    expect(fields).toContain('phone');
+    expect(fields).toContain('email');
+    expect(fields).toContain('amount');
+    expect(fields).toContain('payment.id');
+    expect(fields).toContain('customer.name');
+    expect(fields).toContain('order.id');
+
+    // Sensitive keys must be excluded
+    expect(fields).not.toContain('secret');
+    expect(fields).not.toContain('token');
+  });
+
+  it('extracts values using webhook. prefix and {{webhook.}} placeholders', () => {
+    expect(extractValueByPath(universalPayload, 'webhook.name')).toBe('Anil Sharma');
+    expect(extractValueByPath(universalPayload, 'webhook.amount')).toBe('4999.00');
+    expect(extractValueByPath(universalPayload, 'webhook.payment.id')).toBe('pay_987654321');
+    expect(extractValueByPath(universalPayload, '{{webhook.order.id}}')).toBe('ord_123456');
+    expect(extractValueByPath(universalPayload, 'webhook.customer.address.city')).toBe('Mumbai');
+
+    // Non-existent field returns null safely without throwing
+    expect(extractValueByPath(universalPayload, 'webhook.non_existent_field')).toBeNull();
+  });
+
+  it('extracts template variables mapped to webhook.* fields accurately', () => {
+    const mappings = {
+      '1': 'webhook.name',
+      '2': 'webhook.amount',
+      '3': 'webhook.payment.id',
+      '4': 'webhook.missing_field',
+    };
+
+    const { params, mappedValues } = extractTemplateVariables(universalPayload, mappings, 'Anil Sharma');
+
+    expect(params[0]).toBe('Anil Sharma');
+    expect(params[1]).toBe('4999.00');
+    expect(params[2]).toBe('pay_987654321');
+    // Missing field falls back safely without crash
+    expect(params[3]).toBe('Anil Sharma');
+
+    expect(mappedValues['1']).toBe('Anil Sharma');
+    expect(mappedValues['2']).toBe('4999.00');
+    expect(mappedValues['3']).toBe('pay_987654321');
+  });
+});
+
 

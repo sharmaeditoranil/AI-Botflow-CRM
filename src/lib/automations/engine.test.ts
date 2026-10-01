@@ -106,7 +106,13 @@ vi.mock("./meta-send", () => ({
   engineSendInteractive: vi.fn(async () => ({ whatsapp_message_id: "m1" })),
 }));
 
-import { runAutomationsForTrigger, triggerMatches, drainDuePendingExecutions } from "./engine";
+import {
+  runAutomationsForTrigger,
+  executeAutomation,
+  triggerMatches,
+  drainDuePendingExecutions,
+} from "./engine";
+import { engineSendTemplate } from "./meta-send";
 import type { Automation, KeywordMatchTriggerConfig } from "@/types";
 
 const ACCOUNT = "acct-1";
@@ -559,4 +565,76 @@ describe("drainDuePendingExecutions", () => {
     expect(res).toEqual({ processed: 0, errors: 0 });
   });
 });
+
+describe("executeAutomation with webhook variable mapping", () => {
+  it("resolves webhook.* variables in send_template from incoming webhook payload", async () => {
+    const auto: Automation = {
+      id: "auto-webhook-1",
+      account_id: ACCOUNT,
+      user_id: "user-1",
+      name: "Payment Alert",
+      description: undefined,
+      trigger_type: "incoming_webhook",
+      trigger_config: {},
+      is_active: true,
+      execution_count: 0,
+      last_executed_at: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    h.state.steps = [
+      {
+        id: "step-tmpl-1",
+        automation_id: "auto-webhook-1",
+        parent_step_id: null,
+        branch: null,
+        step_type: "send_template",
+        step_config: {
+          template_name: "master_payment_confirmation",
+          language: "en",
+          variables: {
+            "1": "webhook.name",
+            "2": "webhook.amount",
+            "3": "webhook.payment.id",
+          },
+        },
+        position: 0,
+      },
+    ];
+
+    const payload = {
+      name: "Rahul Sharma",
+      amount: "1999",
+      payment: {
+        id: "pay_xyz999",
+      },
+    };
+
+    await executeAutomation(auto, {
+      accountId: ACCOUNT,
+      triggerType: "incoming_webhook",
+      contactId: "contact-1",
+      context: {
+        conversation_id: "conv-1",
+        webhook_payload: payload,
+        vars: {
+          ...payload,
+          "webhook.name": "Rahul Sharma",
+          "webhook.amount": "1999",
+          "webhook.payment.id": "pay_xyz999",
+        },
+      },
+    });
+
+    expect(engineSendTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        templateName: "master_payment_confirmation",
+        language: "en",
+        params: ["Rahul Sharma", "1999", "pay_xyz999"],
+      }),
+    );
+  });
+});
+
 

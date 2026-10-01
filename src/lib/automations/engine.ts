@@ -37,6 +37,7 @@ import {
   findSmartMessage,
   findSmartEmail,
   extractLeadSummary,
+  extractValueByPath,
 } from '@/lib/webhooks/incoming-trigger'
 
 // ------------------------------------------------------------
@@ -56,6 +57,10 @@ export interface AutomationContext {
   agent_id?: string
   /** Button / list-row id the customer tapped, for interactive_reply. */
   interactive_reply_id?: string
+  /** Incoming raw webhook payload, if fired by incoming_webhook. */
+  webhook_payload?: unknown
+  /** Flattened key-value paths of the incoming webhook. */
+  flattened_webhook?: Record<string, unknown>
 }
 
 export interface DispatchInput {
@@ -977,10 +982,36 @@ function resolveVariableValue(
     return trimmed.slice(7).trim()
   }
 
-  // Handle {{contact.name}}, {{name}}, etc.
+  // Handle {{contact.name}}, {{name}}, {{webhook.payment.id}}, etc.
   const match = trimmed.match(/^\{\{\s*([\w.\s-]+)\s*\}\}$/)
   const key = match ? match[1].trim() : trimmed
   const lower = key.toLowerCase()
+
+  // 1. Webhook variables (e.g. "webhook.name", "webhook.amount", "webhook.payment.id", "webhook.customer.name")
+  if (lower.startsWith('webhook.') || key.startsWith('webhook.')) {
+    const rawPath = key.slice(8).trim()
+    const payload = (args.context as any).webhook_payload || (args.context.vars as any)
+    const fromPayload = extractValueByPath(payload, rawPath)
+    if (fromPayload !== null && fromPayload !== undefined && fromPayload !== '') {
+      return String(fromPayload)
+    }
+    if (args.context.vars?.[key] !== undefined && args.context.vars[key] !== '') {
+      return String(args.context.vars[key])
+    }
+    if (args.context.vars?.[rawPath] !== undefined && args.context.vars[rawPath] !== '') {
+      return String(args.context.vars[rawPath])
+    }
+    if (args.context.vars) {
+      const foundK = Object.keys(args.context.vars).find(
+        (k) => k.toLowerCase() === lower || k.toLowerCase() === rawPath.toLowerCase()
+      )
+      if (foundK && args.context.vars[foundK] !== undefined && args.context.vars[foundK] !== '') {
+        return String(args.context.vars[foundK])
+      }
+    }
+    // Missing field falls back safely without error
+    return ''
+  }
 
   if (
     lower === 'contact.name' ||
@@ -1016,6 +1047,15 @@ function resolveVariableValue(
     }
   }
 
+  // Check nested path on webhook payload or vars
+  const pathVal = extractValueByPath(
+    (args.context as any).webhook_payload || (args.context.vars as any),
+    key
+  )
+  if (pathVal !== null && pathVal !== undefined && pathVal !== '') {
+    return String(pathVal)
+  }
+
   // Support interpolate expression if it contains {{...}}
   if (trimmed.includes('{{')) {
     return interpolate(trimmed, args)
@@ -1028,6 +1068,17 @@ function interpolate(s: string, args: ExecuteArgs): string {
   return s.replace(/\{\{\s*([\w.\s-]+)\s*\}\}/g, (_, key) => {
     const trimmedKey = String(key).trim()
     const lower = trimmedKey.toLowerCase()
+
+    if (lower.startsWith('webhook.') || trimmedKey.startsWith('webhook.')) {
+      const rawPath = trimmedKey.slice(8).trim()
+      const payload = (args.context as any).webhook_payload || (args.context.vars as any)
+      const val = extractValueByPath(payload, rawPath)
+      if (val !== null && val !== undefined) return String(val)
+      if (args.context.vars?.[trimmedKey] !== undefined) return String(args.context.vars[trimmedKey])
+      if (args.context.vars?.[rawPath] !== undefined) return String(args.context.vars[rawPath])
+      return ''
+    }
+
     const [ns, prop] = trimmedKey.split('.')
     if (ns === 'message' && prop === 'text') return String(args.context.message_text ?? '')
     if (ns === 'vars' && prop) {

@@ -13,6 +13,8 @@ import {
   findSmartEmail,
   extractLeadSummary,
   isLikelyTestPing,
+  flattenPayload,
+  detectWebhookFields,
 } from '@/lib/webhooks/incoming-trigger';
 import { executeAutomation, drainDuePendingExecutions } from '@/lib/automations/engine';
 import { startAutomationSweeper } from '@/lib/automations/sweeper';
@@ -288,6 +290,32 @@ async function executeIncomingWebhook(
     }
 
     const cfg = (automation.trigger_config || {}) as Record<string, any>;
+
+    // Universal payload flattening and field detection for all incoming webhooks
+    const flattened = flattenPayload(payload);
+    const detectedKeys = detectWebhookFields(payload);
+
+    // Save detected fields and sample payload to trigger_config so frontend builder displays them
+    const existingDetected = Array.isArray(cfg.detected_fields) ? cfg.detected_fields : [];
+    const mergedDetected = Array.from(new Set([...existingDetected, ...detectedKeys]));
+    if (mergedDetected.length > existingDetected.length || !cfg.sample_payload) {
+      void Promise.resolve(
+        admin
+          .from('automations')
+          .update({
+            trigger_config: {
+              ...cfg,
+              detected_fields: mergedDetected,
+              sample_payload: flattened,
+            },
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', automation.id)
+      ).catch((err: any) =>
+        console.warn(`[Webhook ${method}] Error updating detected_fields:`, err?.message || err)
+      );
+    }
+
     // If a secret is provided, verify it. Or if require_secret is explicitly enabled, require it.
     // Otherwise allow requests without secret since the unique automation ID is private and unique.
     if (providedSecret || cfg.require_secret) {
@@ -316,7 +344,7 @@ async function executeIncomingWebhook(
           success: true,
           status: 'ping_ok',
           message: 'Automation webhook test received successfully. Ready to receive leads.',
-          data: { automation_id: automation.id },
+          data: { automation_id: automation.id, detected_fields: mergedDetected },
         },
         { status: 200, headers: CORS_HEADERS }
       );
@@ -419,22 +447,44 @@ async function executeIncomingWebhook(
 
     // Execute automation workflow with enriched lead context
     try {
+      const enrichedVars: Record<string, unknown> = {
+        ...payload,
+        ...flattened,
+      };
+      for (const [k, v] of Object.entries(flattened)) {
+        enrichedVars[`webhook.${k}`] = v;
+      }
+      enrichedVars.name = contactName;
+      enrichedVars.phone = String(rawPhone);
+      enrichedVars['webhook.name'] = contactName;
+      enrichedVars['webhook.phone'] = String(rawPhone);
+      if (email) {
+        enrichedVars.email = email;
+        enrichedVars['webhook.email'] = email;
+      }
+      if (leadSummary.service) {
+        enrichedVars.service = leadSummary.service;
+        enrichedVars['webhook.service'] = leadSummary.service;
+      }
+      if (leadSummary.city) {
+        enrichedVars.city = leadSummary.city;
+        enrichedVars['webhook.city'] = leadSummary.city;
+      }
+      if (leadSummary.message) {
+        enrichedVars.message = leadSummary.message;
+        enrichedVars.extra_message = leadSummary.message;
+        enrichedVars['webhook.message'] = leadSummary.message;
+      }
+      enrichedVars.lead_summary = leadSummary.formattedNote;
+
       await executeAutomation(automation as any, {
         accountId: automation.account_id,
         triggerType: 'incoming_webhook',
         contactId: resolved.contactId,
         context: {
-          vars: {
-            ...payload,
-            name: contactName,
-            phone: String(rawPhone),
-            service: leadSummary.service || '',
-            city: leadSummary.city || '',
-            message: leadSummary.message || '',
-            extra_message: leadSummary.message || '',
-            email: email || '',
-            lead_summary: leadSummary.formattedNote,
-          },
+          webhook_payload: payload,
+          flattened_webhook: flattened,
+          vars: enrichedVars,
           message_text: leadSummary.message || leadSummary.formattedNote,
           conversation_id: resolved.conversationId,
         },
