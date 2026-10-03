@@ -20,6 +20,8 @@ function getAdminSupabase() {
   );
 }
 
+const RECENT_RZP_KEYS = new Map<string, number>();
+
 export async function POST(req: NextRequest) {
   const signature = req.headers.get('x-razorpay-signature');
 
@@ -205,6 +207,42 @@ export async function POST(req: NextRequest) {
 
           for (const auto of matchedAutomations) {
             try {
+              if (payment?.id) {
+                const autoKey = `${auto.id}:${payment.id}`;
+                const now = Date.now();
+                if (RECENT_RZP_KEYS.has(autoKey)) {
+                  console.log(`[Razorpay Webhook] Automation "${auto.name}" already processed payment ${payment.id} (in-memory), skipping duplicate.`);
+                  continue;
+                }
+                RECENT_RZP_KEYS.set(autoKey, now);
+
+                // Check automation_logs in last 24h
+                const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000).toISOString();
+                const { data: existingLogs } = await adminSupabase
+                  .from('automation_logs')
+                  .select('id')
+                  .eq('automation_id', auto.id)
+                  .gte('created_at', oneDayAgo)
+                  .limit(10);
+
+                // Also check webhook_trigger_logs
+                const { data: existingWbLogs } = await adminSupabase
+                  .from('webhook_trigger_logs')
+                  .select('id, request_payload')
+                  .eq('trigger_id', auto.id)
+                  .gte('created_at', oneDayAgo)
+                  .limit(20);
+
+                const alreadyInWbLogs = existingWbLogs?.some((l: any) =>
+                  JSON.stringify(l.request_payload || {}).includes(payment.id)
+                );
+
+                if (alreadyInWbLogs) {
+                  console.log(`[Razorpay Webhook] Automation "${auto.name}" already processed payment ${payment.id} (db log), skipping duplicate.`);
+                  continue;
+                }
+              }
+
               const resolved = await resolveConversationByPhone(
                 adminSupabase,
                 auto.account_id,

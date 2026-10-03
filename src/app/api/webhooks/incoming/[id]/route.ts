@@ -15,11 +15,16 @@ import {
   isLikelyTestPing,
   flattenPayload,
   detectWebhookFields,
+  extractWebhookIdempotencyKey,
+  isIgnorableWebhookEvent,
 } from '@/lib/webhooks/incoming-trigger';
 import { executeAutomation, drainDuePendingExecutions } from '@/lib/automations/engine';
 import { startAutomationSweeper } from '@/lib/automations/sweeper';
 import { resolveConversationByPhone } from '@/lib/whatsapp/resolve-conversation';
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit';
+
+// In-memory 24-hour deduplication cache to instantly intercept rapid retries (<1ms)
+const RECENT_WEBHOOK_KEYS = new Map<string, number>();
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -380,6 +385,111 @@ async function executeIncomingWebhook(
     const contactName = findSmartName(payload, namePath) || 'Webhook Lead';
     console.log(`[Webhook ${method}] contactName:`, contactName, '| phone:', rawPhone);
 
+    // -------------------------------------------------------------
+    // STRICT IDEMPOTENCY & DEDUPLICATION GUARD
+    // Prevents Razorpay timeout retries or multiple event webhooks (payment.authorized,
+    // payment.captured, order.paid) from triggering the automation multiple times
+    // and sending 4-5 duplicate WhatsApp messages to the customer.
+    // -------------------------------------------------------------
+    // 0. Ignore failure / cancelled events (e.g. payment.failed, order.cancelled)
+    if (isIgnorableWebhookEvent(payload)) {
+      console.log(`[Webhook ${method}] Ignored failure/non-actionable event for automation: ${automation.id}`);
+      return NextResponse.json(
+        {
+          success: true,
+          message: 'Ignored failure/non-actionable webhook event.',
+          ignored: true,
+        },
+        { status: 200, headers: CORS_HEADERS }
+      );
+    }
+
+    const { key: idempotencyKey, identifier, type: keyType } = extractWebhookIdempotencyKey(payload, request.headers);
+    const scopedKey = `${automation.id}:${idempotencyKey}`;
+    const now = Date.now();
+
+    // 1. In-memory check (instant cache hit in <1ms)
+    // Clean old entries if Map exceeds 2000 items
+    if (RECENT_WEBHOOK_KEYS.size > 2000) {
+      for (const [k, ts] of RECENT_WEBHOOK_KEYS.entries()) {
+        if (now - ts > 24 * 60 * 60 * 1000) RECENT_WEBHOOK_KEYS.delete(k);
+      }
+    }
+
+    if (RECENT_WEBHOOK_KEYS.has(scopedKey)) {
+      console.log(`[Webhook ${method}] Duplicate event intercepted (in-memory lock): ${scopedKey}. Skipping duplicate.`);
+      return NextResponse.json(
+        {
+          success: true,
+          message: 'Duplicate webhook event already processed (in-memory lock matched).',
+          duplicate: true,
+          idempotency_key: idempotencyKey,
+        },
+        { status: 200, headers: CORS_HEADERS }
+      );
+    }
+
+    // 2. Database check in webhook_trigger_logs (24-hour persistence across container restarts / workers)
+    const oneDayAgoIso = new Date(now - 24 * 60 * 60 * 1000).toISOString();
+    const { data: recentLogs } = await admin
+      .from('webhook_trigger_logs')
+      .select('id, mapped_variables, request_payload, created_at')
+      .eq('trigger_id', automation.id)
+      .gte('created_at', oneDayAgoIso)
+      .order('created_at', { ascending: false })
+      .limit(35);
+
+    const isDuplicate = recentLogs?.some((l: any) => {
+      const mapped = (l.mapped_variables || {}) as Record<string, unknown>;
+      if (mapped.idempotency_key && mapped.idempotency_key === idempotencyKey) return true;
+      if (keyType === 'payment' && identifier && JSON.stringify(l.request_payload || {}).includes(identifier)) return true;
+      if (keyType === 'order' && identifier && JSON.stringify(l.request_payload || {}).includes(identifier)) return true;
+      return false;
+    });
+
+    if (isDuplicate) {
+      RECENT_WEBHOOK_KEYS.set(scopedKey, now);
+      console.log(`[Webhook ${method}] Duplicate event intercepted (database log): ${scopedKey}. Skipping duplicate.`);
+      return NextResponse.json(
+        {
+          success: true,
+          message: 'Duplicate webhook event already processed (database lock matched).',
+          duplicate: true,
+          idempotency_key: idempotencyKey,
+        },
+        { status: 200, headers: CORS_HEADERS }
+      );
+    }
+
+    // 3. IMMEDIATELY ACQUIRE LOCK BEFORE ANY OTHER OPERATION
+    // This stops any concurrent retry from proceeding even if it arrives 1 millisecond later
+    RECENT_WEBHOOK_KEYS.set(scopedKey, now);
+    let lockLogId: string | null = null;
+    try {
+      const { data: lockRow } = await admin
+        .from('webhook_trigger_logs')
+        .insert({
+          trigger_id: automation.id,
+          account_id: automation.account_id,
+          status: 'processing',
+          http_status: 200,
+          recipient_phone: String(rawPhone),
+          recipient_name: contactName,
+          request_payload: typeof payload === 'object' && payload !== null ? payload : {},
+          mapped_variables: {
+            idempotency_key: idempotencyKey,
+            identifier,
+            key_type: keyType,
+            event: (payload as any).event || null,
+          },
+        })
+        .select('id')
+        .maybeSingle();
+      lockLogId = lockRow?.id || null;
+    } catch (logErr) {
+      console.warn(`[Webhook ${method}] Notice on acquiring idempotency lock:`, logErr);
+    }
+
     // Resolve or create contact and conversation
     let resolved;
     try {
@@ -391,6 +501,10 @@ async function executeIncomingWebhook(
       );
     } catch (e: any) {
       console.error(`[Webhook ${method}] resolveConversationByPhone failed:`, e.message);
+      if (lockLogId) {
+        await admin.from('webhook_trigger_logs').delete().eq('id', lockLogId);
+      }
+      RECENT_WEBHOOK_KEYS.delete(scopedKey);
       return NextResponse.json(
         {
           error: e.message || 'Failed to resolve contact with provided phone number.',
@@ -555,12 +669,38 @@ async function executeIncomingWebhook(
         },
       });
       console.log(`[Webhook ${method}] executeAutomation completed for automation:`, automation.id);
+      if (lockLogId) {
+        try {
+          await admin
+            .from('webhook_trigger_logs')
+            .update({
+              status: 'success',
+              execution_time_ms: Date.now() - now,
+              contact_id: resolved.contactId,
+            })
+            .eq('id', lockLogId);
+        } catch (uErr) {
+          console.warn('[Webhook] Error updating lock log to success:', uErr);
+        }
+      }
       startAutomationSweeper();
       drainDuePendingExecutions().catch((err) =>
         console.error('[Webhook] Opportunistic automation drain error:', err)
       );
     } catch (execErr: any) {
       console.error(`[Webhook ${method}] executeAutomation failed:`, execErr.message || execErr);
+      if (lockLogId) {
+        try {
+          await admin
+            .from('webhook_trigger_logs')
+            .update({
+              status: 'failed',
+              execution_time_ms: Date.now() - now,
+              error_message: execErr.message || 'Execution error',
+            })
+            .eq('id', lockLogId);
+        } catch (_) {}
+      }
       return NextResponse.json(
         {
           error: `Automation executed but failed: ${execErr.message || 'Unknown error'}`,

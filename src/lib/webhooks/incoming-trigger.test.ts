@@ -12,6 +12,8 @@ import {
   extractLeadSummary,
   flattenPayload,
   detectWebhookFields,
+  extractWebhookIdempotencyKey,
+  isIgnorableWebhookEvent,
 } from './incoming-trigger';
 
 describe('generateIncomingWebhookSecret', () => {
@@ -343,5 +345,54 @@ describe('Razorpay Deeply Nested Webhook Payload Mapping', () => {
     expect(formatted).toMatch(/^\d{2}\/\d{2}\/\d{4}$/);
   });
 });
+
+describe('extractWebhookIdempotencyKey & isIgnorableWebhookEvent', () => {
+  it('extracts payment ID as idempotency key from Razorpay payload', () => {
+    const payload = {
+      event: 'payment.captured',
+      payload: {
+        payment: {
+          entity: {
+            id: 'pay_Tj6ZOLi3Va22SE',
+            amount: 2100,
+          },
+        },
+      },
+    };
+    const res = extractWebhookIdempotencyKey(payload);
+    expect(res.key).toBe('pay_pay_Tj6ZOLi3Va22SE');
+    expect(res.identifier).toBe('pay_Tj6ZOLi3Va22SE');
+    expect(res.type).toBe('payment');
+  });
+
+  it('extracts order ID when payment ID is absent', () => {
+    const payload = {
+      event: 'order.paid',
+      order: {
+        id: 'order_12345678',
+      },
+    };
+    const res = extractWebhookIdempotencyKey(payload);
+    expect(res.key).toBe('order_order_12345678');
+    expect(res.identifier).toBe('order_12345678');
+    expect(res.type).toBe('order');
+  });
+
+  it('extracts x-razorpay-event-id from headers if present', () => {
+    const headers = new Headers();
+    headers.set('x-razorpay-event-id', 'evt_abc123');
+    const res = extractWebhookIdempotencyKey({}, headers);
+    expect(res.key).toBe('rzp_evt_evt_abc123');
+    expect(res.type).toBe('header');
+  });
+
+  it('detects ignorable failure events', () => {
+    expect(isIgnorableWebhookEvent({ event: 'payment.failed' })).toBe(true);
+    expect(isIgnorableWebhookEvent({ event: 'order.cancelled' })).toBe(true);
+    expect(isIgnorableWebhookEvent({ event: 'payment.captured' })).toBe(false);
+    expect(isIgnorableWebhookEvent({ event: 'order.paid' })).toBe(false);
+  });
+});
+
 
 

@@ -1358,3 +1358,85 @@ export async function processIncomingWebhook(
     throw new IncomingWebhookError('delivery_failed', errorMessage, status);
   }
 }
+
+/**
+ * Extract a canonical transaction / event idempotency key from an incoming webhook payload.
+ * Identifies payments, orders, form submissions, and external event IDs so retries or duplicate events
+ * do not re-trigger automations or send duplicate WhatsApp messages.
+ */
+export function extractWebhookIdempotencyKey(
+  payload: Record<string, unknown>,
+  headers?: Headers
+): { key: string; identifier: string; type: 'payment' | 'order' | 'event' | 'header' | 'hash' } {
+  // 1. Razorpay event ID from HTTP header
+  const headerEventId = headers?.get('x-razorpay-event-id');
+  if (headerEventId && typeof headerEventId === 'string' && headerEventId.trim()) {
+    const clean = headerEventId.trim();
+    return { key: `rzp_evt_${clean}`, identifier: clean, type: 'header' };
+  }
+
+  // 2. Direct Payment ID (Razorpay, Stripe, PayU, Cashfree, PayPal)
+  const paymentId =
+    extractValueByPath(payload, 'payment.id') ||
+    extractValueByPath(payload, 'payload.payment.entity.id') ||
+    extractValueByPath(payload, 'payment_id') ||
+    extractValueByPath(payload, 'razorpay_payment_id') ||
+    extractValueByPath(payload, 'transaction_id') ||
+    extractValueByPath(payload, 'txn_id');
+
+  if (paymentId && typeof paymentId === 'string' && paymentId.trim().length > 3) {
+    const clean = paymentId.trim();
+    return { key: `pay_${clean}`, identifier: clean, type: 'payment' };
+  }
+
+  // 3. Order ID if payment id is not present
+  const orderId =
+    extractValueByPath(payload, 'order.id') ||
+    extractValueByPath(payload, 'payload.order.entity.id') ||
+    extractValueByPath(payload, 'order_id') ||
+    extractValueByPath(payload, 'razorpay_order_id');
+
+  if (orderId && typeof orderId === 'string' && orderId.trim().length > 3) {
+    const clean = orderId.trim();
+    return { key: `order_${clean}`, identifier: clean, type: 'order' };
+  }
+
+  // 4. Form submission ID or event ID
+  const eventId =
+    extractValueByPath(payload, 'event_id') ||
+    extractValueByPath(payload, 'submission_id') ||
+    extractValueByPath(payload, 'lead_id');
+
+  if (eventId && typeof eventId === 'string' && eventId.trim().length > 3) {
+    const clean = eventId.trim();
+    return { key: `evt_${clean}`, identifier: clean, type: 'event' };
+  }
+
+  // 5. Fallback: hash based on phone + short time window (2-minute debounce)
+  const phone = findSmartPhone(payload) || 'unknown';
+  const name = findSmartName(payload) || '';
+  const hashKey = `sub_${phone}_${name.slice(0, 10)}_${Math.floor(Date.now() / 120000)}`;
+  return { key: hashKey, identifier: hashKey, type: 'hash' };
+}
+
+/**
+ * Checks whether an incoming webhook payload represents a failure or non-actionable event
+ * (e.g. payment.failed, order.cancelled) for a payment confirmation automation.
+ */
+export function isIgnorableWebhookEvent(payload: Record<string, unknown>): boolean {
+  const event = extractValueByPath(payload, 'event');
+  if (typeof event === 'string') {
+    const evLower = event.toLowerCase();
+    if (
+      evLower === 'payment.failed' ||
+      evLower === 'order.cancelled' ||
+      evLower === 'payment.dispute.created' ||
+      evLower.includes('.failed') ||
+      evLower.includes('cancelled')
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
