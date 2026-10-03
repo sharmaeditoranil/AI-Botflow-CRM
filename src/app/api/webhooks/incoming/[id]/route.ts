@@ -297,7 +297,20 @@ async function executeIncomingWebhook(
 
     // Save detected fields and sample payload to trigger_config so frontend builder displays them
     const existingDetected = Array.isArray(cfg.detected_fields) ? cfg.detected_fields : [];
-    const mergedDetected = Array.from(new Set([...existingDetected, ...detectedKeys]));
+    const mergedDetected = Array.from(new Set([...detectedKeys, ...existingDetected]));
+
+    const sampleWithAliases: Record<string, unknown> = { ...flattened };
+    const sAmount = extractValueByPath(payload, 'amount');
+    const sOrder = extractValueByPath(payload, 'order.id');
+    const sPay = extractValueByPath(payload, 'payment.id');
+    const sCourse = extractValueByPath(payload, 'course') || extractValueByPath(payload, 'title') || extractValueByPath(payload, 'notes.title') || extractValueByPath(payload, 'description');
+    const sDate = extractValueByPath(payload, 'date');
+    if (sAmount) sampleWithAliases.amount = sAmount;
+    if (sOrder) sampleWithAliases['order.id'] = sOrder;
+    if (sPay) sampleWithAliases['payment.id'] = sPay;
+    if (sCourse) sampleWithAliases.course = sCourse;
+    if (sDate) sampleWithAliases.date = sDate;
+
     if (mergedDetected.length > existingDetected.length || !cfg.sample_payload) {
       void Promise.resolve(
         admin
@@ -306,7 +319,7 @@ async function executeIncomingWebhook(
             trigger_config: {
               ...cfg,
               detected_fields: mergedDetected,
-              sample_payload: flattened,
+              sample_payload: sampleWithAliases,
             },
             updated_at: new Date().toISOString(),
           })
@@ -476,6 +489,58 @@ async function executeIncomingWebhook(
         enrichedVars['webhook.message'] = leadSummary.message;
       }
       enrichedVars.lead_summary = leadSummary.formattedNote;
+
+      // Extract high-priority friendly aliases
+      const autoAmount = extractValueByPath(payload, 'amount');
+      const autoOrderId = extractValueByPath(payload, 'order.id');
+      const autoPaymentId = extractValueByPath(payload, 'payment.id');
+      const autoCourse =
+        extractValueByPath(payload, 'course') ||
+        extractValueByPath(payload, 'title') ||
+        extractValueByPath(payload, 'notes.title') ||
+        extractValueByPath(payload, 'description');
+      const autoStudent =
+        extractValueByPath(payload, 'student') ||
+        extractValueByPath(payload, 'notes.student');
+      const autoDate = extractValueByPath(payload, 'date');
+      const autoCreatedAt = extractValueByPath(payload, 'created_at');
+
+      if (autoAmount) {
+        enrichedVars.amount = autoAmount;
+        enrichedVars['webhook.amount'] = autoAmount;
+      }
+      if (autoOrderId) {
+        enrichedVars.order_id = autoOrderId;
+        enrichedVars['order.id'] = autoOrderId;
+        enrichedVars['webhook.order_id'] = autoOrderId;
+        enrichedVars['webhook.order.id'] = autoOrderId;
+      }
+      if (autoPaymentId) {
+        enrichedVars.payment_id = autoPaymentId;
+        enrichedVars['payment.id'] = autoPaymentId;
+        enrichedVars.transaction_id = autoPaymentId;
+        enrichedVars['webhook.payment_id'] = autoPaymentId;
+        enrichedVars['webhook.payment.id'] = autoPaymentId;
+        enrichedVars['webhook.transaction_id'] = autoPaymentId;
+      }
+      if (autoCourse) {
+        enrichedVars.course = autoCourse;
+        enrichedVars.title = autoCourse;
+        enrichedVars['webhook.course'] = autoCourse;
+        enrichedVars['webhook.title'] = autoCourse;
+      }
+      if (autoStudent) {
+        enrichedVars.student = autoStudent;
+        enrichedVars['webhook.student'] = autoStudent;
+      }
+      if (autoDate) {
+        enrichedVars.date = autoDate;
+        enrichedVars['webhook.date'] = autoDate;
+      }
+      if (autoCreatedAt) {
+        enrichedVars.created_at = autoCreatedAt;
+        enrichedVars['webhook.created_at'] = autoCreatedAt;
+      }
 
       await executeAutomation(automation as any, {
         accountId: automation.account_id,

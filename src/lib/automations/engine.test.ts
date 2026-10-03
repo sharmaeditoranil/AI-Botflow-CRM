@@ -635,6 +635,94 @@ describe("executeAutomation with webhook variable mapping", () => {
       }),
     );
   });
+
+  it("resolves nested Razorpay webhook variables without falling back to contact name", async () => {
+    const auto: Automation = {
+      id: "auto-webhook-razorpay",
+      account_id: ACCOUNT,
+      user_id: "user-1",
+      name: "Payment Confirmation",
+      description: undefined,
+      trigger_type: "incoming_webhook",
+      trigger_config: {},
+      is_active: true,
+      execution_count: 0,
+      last_executed_at: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    h.state.steps = [
+      {
+        id: "step-tmpl-rzp",
+        automation_id: "auto-webhook-razorpay",
+        parent_step_id: null,
+        branch: null,
+        step_type: "send_template",
+        step_config: {
+          template_name: "payment_confirmation_group_join",
+          language: "en",
+          variables: {
+            "1": "{{contact.name}}",
+            "2": "webhook.amount",
+            "3": "webhook.order.id",
+            "4": "webhook.order.id",
+            "5": "webhook.created_at",
+          },
+        },
+        position: 0,
+      },
+    ];
+
+    const rzpPayload = {
+      event: "payment.captured",
+      entity: "event",
+      account_id: "acc_Rz5d8k2Zpx03BM",
+      created_at: 1790958356,
+      payload: {
+        payment: {
+          entity: {
+            id: "pay_Tj6ZOLi3Va22SE",
+            amount: 2100,
+            currency: "INR",
+            order_id: "order_Tj6YdkfV7om7oZ",
+            notes: {
+              title: "Wedding Photo & Video Editing Me AI Ka Sahi Use",
+              student: "Priyanka",
+            },
+          },
+        },
+      },
+    };
+
+    await executeAutomation(auto, {
+      accountId: ACCOUNT,
+      triggerType: "incoming_webhook",
+      contactId: "contact-1",
+      context: {
+        conversation_id: "conv-1",
+        webhook_payload: rzpPayload,
+        vars: {
+          name: "Priyanka",
+          phone: "+918292418121",
+        },
+      },
+    });
+
+    expect(engineSendTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        templateName: "payment_confirmation_group_join",
+        language: "en",
+        params: [
+          "Priyanka",
+          "21",
+          "order_Tj6YdkfV7om7oZ",
+          "order_Tj6YdkfV7om7oZ",
+          "1790958356",
+        ],
+      }),
+    );
+  });
 });
 
 

@@ -465,13 +465,33 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
       for (let i = 1; i <= totalParamsNeeded; i++) {
         const rawMapping = cfg.variables?.[String(i)] || ''
         let resolved = resolveVariableValue(rawMapping, args, contactName, contactPhone)
-        // If resolved is still empty, provide a safe fallback so Meta API never rejects with "missing variable"
+        // If resolved is still empty, provide a smart, context-aware fallback so Meta API never rejects with "missing variable"
         if (!resolved || resolved.trim().length === 0) {
-          resolved =
-            (args.context.vars?.name as string) ||
-            (args.context.vars?.['customer name'] as string) ||
-            contactName ||
-            'Customer'
+          const mappingLower = (rawMapping || '').toLowerCase()
+          if (
+            mappingLower.includes('name') ||
+            mappingLower.includes('student') ||
+            mappingLower.includes('customer') ||
+            (i === 1 && !rawMapping)
+          ) {
+            resolved =
+              (args.context.vars?.name as string) ||
+              (args.context.vars?.['customer name'] as string) ||
+              contactName ||
+              'Customer'
+          } else if (mappingLower.includes('phone') || mappingLower.includes('mobile')) {
+            resolved = contactPhone || (args.context.vars?.phone as string) || ''
+          } else if (
+            mappingLower.includes('date') ||
+            mappingLower.includes('time') ||
+            mappingLower.includes('created')
+          ) {
+            resolved = new Date().toLocaleDateString('en-IN')
+          } else {
+            // For amount, course, transaction ID, order ID, etc., NEVER inject customer name!
+            // Meta API requires a non-empty string for each variable placeholder.
+            resolved = '-'
+          }
         }
         params.push(resolved)
       }
@@ -995,6 +1015,13 @@ function resolveVariableValue(
     if (fromPayload !== null && fromPayload !== undefined && fromPayload !== '') {
       return String(fromPayload)
     }
+    const flattened = (args.context as any).flattened_webhook
+    if (flattened) {
+      const fromFlat = extractValueByPath(flattened, rawPath)
+      if (fromFlat !== null && fromFlat !== undefined && fromFlat !== '') {
+        return String(fromFlat)
+      }
+    }
     if (args.context.vars?.[key] !== undefined && args.context.vars[key] !== '') {
       return String(args.context.vars[key])
     }
@@ -1002,6 +1029,10 @@ function resolveVariableValue(
       return String(args.context.vars[rawPath])
     }
     if (args.context.vars) {
+      const fromVars = extractValueByPath(args.context.vars, rawPath)
+      if (fromVars !== null && fromVars !== undefined && fromVars !== '') {
+        return String(fromVars)
+      }
       const foundK = Object.keys(args.context.vars).find(
         (k) => k.toLowerCase() === lower || k.toLowerCase() === rawPath.toLowerCase()
       )

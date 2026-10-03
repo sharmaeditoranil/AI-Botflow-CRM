@@ -286,4 +286,62 @@ describe('Universal Webhook Payload Flattening & Field Detection', () => {
   });
 });
 
+describe('Razorpay Deeply Nested Webhook Payload Mapping', () => {
+  const razorpayPayload = {
+    event: 'payment.captured',
+    entity: 'event',
+    account_id: 'acc_Rz5d8k2Zpx03BM',
+    created_at: 1790958356,
+    payload: {
+      payment: {
+        entity: {
+          id: 'pay_Tj6ZOLi3Va22SE',
+          fee: 50,
+          tax: 8,
+          amount: 2100,
+          currency: 'INR',
+          order_id: 'order_Tj6YdkfV7om7oZ',
+          contact: '+918292418121',
+          email: 'priyankadevisharma@gmail.com',
+          notes: {
+            type: 'masterclass_ticket',
+            title: 'Wedding Photo & Video Editing Me AI Ka Sahi Use',
+            student: 'Priyanka',
+          },
+        },
+      },
+    },
+  };
+
+  it('correctly resolves amount in rupees from paise in Razorpay payload', () => {
+    // 2100 paise -> 21 rupees
+    expect(extractValueByPath(razorpayPayload, 'amount')).toBe('21');
+    expect(extractValueByPath(razorpayPayload, 'webhook.amount')).toBe('21');
+    expect(extractValueByPath(razorpayPayload, 'payload.payment.entity.amount')).toBe('21');
+  });
+
+  it('correctly resolves order.id and payment.id from nested Razorpay payload', () => {
+    expect(extractValueByPath(razorpayPayload, 'order.id')).toBe('order_Tj6YdkfV7om7oZ');
+    expect(extractValueByPath(razorpayPayload, 'webhook.order.id')).toBe('order_Tj6YdkfV7om7oZ');
+    expect(extractValueByPath(razorpayPayload, 'webhook.order_id')).toBe('order_Tj6YdkfV7om7oZ');
+
+    expect(extractValueByPath(razorpayPayload, 'payment.id')).toBe('pay_Tj6ZOLi3Va22SE');
+    expect(extractValueByPath(razorpayPayload, 'webhook.payment.id')).toBe('pay_Tj6ZOLi3Va22SE');
+  });
+
+  it('correctly resolves course, title, and student from notes in Razorpay payload', () => {
+    expect(extractValueByPath(razorpayPayload, 'course')).toBe('Wedding Photo & Video Editing Me AI Ka Sahi Use');
+    expect(extractValueByPath(razorpayPayload, 'webhook.course')).toBe('Wedding Photo & Video Editing Me AI Ka Sahi Use');
+    expect(extractValueByPath(razorpayPayload, 'title')).toBe('Wedding Photo & Video Editing Me AI Ka Sahi Use');
+    expect(extractValueByPath(razorpayPayload, 'student')).toBe('Priyanka');
+    expect(extractValueByPath(razorpayPayload, 'webhook.student')).toBe('Priyanka');
+  });
+
+  it('correctly formats created_at Unix timestamp into readable date', () => {
+    expect(extractValueByPath(razorpayPayload, 'created_at')).toBe('1790958356');
+    const formatted = extractValueByPath(razorpayPayload, 'date');
+    expect(formatted).toMatch(/^\d{2}\/\d{2}\/\d{4}$/);
+  });
+});
+
 

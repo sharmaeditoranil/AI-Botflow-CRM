@@ -119,38 +119,111 @@ export function isSensitiveFieldKey(key: string): boolean {
 }
 
 /**
+ * Format a Unix timestamp (seconds or milliseconds) into Indian standard date string DD/MM/YYYY
+ */
+export function formatTimestampToDate(val: unknown): string {
+  if (val === null || val === undefined) return '';
+  const num = typeof val === 'number' ? val : Number(String(val).trim());
+  if (!Number.isFinite(num) || num <= 0) return String(val || '');
+  // 10 digits = seconds (e.g. 1790958356), 13 digits = ms
+  const ms = num < 10000000000 ? num * 1000 : num;
+  const d = new Date(ms);
+  if (isNaN(d.getTime())) return String(val);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+/**
+ * Check if a payload originated from Razorpay (standard event or webhook payload)
+ */
+export function isRazorpayPayload(payload: unknown): boolean {
+  if (!payload || typeof payload !== 'object') return false;
+  const rec = payload as Record<string, unknown>;
+  // Razorpay standard webhook signature: entity: 'event', account_id: 'acc_...'
+  if (
+    rec.entity === 'event' &&
+    typeof rec.account_id === 'string' &&
+    rec.account_id.startsWith('acc_')
+  ) {
+    return true;
+  }
+  if (
+    rec.payload &&
+    typeof rec.payload === 'object' &&
+    ('payment' in (rec.payload as Record<string, unknown>) || 'order' in (rec.payload as Record<string, unknown>))
+  ) {
+    const p = rec.payload as Record<string, any>;
+    if (p.payment?.entity || p.order?.entity) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Detects and formats all available variable fields from an incoming webhook payload.
  * Returns clean dot-notation field keys sorted with high-priority keys first.
  */
 export function detectWebhookFields(payload: unknown): string[] {
   if (!payload || typeof payload !== 'object') return [];
   const flattened = flattenPayload(payload);
-  const keys = Object.keys(flattened).filter((k) => !isSensitiveFieldKey(k) && k.trim().length > 0);
+  const rawKeys = Object.keys(flattened).filter((k) => !isSensitiveFieldKey(k) && k.trim().length > 0);
 
-  // Sort: high-priority common keys first, then alphabetical
-  const priorityOrder = [
+  // High priority clean aliases
+  const friendlyKeys = [
     'name',
-    'customer.name',
-    'phone',
-    'mobile',
-    'customer.phone',
-    'email',
-    'customer.email',
     'amount',
-    'order.amount',
-    'payment.amount',
-    'total',
-    'payment.id',
-    'payment_id',
+    'course',
+    'title',
     'order.id',
-    'order_id',
-    'service',
-    'city',
-    'message',
-    'status',
+    'payment.id',
+    'date',
+    'phone',
+    'email',
+    'created_at',
   ];
 
-  return Array.from(new Set(keys)).sort((a, b) => {
+  // Also include simplified suffix keys for deeply nested paths
+  const suffixKeys: string[] = [];
+  for (const k of rawKeys) {
+    const parts = k.split('.');
+    if (parts.length > 1) {
+      const leaf = parts[parts.length - 1];
+      if (leaf && !suffixKeys.includes(leaf) && !isSensitiveFieldKey(leaf)) {
+        suffixKeys.push(leaf);
+      }
+      if (parts.length > 2) {
+        const lastTwo = `${parts[parts.length - 2]}.${leaf}`;
+        if (!suffixKeys.includes(lastTwo) && !isSensitiveFieldKey(lastTwo)) {
+          suffixKeys.push(lastTwo);
+        }
+      }
+    }
+  }
+
+  const allKeys = Array.from(new Set([...friendlyKeys, ...suffixKeys, ...rawKeys]));
+
+  const priorityOrder = [
+    'name',
+    'amount',
+    'course',
+    'title',
+    'order.id',
+    'order_id',
+    'payment.id',
+    'payment_id',
+    'date',
+    'phone',
+    'email',
+    'created_at',
+    'status',
+    'message',
+    'city',
+  ];
+
+  return allKeys.sort((a, b) => {
     const aIdx = priorityOrder.indexOf(a.toLowerCase());
     const bIdx = priorityOrder.indexOf(b.toLowerCase());
     if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
@@ -177,7 +250,7 @@ function tokenizePath(path: string): string[] {
  * Extract a scalar value (stringified) from an arbitrary JSON object using
  * a path string like "customer.phone", "order.recipient.mobile", "webhook.name", etc.
  * Supports dot notation, array indices, bracket notation, flattened objects,
- * and optional "webhook." or "{{webhook. ... }}" prefixes.
+ * suffix matching across nested keys, and optional "webhook." or "{{webhook. ... }}" prefixes.
  */
 export function extractValueByPath(payload: unknown, path: string): string | null {
   if (!payload || typeof payload !== 'object') return null;
@@ -189,6 +262,12 @@ export function extractValueByPath(payload: unknown, path: string): string | nul
   if (cleanPath.startsWith('{{') && cleanPath.endsWith('}}')) {
     cleanPath = cleanPath.slice(2, -2).trim();
   }
+
+  // If path starts with webhook., strip it
+  if (cleanPath.startsWith('webhook.')) {
+    cleanPath = cleanPath.slice(8).trim();
+  }
+  if (!cleanPath) return null;
 
   const record = payload as Record<string, unknown>;
 
@@ -203,65 +282,231 @@ export function extractValueByPath(payload: unknown, path: string): string | nul
     }
   }
 
-  // If path starts with webhook., try stripping it first
-  if (cleanPath.startsWith('webhook.')) {
-    const stripped = cleanPath.slice(8).trim();
-    if (stripped in record && record[stripped] !== undefined && record[stripped] !== null) {
-      const val = record[stripped];
-      if (typeof val === 'string') {
-        const trimmed = val.trim();
-        if (trimmed.length > 0) return trimmed;
-      } else if (typeof val === 'number' || typeof val === 'boolean') {
-        return String(val);
-      }
+  // Also check if cleanPath with "webhook." prefix exists in record
+  const webhookKey = `webhook.${cleanPath}`;
+  if (webhookKey in record && record[webhookKey] !== undefined && record[webhookKey] !== null) {
+    const val = record[webhookKey];
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (trimmed.length > 0) return trimmed;
+    } else if (typeof val === 'number' || typeof val === 'boolean') {
+      return String(val);
     }
-    const strippedRes = extractValueByPath(payload, stripped);
-    if (strippedRes !== null) return strippedRes;
   }
 
+  // Tokenize and drill down for nested objects
   const tokens = tokenizePath(cleanPath);
-  if (tokens.length === 0) return null;
-
-  let current: unknown = payload;
-
-  for (let i = 0; i < tokens.length; i++) {
-    if (current === null || current === undefined || typeof current !== 'object') {
-      return null;
-    }
-
-    const token = tokens[i];
-    const isLast = i === tokens.length - 1;
-    const curRecord = current as Record<string, unknown>;
-
-    if (token in curRecord) {
-      current = curRecord[token];
-    } else if (isLast) {
-      // Case-insensitive fallback on the final property
-      const lowerToken = token.toLowerCase();
-      const matchedKey = Object.keys(curRecord).find(
-        (k) => k.toLowerCase() === lowerToken
-      );
-      if (matchedKey !== undefined) {
-        current = curRecord[matchedKey];
-      } else {
-        return null;
+  let tokenDrillResult: unknown = null;
+  if (tokens.length > 0) {
+    let current: unknown = payload;
+    let drillFailed = false;
+    for (let i = 0; i < tokens.length; i++) {
+      if (current === null || current === undefined || typeof current !== 'object') {
+        drillFailed = true;
+        break;
       }
-    } else {
-      return null;
+      const token = tokens[i];
+      const isLast = i === tokens.length - 1;
+      const curRecord = current as Record<string, unknown>;
+
+      if (token in curRecord) {
+        current = curRecord[token];
+      } else if (isLast) {
+        const lowerToken = token.toLowerCase();
+        const matchedKey = Object.keys(curRecord).find(
+          (k) => k.toLowerCase() === lowerToken
+        );
+        if (matchedKey !== undefined) {
+          current = curRecord[matchedKey];
+        } else {
+          drillFailed = true;
+          break;
+        }
+      } else {
+        drillFailed = true;
+        break;
+      }
+    }
+    if (!drillFailed && current !== null && current !== undefined && typeof current !== 'object') {
+      tokenDrillResult = current;
     }
   }
 
-  if (current === null || current === undefined) {
-    return null;
+  const isRzp = isRazorpayPayload(payload);
+
+  if (tokenDrillResult !== null && tokenDrillResult !== undefined) {
+    if (typeof tokenDrillResult === 'string') {
+      const trimmed = tokenDrillResult.trim();
+      if (trimmed.length > 0) return trimmed;
+    } else if (typeof tokenDrillResult === 'number') {
+      if (isRzp && (cleanPath.endsWith('amount') || cleanPath === 'amount') && tokenDrillResult >= 100) {
+        const rupees = tokenDrillResult / 100;
+        return Number.isInteger(rupees) ? String(rupees) : rupees.toFixed(2);
+      }
+      return String(tokenDrillResult);
+    } else if (typeof tokenDrillResult === 'boolean') {
+      return String(tokenDrillResult);
+    }
   }
 
-  if (typeof current === 'string') {
-    const trimmed = current.trim();
-    return trimmed.length > 0 ? trimmed : null;
+  // Suffix, alias, and leaf matching across flattened payload keys
+  const flattened = flattenPayload(payload);
+  const flatEntries = Object.entries(flattened);
+  if (flatEntries.length === 0) return null;
+
+  const lowerPath = cleanPath.toLowerCase();
+  const underPath = lowerPath.replace(/\./g, '_');
+  const dotPath = lowerPath.replace(/_/g, '.');
+
+  // Helper to extract formatted scalar from a flattened entry
+  const formatEntryValue = (val: unknown, key: string): string | null => {
+    if (val === null || val === undefined) return null;
+    const str = String(val).trim();
+    if (!str) return null;
+
+    // Razorpay amount conversion: paise -> rupees
+    if (
+      isRzp &&
+      typeof val === 'number' &&
+      (key.endsWith('.amount') || key === 'amount' || key.endsWith('.base_amount')) &&
+      val >= 100
+    ) {
+      const rupees = val / 100;
+      return Number.isInteger(rupees) ? String(rupees) : rupees.toFixed(2);
+    }
+
+    // Unix timestamp conversion for date keys
+    if (
+      (lowerPath === 'date' || lowerPath === 'payment_date' || lowerPath === 'datetime') &&
+      typeof val === 'number' &&
+      val > 1000000000 &&
+      val < 2500000000
+    ) {
+      return formatTimestampToDate(val);
+    }
+
+    return str;
+  };
+
+  // 1. Direct exact or case-insensitive match on flattened keys
+  for (const [k, v] of flatEntries) {
+    const kLower = k.toLowerCase();
+    if (kLower === lowerPath || kLower === underPath || kLower === dotPath) {
+      const res = formatEntryValue(v, k);
+      if (res) return res;
+    }
   }
 
-  if (typeof current === 'number' || typeof current === 'boolean') {
-    return String(current);
+  // 2. Suffix match: key ends with `.${lowerPath}` or `.${underPath}` or `.${dotPath}`
+  // e.g. "payload.payment.entity.amount" ends with ".amount"
+  // e.g. "payload.payment.entity.order_id" ends with ".order_id" (matching "order.id")
+  for (const [k, v] of flatEntries) {
+    const kLower = k.toLowerCase();
+    if (
+      kLower.endsWith(`.${lowerPath}`) ||
+      kLower.endsWith(`.${underPath}`) ||
+      kLower.endsWith(`.${dotPath}`)
+    ) {
+      const res = formatEntryValue(v, k);
+      if (res) return res;
+    }
+  }
+
+  // 3. Semantic keyword matching
+  // A) Amount
+  if (lowerPath === 'amount' || lowerPath === 'total' || lowerPath === 'price') {
+    for (const [k, v] of flatEntries) {
+      const kLower = k.toLowerCase();
+      if (kLower.endsWith('.amount') || kLower.endsWith('.base_amount') || kLower.endsWith('.total')) {
+        const res = formatEntryValue(v, k);
+        if (res) return res;
+      }
+    }
+  }
+
+  // B) Order ID
+  if (lowerPath === 'order.id' || lowerPath === 'order_id' || lowerPath === 'orderid') {
+    for (const [k, v] of flatEntries) {
+      const kLower = k.toLowerCase();
+      if (kLower.endsWith('.order_id') || kLower.endsWith('.order.id') || kLower.endsWith('.orderid')) {
+        const res = formatEntryValue(v, k);
+        if (res) return res;
+      }
+    }
+  }
+
+  // C) Payment ID / Transaction ID
+  if (
+    lowerPath === 'payment.id' ||
+    lowerPath === 'payment_id' ||
+    lowerPath === 'transaction_id' ||
+    lowerPath === 'txid' ||
+    lowerPath === 'tx_id' ||
+    lowerPath === 'transaction'
+  ) {
+    for (const [k, v] of flatEntries) {
+      const kLower = k.toLowerCase();
+      if (
+        kLower.endsWith('.payment.entity.id') ||
+        kLower.endsWith('.payment.id') ||
+        kLower.endsWith('.payment_id') ||
+        kLower.endsWith('.transaction_id') ||
+        kLower.endsWith('.acquirer_data.rrn')
+      ) {
+        const res = formatEntryValue(v, k);
+        if (res) return res;
+      }
+    }
+  }
+
+  // D) Course / Title / Product
+  if (
+    lowerPath === 'course' ||
+    lowerPath === 'title' ||
+    lowerPath === 'product' ||
+    lowerPath === 'service'
+  ) {
+    for (const [k, v] of flatEntries) {
+      const kLower = k.toLowerCase();
+      if (
+        kLower.endsWith('.notes.title') ||
+        kLower.endsWith('.notes.course') ||
+        kLower.endsWith('.title') ||
+        kLower.endsWith('.course') ||
+        kLower.endsWith('.description') ||
+        kLower.endsWith('.item_name')
+      ) {
+        const res = formatEntryValue(v, k);
+        if (res) return res;
+      }
+    }
+  }
+
+  // E) Student / Name
+  if (lowerPath === 'student' || lowerPath === 'customer' || lowerPath === 'name' || lowerPath === 'customer.name') {
+    for (const [k, v] of flatEntries) {
+      const kLower = k.toLowerCase();
+      if (
+        kLower.endsWith('.notes.student') ||
+        kLower.endsWith('.student') ||
+        kLower.endsWith('.customer_name') ||
+        kLower.endsWith('.full_name')
+      ) {
+        const res = formatEntryValue(v, k);
+        if (res) return res;
+      }
+    }
+  }
+
+  // F) Date / Created At
+  if (lowerPath === 'date' || lowerPath === 'payment_date' || lowerPath === 'created_at') {
+    for (const [k, v] of flatEntries) {
+      const kLower = k.toLowerCase();
+      if (kLower.endsWith('.created_at') || kLower === 'created_at' || kLower.endsWith('.date')) {
+        const res = formatEntryValue(v, k);
+        if (res) return res;
+      }
+    }
   }
 
   return null;

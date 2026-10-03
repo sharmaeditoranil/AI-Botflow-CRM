@@ -235,6 +235,7 @@ interface AutomationResources {
   pipelines: PipelineOption[]
   stages: PipelineStageOption[]
   webhookFields?: string[]
+  samplePayload?: Record<string, unknown>
 }
 
 interface PipelineOption {
@@ -281,6 +282,7 @@ function ResourcesProvider({
   const [pipelines, setPipelines] = useState<PipelineOption[]>([])
   const [stages, setStages] = useState<PipelineStageOption[]>([])
   const [liveDetectedFields, setLiveDetectedFields] = useState<string[]>([])
+  const [liveSamplePayload, setLiveSamplePayload] = useState<Record<string, unknown> | null>(null)
 
   useEffect(() => {
     if (!automationId || triggerType !== "incoming_webhook") return
@@ -295,6 +297,10 @@ function ResourcesProvider({
         if (Array.isArray(fields) && fields.length > 0 && active) {
           setLiveDetectedFields(fields)
         }
+        const sample = data?.automation?.trigger_config?.sample_payload
+        if (sample && typeof sample === "object" && active) {
+          setLiveSamplePayload(sample as Record<string, unknown>)
+        }
       } catch {}
     }
 
@@ -305,6 +311,14 @@ function ResourcesProvider({
     }
   }, [automationId, triggerType])
 
+  const samplePayload = useMemo(() => {
+    return (
+      liveSamplePayload ||
+      (triggerConfig?.sample_payload as Record<string, unknown>) ||
+      undefined
+    )
+  }, [liveSamplePayload, triggerConfig])
+
   const webhookFields = useMemo(() => {
     const detected: string[] = []
     const sourceFields = [
@@ -314,8 +328,9 @@ function ResourcesProvider({
     for (const f of sourceFields) {
       if (typeof f === "string" && f.trim()) detected.push(f.trim())
     }
-    if (triggerConfig?.sample_payload && typeof triggerConfig.sample_payload === "object") {
-      for (const k of Object.keys(triggerConfig.sample_payload)) {
+    const sample = samplePayload
+    if (sample && typeof sample === "object") {
+      for (const k of Object.keys(sample)) {
         if (typeof k === "string" && k.trim() && !detected.includes(k.trim())) {
           detected.push(k.trim())
         }
@@ -328,7 +343,7 @@ function ResourcesProvider({
       detected.push(triggerConfig.name_path.trim())
     }
     return Array.from(new Set(detected))
-  }, [triggerConfig, liveDetectedFields])
+  }, [triggerConfig, liveDetectedFields, samplePayload])
 
   useEffect(() => {
     let cancelled = false
@@ -383,7 +398,7 @@ function ResourcesProvider({
 
   return (
     <ResourcesContext.Provider
-      value={{ tags, members, templates, customFields, pipelines, stages, webhookFields }}
+      value={{ tags, members, templates, customFields, pipelines, stages, webhookFields, samplePayload }}
     >
       {children}
     </ResourcesContext.Provider>
@@ -629,9 +644,11 @@ function DealPipelineFields({
 function WebhookVariablesMenu({
   onSelect,
   availableFields = [],
+  samplePayload,
 }: {
   onSelect: (field: string) => void
   availableFields?: string[]
+  samplePayload?: Record<string, unknown>
 }) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState("")
@@ -641,11 +658,13 @@ function WebhookVariablesMenu({
   const commonWebhookFields = [
     "name",
     "amount",
-    "payment.id",
+    "course",
     "order.id",
-    "customer.name",
+    "payment.id",
+    "date",
     "phone",
     "email",
+    "created_at",
   ]
 
   const mergedFields = useMemo(() => {
@@ -664,6 +683,33 @@ function WebhookVariablesMenu({
     const q = search.toLowerCase()
     return all.filter((f) => f.toLowerCase().includes(q))
   }, [availableFields, search])
+
+  const getSampleVal = (field: string): string | null => {
+    if (!samplePayload) return null
+    const clean = field.startsWith("webhook.") ? field.slice(8) : field
+    if (clean in samplePayload && samplePayload[clean] !== undefined && samplePayload[clean] !== null) {
+      return String(samplePayload[clean]).slice(0, 32)
+    }
+    const cleanLower = clean.toLowerCase()
+    const under = cleanLower.replace(/\./g, "_")
+    const dot = cleanLower.replace(/_/g, ".")
+    for (const [k, v] of Object.entries(samplePayload)) {
+      const kLower = k.toLowerCase()
+      if (
+        kLower === cleanLower ||
+        kLower === under ||
+        kLower === dot ||
+        kLower.endsWith(`.${cleanLower}`) ||
+        kLower.endsWith(`.${under}`) ||
+        kLower.endsWith(`.${dot}`)
+      ) {
+        if (v !== null && v !== undefined) {
+          return String(v).slice(0, 32)
+        }
+      }
+    }
+    return null
+  }
 
   useEffect(() => {
     if (!open) return
@@ -689,7 +735,7 @@ function WebhookVariablesMenu({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 w-64 rounded-md border border-border bg-popover p-2 shadow-xl">
+        <div className="absolute right-0 top-full z-50 mt-1 w-72 rounded-md border border-border bg-popover p-2 shadow-xl">
           <div className="flex items-center justify-between pb-1.5 border-b border-border/60">
             <span className="font-semibold text-foreground text-[11px] flex items-center gap-1">
               <Webhook className="h-3 w-3 text-primary" /> Webhook Variables
@@ -711,12 +757,13 @@ function WebhookVariablesMenu({
             />
           </div>
 
-          <div className="max-h-48 overflow-y-auto space-y-0.5 pr-0.5">
+          <div className="max-h-56 overflow-y-auto space-y-0.5 pr-0.5">
             {mergedFields.map((field) => {
               const isDetected = availableFields.some(
                 (af) => af === field || af === `webhook.${field}` || af.toLowerCase() === field.toLowerCase()
               )
               const varString = `webhook.${field}`
+              const sampleVal = getSampleVal(field)
               return (
                 <button
                   key={field}
@@ -725,11 +772,18 @@ function WebhookVariablesMenu({
                     onSelect(varString)
                     setOpen(false)
                   }}
-                  className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left font-mono text-[11px] text-foreground hover:bg-primary/10 hover:text-primary transition-colors"
+                  className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left font-mono text-[11px] text-foreground hover:bg-primary/10 hover:text-primary transition-colors gap-2"
                 >
-                  <span className="truncate">{varString}</span>
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <span className="truncate">{varString}</span>
+                    {sampleVal && (
+                      <span className="truncate text-[10px] font-sans text-muted-foreground/80 font-normal">
+                        {sampleVal}
+                      </span>
+                    )}
+                  </div>
                   {isDetected && (
-                    <span className="text-[9px] font-sans px-1 rounded bg-emerald-500/15 text-emerald-500 shrink-0 ml-1">
+                    <span className="text-[9px] font-sans px-1 rounded bg-emerald-500/15 text-emerald-500 shrink-0">
                       Detected
                     </span>
                   )}
@@ -783,7 +837,7 @@ function SendTemplateFields({
   }) => void
   t: ReturnType<typeof useTranslations>
 }) {
-  const { templates, webhookFields } = useResources()
+  const { templates, webhookFields, samplePayload } = useResources()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploadingMedia, setUploadingMedia] = useState(false)
   const [showUrlInput, setShowUrlInput] = useState(false)
@@ -1182,6 +1236,7 @@ function SendTemplateFields({
                       <WebhookVariablesMenu
                         onSelect={(v) => handleVarChange(idx, v)}
                         availableFields={webhookFields}
+                        samplePayload={samplePayload}
                       />
                     </div>
                   </div>
