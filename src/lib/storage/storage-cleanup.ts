@@ -135,24 +135,30 @@ async function collectExpiredBucketFiles(
       for (const item of items) {
         const itemPath = prefix ? `${prefix}/${item.name}` : item.name;
 
-        // Check if item is a folder
-        const isFolder = !item.id || item.metadata === null || (item as any).is_folder;
+        // Check if item is a folder (folders in Supabase storage have null id, null metadata, or null created_at)
+        const isFolder =
+          !item.id ||
+          item.metadata === null ||
+          (item as any).is_folder ||
+          item.created_at === null ||
+          item.created_at === undefined;
+
         if (isFolder) {
           await walk(itemPath);
         } else {
-          // File: evaluate creation age
+          // File: evaluate creation age (item.created_at is authoritative from object storage)
           let fileTime = 0;
           if (item.created_at) {
             fileTime = new Date(item.created_at).getTime();
-          }
-
-          // Also check timestamp prefix in filename: e.g. <timestamp>-filename.ext
-          const match = item.name.match(/^(\d{10,13})-/);
-          if (match) {
-            const rawPrefix = match[1];
-            const parsed = Number(rawPrefix.length === 10 ? rawPrefix + '000' : rawPrefix);
-            if (!isNaN(parsed) && parsed > 0) {
-              fileTime = Math.min(fileTime || parsed, parsed);
+          } else {
+            // Fallback: check timestamp prefix in filename: e.g. <timestamp>-filename.ext
+            const match = item.name.match(/^(\d{10,13})-/);
+            if (match) {
+              const rawPrefix = match[1];
+              const parsed = Number(rawPrefix.length === 10 ? rawPrefix + '000' : rawPrefix);
+              if (!isNaN(parsed) && parsed > 0) {
+                fileTime = parsed;
+              }
             }
           }
 
@@ -320,12 +326,12 @@ export async function executeStorageCleanup(options?: {
         details.flowEvents += eventCount;
       }
 
-      // b. flow_runs finished statuses
+      // b. flow_runs finished statuses (flow_runs uses started_at)
       const { count: runCount } = await supabase
         .from('flow_runs')
         .delete({ count: 'exact' })
-        .in('status', ['completed', 'failed', 'cancelled', 'timed_out'])
-        .lt('created_at', logsCutoffIso);
+        .in('status', ['completed', 'failed', 'timed_out', 'handed_off'])
+        .lt('started_at', logsCutoffIso);
       if (runCount) {
         totalLogsDeleted += runCount;
         details.flowRuns += runCount;
