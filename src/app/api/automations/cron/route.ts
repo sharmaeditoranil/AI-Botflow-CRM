@@ -58,5 +58,29 @@ export async function GET(request: Request) {
     console.warn('[cron] CRM AI follow-up runner notice:', crmErr)
   }
 
-  return NextResponse.json({ processed, errors, crmFollowupsProcessed })
+  // Also sweep automated storage & data retention cleanup (once every 24 hours)
+  let storageCleanupRun = null
+  try {
+    const { getStorageRetentionSettings, executeStorageCleanup } = await import('@/lib/storage/storage-cleanup')
+    const retentionSettings = await getStorageRetentionSettings()
+    if (retentionSettings.auto_cleanup_enabled) {
+      const lastRunMs = retentionSettings.last_cleanup_at
+        ? new Date(retentionSettings.last_cleanup_at).getTime()
+        : 0
+      const hoursSinceLast = (Date.now() - lastRunMs) / (1000 * 60 * 60)
+      if (hoursSinceLast >= 24) {
+        storageCleanupRun = await executeStorageCleanup({ manual: false })
+      }
+    }
+  } catch (storageErr) {
+    console.warn('[cron] Auto storage cleanup runner notice:', storageErr)
+  }
+
+  return NextResponse.json({
+    processed,
+    errors,
+    crmFollowupsProcessed,
+    storageCleanupRun,
+  })
 }
+

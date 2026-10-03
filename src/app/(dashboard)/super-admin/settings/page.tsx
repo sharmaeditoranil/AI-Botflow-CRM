@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import {
   Settings,
@@ -13,6 +14,8 @@ import {
   AlertCircle,
   Bot,
   Wallet,
+  HardDrive,
+  ArrowRight,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -505,6 +508,37 @@ export default function SuperAdminSettingsPage() {
               />
               <span className="text-[10px] text-muted-foreground block">24hr customer chat window</span>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Storage Management & Auto Data Retention */}
+      <Card className="border-border bg-card">
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <HardDrive className="h-5 w-5 text-amber-400" />
+              <div>
+                <CardTitle className="text-base font-bold text-foreground">
+                  Storage Management & Auto Data Retention
+                </CardTitle>
+                <CardDescription className="text-xs text-muted-foreground">
+                  Configure how many days to keep customer voice notes, videos, PDFs, and high-volume webhook logs before auto-deleting them in the background.
+                </CardDescription>
+              </div>
+            </div>
+            <Link href="/super-admin/storage">
+              <Button type="button" variant="outline" size="sm" className="border-amber-500/40 text-amber-300 hover:bg-amber-500/20 text-xs">
+                Manage Storage & Cleanup <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+              </Button>
+            </Link>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2 text-xs">
+          <div className="rounded-lg border border-border/80 bg-muted/40 p-3 text-[11px] text-muted-foreground flex items-center justify-between">
+            <span>
+              Background auto-cleanup scans <code>chat-media</code>, <code>flow-media</code>, and database execution logs every 24 hours to keep your server storage clean and prevent disk overflow.
+            </span>
           </div>
         </CardContent>
       </Card>

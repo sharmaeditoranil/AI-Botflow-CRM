@@ -12,6 +12,7 @@ import {
   ArrowLeft,
   Loader2,
   Ticket,
+  HardDrive,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { BrandLogo } from '@/components/brand/brand-logo';
@@ -44,6 +45,7 @@ export default function SuperAdminLayout({ children }: { children: React.ReactNo
     { href: '/super-admin/tenants', label: 'Tenants / Customers', icon: Users },
     { href: '/super-admin/plans', label: 'Plans & Limits', icon: CreditCard },
     { href: '/super-admin/coupons', label: 'Coupons & Promos', icon: Ticket },
+    { href: '/super-admin/storage', label: 'Storage & Auto Cleanup', icon: HardDrive },
     { href: '/super-admin/settings', label: 'Gateway, Wallet & Rates', icon: Settings },
   ];
 
