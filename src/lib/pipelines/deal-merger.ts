@@ -317,7 +317,7 @@ export function parseDealLeadDetails(
   rawTitle?: string | null,
   rawNotes?: string | null
 ): ParsedDealLead {
-  let title = (rawTitle || "").trim();
+  const title = (rawTitle || "").trim();
   const notes = (rawNotes || "").trim();
 
   let service = "";

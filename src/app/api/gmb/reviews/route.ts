@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
       .eq("account_id", profile.account_id)
       .order("review_timestamp", { ascending: false });
 
-    let reviews = dbReviews;
+    const reviews = dbReviews;
 
     if (revError) {
       console.warn("[GMB Reviews] Database fetch notice:", revError.message);
