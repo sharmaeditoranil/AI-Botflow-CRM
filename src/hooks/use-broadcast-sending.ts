@@ -241,7 +241,23 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
     // Always exclude customers who opted out / unsubscribed
     contacts = contacts.filter((c) => !c.is_opted_out);
 
-    return contacts;
+    // Deduplicate contacts by ID and normalized phone so no recipient
+    // ever receives duplicate messages within the same broadcast campaign.
+    const seenContactIds = new Set<string>();
+    const seenPhoneKeys = new Set<string>();
+    const uniqueContacts: Contact[] = [];
+    for (const c of contacts) {
+      if (!c.id || seenContactIds.has(c.id)) continue;
+      const phoneKey = normalizeKey(c.phone ?? '');
+      if (phoneKey) {
+        if (seenPhoneKeys.has(phoneKey)) continue;
+        seenPhoneKeys.add(phoneKey);
+      }
+      seenContactIds.add(c.id);
+      uniqueContacts.push(c);
+    }
+
+    return uniqueContacts;
   }
 
   /**

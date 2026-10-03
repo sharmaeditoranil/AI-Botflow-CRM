@@ -480,11 +480,12 @@ export function Step4ScheduleSend({
                     {t('cancel')}
                   </Button>
                   <Button
+                    disabled={isProcessing}
                     onClick={() => {
                       setShowConfirm(false);
                       onSend();
                     }}
-                    className="bg-primary text-primary-foreground hover:bg-primary/90"
+                    className="bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
                   >
                     <Send className="h-4 w-4" />
                     {t('scheduleSend.sendNow')}

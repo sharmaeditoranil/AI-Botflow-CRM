@@ -119,6 +119,20 @@ export async function POST(request: Request) {
       )
     }
 
+    // Deduplicate recipients by sanitized phone number so identical numbers in one batch
+    // are only sent to once.
+    const seenPhones = new Set<string>();
+    const uniqueRecipients: NewRecipient[] = [];
+    for (const r of recipients) {
+      const sanitized = sanitizePhoneForMeta(r.phone || '');
+      if (sanitized) {
+        if (seenPhones.has(sanitized)) continue;
+        seenPhones.add(sanitized);
+      }
+      uniqueRecipients.push(r);
+    }
+    recipients = uniqueRecipients;
+
     if (!template_name) {
       return NextResponse.json(
         { error: 'template_name is required' },

@@ -47,7 +47,7 @@ export default function NewBroadcastPage() {
   const [name, setName] = useState('');
 
   async function handleSend() {
-    if (!template) return;
+    if (!template || isProcessing) return;
 
     try {
       const broadcastId = await createAndSendBroadcast({
