@@ -23,6 +23,10 @@
 # misc
 .DS_Store
 *.pem
+*.jks
+*.aab
+*.apk
+playstore-release/
 
 # debug
 npm-debug.log*

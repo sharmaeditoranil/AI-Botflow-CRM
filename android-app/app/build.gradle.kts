@@ -5,20 +5,30 @@ plugins {
 
 android {
     namespace = "in.aibotflow.crm"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "in.aibotflow.crm"
         minSdk = 24
-        targetSdk = 34
-        versionCode = 2
-        versionName = "1.0.1"
+        targetSdk = 36
+        versionCode = 3
+        versionName = "1.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("../aibotflow-release.jks")
+            storePassword = "AiBotflow@2026"
+            keyAlias = "aibotflow"
+            keyPassword = "AiBotflow@2026"
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

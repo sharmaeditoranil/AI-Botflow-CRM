@@ -222,7 +222,6 @@ class MainActivity : AppCompatActivity() {
         val settings = binding.webView.settings
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
-        settings.databaseEnabled = true
         settings.useWideViewPort = true
         settings.loadWithOverviewMode = true
         settings.setSupportZoom(false)
@@ -234,7 +233,7 @@ class MainActivity : AppCompatActivity() {
 
         // Append custom app identifier to User-Agent
         val defaultUserAgent = settings.userAgentString
-        settings.userAgentString = "$defaultUserAgent AIBotflowCRM/1.0.0 (Android)"
+        settings.userAgentString = "$defaultUserAgent AIBotflowCRM/1.0.2 (Android)"
 
         // Enable cookies
         val cookieManager = CookieManager.getInstance()
@@ -254,7 +253,7 @@ class MainActivity : AppCompatActivity() {
                 val url = request?.url?.toString() ?: return false
 
                 // Keep dash.aibotflow.in internal
-                if (url.startsWith("https://dash.aibotflow.in") || url.startsWith("https://zcfzzbbxionrcxypcbfz.supabase.co")) {
+                if (url.startsWith("https://dash.aibotflow.in") || url.startsWith("https://behqbokdnwsaflapewjf.supabase.co") || url.startsWith("https://zcfzzbbxionrcxypcbfz.supabase.co")) {
                     return false
                 }
 
