@@ -630,8 +630,22 @@ html[data-mode="light"] {
    * surface follows the theme, the text must too (white-on-white in
    * light mode otherwise). */
   .bg-\[\#202c33\].text-white { color: var(--card-foreground); }
-  /* Outgoing bubbles: the deep brand fill reads heavy on white. */
-  html[data-mode="light"] .bg-\[\#005c4b\] { background-color: var(--primary); }
+  /* Outgoing bubbles in light mode: a whisper of the accent with dark
+   * text (WhatsApp-light style) instead of a solid fill. Everything
+   * inside that assumed white-on-primary is re-pointed to match. */
+  html[data-mode="light"] .bg-\[\#005c4b\] {
+    background-color: color-mix(in oklch, var(--primary) 11%, var(--card));
+    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--primary) 18%, transparent);
+  }
+  html[data-mode="light"] .bg-\[\#005c4b\].text-white,
+  html[data-mode="light"] .bg-\[\#005c4b\] .text-white { color: var(--foreground); }
+  html[data-mode="light"] .bg-\[\#005c4b\] :is(.text-emerald-100\/75, .text-emerald-200\/70) { color: var(--muted-foreground); }
+  html[data-mode="light"] .bg-\[\#005c4b\] .text-primary-foreground { color: var(--primary); }
+  html[data-mode="light"] .bg-\[\#005c4b\] .border-primary-foreground\/50 { border-color: color-mix(in oklch, var(--primary) 50%, transparent); }
+  html[data-mode="light"] .bg-\[\#005c4b\] :is(.bg-primary-foreground\/15, .bg-primary-foreground\/20, .bg-white\/20) {
+    background-color: color-mix(in oklch, var(--primary) 12%, transparent);
+  }
+  html[data-mode="light"] .bg-\[\#005c4b\] .bg-white\/20.text-white { color: var(--primary); }
 }
 
 /* Dashboard conversations chart draws its series with literal hex
