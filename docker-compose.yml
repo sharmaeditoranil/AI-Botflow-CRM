@@ -23,8 +23,11 @@ services:
     environment:
       PORT: 3000
     # Host side only — HOST_PORT=8080 publishes the app on :8080.
+    # Behind a reverse proxy on the same host, set HOST_BIND=127.0.0.1
+    # so the plain-HTTP port isn't reachable from the internet (Docker
+    # publishes ports past ufw/iptables rules).
     ports:
-      - '${HOST_PORT:-3000}:3000'
+      - '${HOST_BIND:-0.0.0.0}:${HOST_PORT:-3000}:3000'
     restart: unless-stopped
     healthcheck:
       test:

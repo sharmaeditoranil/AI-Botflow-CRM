@@ -31,6 +31,11 @@ is included.
 > the healthcheck don't target. Compose pins it to 3000 for that
 > reason.
 
+> Running behind nginx/Caddy on the same host? Add `HOST_BIND=127.0.0.1`
+> to `.env.local` so the port is published on loopback only. Docker
+> bypasses ufw for published ports, so without it the plain-HTTP app is
+> reachable directly on `http://<server-ip>:3000`.
+
 ## Build-time vs runtime variables
 
 - `NEXT_PUBLIC_*` variables are **inlined into the client bundle at
