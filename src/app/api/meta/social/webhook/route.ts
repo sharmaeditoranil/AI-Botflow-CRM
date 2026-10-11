@@ -1,6 +1,8 @@
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { decrypt } from '@/lib/whatsapp/encryption';
+import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature';
 import {
   getFacebookUserProfile,
   getInstagramUserProfile,
@@ -88,11 +90,43 @@ interface SocialWebhookPayload {
 }
 
 /**
+ * Messenger / Instagram webhooks are signed with the platform Meta App
+ * secret, which may live in META_APP_SECRET (comma-separated for several
+ * apps) or in platform_settings.meta_app_secret (Super Admin → Settings).
+ * Accept a signature that matches any of them; fail closed otherwise.
+ */
+async function isValidSocialSignature(rawBody: string, signature: string | null): Promise<boolean> {
+  if (verifyMetaWebhookSignature(rawBody, signature)) return true;
+  if (!signature || !signature.startsWith('sha256=')) return false;
+
+  const { data } = await supabaseAdmin()
+    .from('platform_settings')
+    .select('meta_app_secret')
+    .limit(1)
+    .maybeSingle();
+  const secret = (data?.meta_app_secret as string | null | undefined)?.trim();
+  if (!secret) return false;
+
+  const expected = Buffer.from('sha256=' + createHmac('sha256', secret).update(rawBody).digest('hex'));
+  const supplied = Buffer.from(signature);
+  return supplied.length === expected.length && timingSafeEqual(supplied, expected);
+}
+
+/**
  * Handle incoming Facebook Messenger and Instagram DM messages.
  */
 export async function POST(request: Request) {
+  // Read the raw body first so we can HMAC-verify the exact bytes Meta
+  // signed; request.json() would re-encode them.
+  const rawBody = await request.text();
+  const signature = request.headers.get('x-hub-signature-256');
+  if (!(await isValidSocialSignature(rawBody, signature))) {
+    console.warn('[social-webhook] rejected request with invalid signature');
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+  }
+
   try {
-    const body = (await request.json()) as SocialWebhookPayload;
+    const body = JSON.parse(rawBody) as SocialWebhookPayload;
 
     if (!body || !body.entry || !Array.isArray(body.entry)) {
       return NextResponse.json({ received: true });

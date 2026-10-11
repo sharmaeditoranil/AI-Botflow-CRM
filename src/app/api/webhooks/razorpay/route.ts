@@ -33,28 +33,39 @@ export async function POST(req: NextRequest) {
   const { webhookSecret } = await getRazorpayCredentials();
   const adminSupabase = getAdminSupabase();
 
-  if (webhookSecret) {
-    let isValid = verifyRazorpayWebhookSignature(rawBody, signature, webhookSecret);
-    // If not matching global secret, check against active webhook bot secrets
-    if (!isValid) {
-      const { data: triggers } = await adminSupabase
-        .from('webhook_triggers')
-        .select('secret_key')
-        .eq('is_active', true);
-      if (triggers && triggers.length > 0) {
-        for (const t of triggers) {
-          if (t.secret_key && verifyRazorpayWebhookSignature(rawBody, signature, t.secret_key)) {
-            isValid = true;
-            break;
-          }
-        }
+  // Two kinds of senders share this endpoint:
+  //   - the platform's own Razorpay account (signed with the global
+  //     webhook secret) — the only one allowed to change plans/invoices;
+  //   - a tenant's Razorpay account (signed with one of that tenant's
+  //     webhook bot secrets) — only allowed to drive that tenant's bots.
+  // Anything that matches neither is rejected; there is no unsigned path.
+  let platformVerified = false;
+  let signerAccountId: string | null = null;
+
+  if (webhookSecret && verifyRazorpayWebhookSignature(rawBody, signature, webhookSecret)) {
+    platformVerified = true;
+  } else {
+    const { data: triggers } = await adminSupabase
+      .from('webhook_triggers')
+      .select('secret_key, account_id')
+      .eq('is_active', true);
+    for (const t of triggers || []) {
+      if (t.secret_key && verifyRazorpayWebhookSignature(rawBody, signature, t.secret_key)) {
+        signerAccountId = t.account_id;
+        break;
       }
     }
-    if (!isValid) {
-      console.error('[Razorpay Webhook] Invalid signature');
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
-    }
   }
+
+  if (!platformVerified && !signerAccountId) {
+    console.error('[Razorpay Webhook] Invalid signature');
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
+  }
+
+  // Tenant-signed events are pinned to the signing tenant regardless of
+  // what the payload's notes claim.
+  const resolveAccountId = (notes: Record<string, any>): string | undefined =>
+    platformVerified ? notes.accountId || notes.account_id : signerAccountId ?? undefined;
 
   let event: any;
   try {
@@ -72,12 +83,12 @@ export async function POST(req: NextRequest) {
   if (eventType === 'payment.captured' || eventType === 'order.paid') {
     const payment = payload.payment?.entity;
     const notes = payment?.notes || {};
-    const accountId = notes.accountId || notes.account_id;
+    const accountId = resolveAccountId(notes);
     const planId = notes.planId || notes.plan_id;
     const billingCycle = notes.billingCycle || notes.billing_cycle || 'monthly';
 
     // 1. Internal CRM subscription billing update (if applicable)
-    if (accountId && planId) {
+    if (platformVerified && accountId && planId) {
       const periodEnd = new Date();
       periodEnd.setDate(periodEnd.getDate() + (billingCycle === 'yearly' ? 365 : 30));
 
@@ -299,9 +310,9 @@ export async function POST(req: NextRequest) {
   } else if (eventType === 'payment.failed') {
     const payment = payload.payment?.entity;
     const notes = payment?.notes || {};
-    const accountId = notes.accountId || notes.account_id;
+    const accountId = resolveAccountId(notes);
 
-    if (accountId) {
+    if (platformVerified && accountId) {
       await adminSupabase.from('invoices').insert({
         account_id: accountId,
         amount: (payment.amount || 0) / 100,

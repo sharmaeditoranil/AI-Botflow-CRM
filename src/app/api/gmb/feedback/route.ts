@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminSupabase } from "@/lib/auth/super-admin";
+import { getCurrentAccount, toErrorResponse } from "@/lib/auth/account";
 
 export async function POST(req: NextRequest) {
   try {
@@ -79,6 +80,15 @@ export async function POST(req: NextRequest) {
 
 // GET for dashboard feedback management (status update, delete, etc.)
 export async function PATCH(req: NextRequest) {
+  // Dashboard-only: resolve the caller's account so a feedback row can
+  // only be updated by the business it belongs to.
+  let accountId: string;
+  try {
+    ({ accountId } = await getCurrentAccount());
+  } catch (err) {
+    return toErrorResponse(err);
+  }
+
   try {
     const adminDb = getAdminSupabase();
     const body = await req.json();
@@ -96,6 +106,7 @@ export async function PATCH(req: NextRequest) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", feedbackId)
+      .eq("account_id", accountId)
       .select()
       .single();
 

@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient as createAdminClient } from '@supabase/supabase-js';
 
@@ -8,7 +9,34 @@ function getAdminSupabase() {
   );
 }
 
+/**
+ * This sweep runs with the service role across every account, so it is
+ * scheduler-only: the caller must present AUTOMATION_CRON_SECRET (same
+ * secret and header conventions as /api/automations/cron). Fails closed
+ * when the secret isn't configured.
+ */
+function isAuthorizedCron(req: NextRequest): boolean {
+  const expected = process.env.AUTOMATION_CRON_SECRET || process.env.CRON_SECRET;
+  if (!expected) return false;
+
+  const authHeader = req.headers.get('authorization') || '';
+  const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  const supplied =
+    req.headers.get('x-cron-secret') ||
+    bearerToken ||
+    req.nextUrl.searchParams.get('secret') ||
+    '';
+
+  const suppliedBuf = Buffer.from(supplied);
+  const expectedBuf = Buffer.from(expected);
+  return suppliedBuf.length === expectedBuf.length && timingSafeEqual(suppliedBuf, expectedBuf);
+}
+
 export async function GET(req: NextRequest) {
+  if (!isAuthorizedCron(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const adminDb = getAdminSupabase();
     const now = new Date().toISOString();

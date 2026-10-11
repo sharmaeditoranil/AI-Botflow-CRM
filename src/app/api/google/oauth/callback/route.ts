@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminSupabase } from "@/lib/auth/super-admin";
+import { getCurrentAccount } from "@/lib/auth/account";
 import {
   getGooglePlatformCredentials,
   fetchGoogleBusinessAccounts,
@@ -32,6 +33,21 @@ export async function GET(req: NextRequest) {
 
   const accountId = parts[0];
   const userId = parts[1];
+
+  // `state` is not signed, so never trust it on its own: the browser
+  // completing the OAuth flow must belong to the same signed-in user and
+  // account that started it. Otherwise anyone could attach their Google
+  // tokens to another tenant by crafting the state value.
+  try {
+    const ctx = await getCurrentAccount();
+    if (ctx.userId !== userId || ctx.accountId !== accountId) {
+      console.warn("[Google OAuth Callback] state does not match signed-in user/account");
+      return NextResponse.redirect(`${fallbackOrigin}/gmb?error=invalid_state`);
+    }
+  } catch {
+    return NextResponse.redirect(`${fallbackOrigin}/gmb?error=session_expired`);
+  }
+
   let decodedRedirectUri: string | null = null;
   if (parts.length >= 3 && parts[2]) {
     try {
