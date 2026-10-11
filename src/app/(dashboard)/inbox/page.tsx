@@ -883,7 +883,7 @@ function InboxPageInner() {
       : null);
 
   return (
-    <div className="flex h-full w-full max-w-full min-w-0 flex-col overflow-hidden">
+    <div className="wa-inbox flex h-full w-full max-w-full min-w-0 flex-col overflow-hidden">
       {/* WhatsApp connection banner — in the flex column, not absolute,
           so it pushes the panels down instead of overlapping them. */}
       {whatsappConnected === false && (

@@ -74,7 +74,8 @@
  * --sidebar-ring) live in the ACCENT blocks. They set disjoint
  * variables, so cascade order between them doesn't matter.
  *
- * `:root` carries the dark-mode + violet defaults so a visitor
+ * `:root` carries the dark-mode + violet fallbacks (the server always
+ * renders data-theme, and the default accent is emerald) so a visitor
  * renders correctly before JS runs; the boot script in
  * layout.tsx replays the saved mode + accent before first paint.
  *
@@ -88,67 +89,70 @@
 
 /* ---- MODE: neutral surfaces ---- */
 
-/* Dark mode: near-neutral graphite surfaces (a whisper of cool tint),
- * a few steps above pure black so long sessions stay easy on the eyes.
- * The sidebar sits one step darker than the canvas; cards one step
- * lighter — depth from tone, not from glow. */
+/* Dark mode: WhatsApp Dark surfaces so the whole app reads as one
+ * product with the inbox — deep blue-grey canvas, #202c33-family
+ * cards and bars, a darker sidebar. Secondary text is kept a step
+ * brighter than WhatsApp's for comfortable reading on long pages. */
 :root,
 html[data-mode="dark"] {
-  --background: oklch(0.19 0.005 275);
-  --foreground: oklch(0.97 0.003 275);
-  --card: oklch(0.215 0.005 275);
-  --card-2: oklch(0.235 0.006 275);
-  --card-foreground: oklch(0.97 0.003 275);
-  --popover: oklch(0.225 0.006 275);
-  --popover-foreground: oklch(0.97 0.003 275);
-  --secondary: oklch(0.26 0.006 275);
-  --secondary-foreground: oklch(0.97 0.003 275);
-  --muted: oklch(0.255 0.006 275);
-  --muted-foreground: oklch(0.71 0.01 275);
-  --accent: oklch(0.26 0.006 275);
-  --accent-foreground: oklch(0.97 0.003 275);
-  --destructive: oklch(0.63 0.19 25);
-  --border: oklch(0.285 0.006 275);
-  --input: oklch(0.305 0.006 275);
-  --chart-2: oklch(0.72 0.012 275);
-  --chart-3: oklch(0.6 0.01 275);
-  --chart-4: oklch(0.48 0.008 275);
-  --chart-5: oklch(0.38 0.006 275);
+  --background: #111b21;
+  --foreground: #e9edef;
+  --card: #1a252c;
+  --card-2: #202c33;
+  --card-foreground: #e9edef;
+  --popover: #233138;
+  --popover-foreground: #e9edef;
+  --secondary: #2a3942;
+  --secondary-foreground: #e9edef;
+  --muted: #202c33;
+  --muted-foreground: #aebac1;
+  --accent: #2a3942;
+  --accent-foreground: #e9edef;
+  --destructive: #f15c6d;
+  --border: #2a3942;
+  --input: #34444d;
+  --chart-2: #53bdeb;
+  --chart-3: #8696a0;
+  --chart-4: #54656f;
+  --chart-5: #374248;
   --radius: 0.625rem;
-  --sidebar: oklch(0.17 0.005 275);
-  --sidebar-foreground: oklch(0.97 0.003 275);
-  --sidebar-accent: oklch(0.235 0.006 275);
-  --sidebar-accent-foreground: oklch(0.97 0.003 275);
-  --sidebar-border: oklch(0.255 0.006 275);
+  --sidebar: #0c1317;
+  --sidebar-foreground: #e9edef;
+  --sidebar-accent: #202c33;
+  --sidebar-accent-foreground: #e9edef;
+  --sidebar-border: #222d34;
 }
 
+/* Light mode: WhatsApp Light surfaces with deliberately dark text —
+ * near-black body copy and a darker-than-WhatsApp secondary grey so
+ * everything reads crisply on white. */
 html[data-mode="light"] {
-  --background: oklch(0.99 0.002 260);
-  --foreground: oklch(0.21 0.01 260);
-  --card: oklch(1 0 0);
-  --card-2: oklch(0.985 0.002 260);
-  --card-foreground: oklch(0.21 0.01 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.21 0.01 260);
-  --secondary: oklch(0.967 0.003 260);
-  --secondary-foreground: oklch(0.25 0.01 260);
-  --muted: oklch(0.967 0.003 260);
-  --muted-foreground: oklch(0.52 0.015 260);
-  --accent: oklch(0.96 0.004 260);
-  --accent-foreground: oklch(0.25 0.01 260);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0.004 260);
-  --input: oklch(0.922 0.004 260);
-  --chart-2: oklch(0.6 0.1 260);
-  --chart-3: oklch(0.7 0.06 260);
-  --chart-4: oklch(0.8 0.04 260);
-  --chart-5: oklch(0.87 0.03 260);
+  --background: #f0f2f5;
+  --foreground: #0b141a;
+  --card: #ffffff;
+  --card-2: #f7f8fa;
+  --card-foreground: #0b141a;
+  --popover: #ffffff;
+  --popover-foreground: #0b141a;
+  --secondary: #e9edef;
+  --secondary-foreground: #111b21;
+  --muted: #f0f2f5;
+  --muted-foreground: #3b4a54;
+  --accent: #e9edef;
+  --accent-foreground: #111b21;
+  --destructive: #d92d3a;
+  --border: #d1d7db;
+  --input: #c4cbd0;
+  --chart-2: #027eb5;
+  --chart-3: #54656f;
+  --chart-4: #8696a0;
+  --chart-5: #c4cbd0;
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0.002 260);
-  --sidebar-foreground: oklch(0.21 0.01 260);
-  --sidebar-accent: oklch(0.96 0.004 260);
-  --sidebar-accent-foreground: oklch(0.25 0.01 260);
-  --sidebar-border: oklch(0.922 0.004 260);
+  --sidebar: #ffffff;
+  --sidebar-foreground: #0b141a;
+  --sidebar-accent: #f0f2f5;
+  --sidebar-accent-foreground: #111b21;
+  --sidebar-border: #e9edef;
 }
 
 /* ---- ACCENT: primary color ---- */
@@ -168,17 +172,25 @@ html[data-theme="violet"] {
 }
 
 html[data-theme="emerald"] {
-  --primary: oklch(0.62 0.16 162);
-  --primary-foreground: oklch(0.16 0.02 162);
-  --primary-hover: oklch(0.68 0.15 162);
-  --primary-soft: oklch(0.62 0.16 162 / 0.12);
-  --primary-soft-2: oklch(0.62 0.16 162 / 0.22);
-  --ring: oklch(0.62 0.16 162);
-  --chart-1: oklch(0.62 0.16 162);
-  --chart-2: oklch(0.7 0.14 195);
-  --sidebar-primary: oklch(0.62 0.16 162);
-  --sidebar-primary-foreground: oklch(0.16 0.02 162);
-  --sidebar-ring: oklch(0.62 0.16 162);
+  /* WhatsApp green — the default accent. */
+  --primary: #00a884;
+  --primary-foreground: #ffffff;
+  --primary-hover: #06cf9c;
+  --primary-soft: rgb(0 168 132 / 0.12);
+  --primary-soft-2: rgb(0 168 132 / 0.22);
+  --ring: #00a884;
+  --chart-1: #00a884;
+  --chart-2: #53bdeb;
+  --sidebar-primary: #00a884;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-ring: #00a884;
+}
+html[data-mode="light"][data-theme="emerald"] {
+  --primary: #008069;
+  --primary-hover: #00a884;
+  --ring: #008069;
+  --chart-1: #00a884;
+  --sidebar-primary: #008069;
 }
 
 html[data-theme="cobalt"] {
@@ -588,64 +600,153 @@ html[data-mode="light"] {
   --color-red-950: oklch(0.97 0.02 20);
 }
 
-/* Inbox / preview screens used WhatsApp-web hex colors; map them
- * onto the same surface + brand tokens. Social logo colors
- * (WhatsApp, Messenger, Facebook, Instagram) are left untouched. */
+/* ============================================================
+ * WHATSAPP THEME — the inbox and WhatsApp previews.
+ *
+ * The chat surfaces are meant to feel exactly like WhatsApp, so they
+ * use WhatsApp's own palette (Dark in dark mode, Light in light mode)
+ * rather than the app theme. Components already hard-code
+ * WhatsApp-web hex colours; those utilities are pointed at --wa-*
+ * tokens so each one swaps per mode. Inside `.wa-inbox` the app's
+ * theme tokens are remapped to the same palette, so the theme-coloured
+ * parts of the inbox (desktop list, header, composer, buttons) match
+ * too. Social logo colours (WhatsApp, Messenger, Instagram) are left
+ * untouched.
+ * ============================================================ */
+
+:root,
+html[data-mode="dark"] {
+  --wa-chat: #0b141a;
+  --wa-panel: #111b21;
+  --wa-bar: #202c33;
+  --wa-in: #202c33;
+  --wa-out: #005c4b;
+  --wa-hover: #2a3942;
+  --wa-input: #2a3942;
+  --wa-chip: #182229;
+  --wa-text: #e9edef;
+  --wa-sub: #8696a0;
+  --wa-icon: #aebac1;
+  --wa-border: #222d34;
+  --wa-green: #00a884;
+  --wa-green-hover: #06cf9c;
+  --wa-out-text: #e9edef;
+  --wa-out-meta: rgb(255 255 255 / 0.6);
+  --wa-out-accent: rgb(255 255 255 / 0.9);
+  --wa-out-quote: rgb(0 0 0 / 0.18);
+}
+
+html[data-mode="light"] {
+  --wa-chat: #efeae2;
+  --wa-panel: #ffffff;
+  --wa-bar: #f0f2f5;
+  --wa-in: #ffffff;
+  --wa-out: #d9fdd3;
+  --wa-hover: #f0f2f5;
+  --wa-input: #ffffff;
+  --wa-chip: #ffffff;
+  --wa-text: #111b21;
+  --wa-sub: #54656f;
+  --wa-icon: #3b4a54;
+  --wa-border: #e9edef;
+  --wa-green: #00a884;
+  --wa-green-hover: #008069;
+  --wa-out-text: #111b21;
+  --wa-out-meta: #667781;
+  --wa-out-accent: #008069;
+  --wa-out-quote: rgb(0 0 0 / 0.05);
+}
+
+.wa-inbox {
+  --background: var(--wa-panel);
+  --card: var(--wa-panel);
+  --card-2: var(--wa-bar);
+  --popover: var(--wa-bar);
+  --muted: var(--wa-bar);
+  --secondary: var(--wa-hover);
+  --accent: var(--wa-hover);
+  --border: var(--wa-border);
+  --input: var(--wa-border);
+  --foreground: var(--wa-text);
+  --card-foreground: var(--wa-text);
+  --popover-foreground: var(--wa-text);
+  --secondary-foreground: var(--wa-text);
+  --accent-foreground: var(--wa-text);
+  --muted-foreground: var(--wa-sub);
+  --primary: var(--wa-green);
+  --primary-foreground: #ffffff;
+  --primary-hover: var(--wa-green-hover);
+  --primary-soft: color-mix(in oklab, var(--wa-green) 12%, transparent);
+  --primary-soft-2: color-mix(in oklab, var(--wa-green) 20%, transparent);
+  --ring: var(--wa-green);
+  /* Accent effects are composed at :root from the brand colour; give
+   * the inbox WhatsApp-green versions so buttons stay on-palette. */
+  --accent-gradient: linear-gradient(var(--wa-green), var(--wa-green));
+  --halo: 0 0 0 3px color-mix(in oklab, var(--wa-green) 25%, transparent);
+  --glow-accent: 0 6px 18px -10px color-mix(in oklab, var(--wa-green) 75%, transparent);
+  --hairline: color-mix(in oklab, var(--wa-text) 9%, transparent);
+  --hairline-strong: color-mix(in oklab, var(--wa-text) 16%, transparent);
+  color: var(--foreground);
+}
+
 @layer utilities {
-  .active\:bg-\[\#2a3942\]:active { background-color: var(--secondary); }
-  .bg-\[\#005c4b\] { background-color: var(--brand-800); }
-  .bg-\[\#00a884\] { background-color: var(--primary); }
-  .bg-\[\#00a884\]\/20 { background-color: color-mix(in oklab, var(--primary) 20%, transparent); }
-  .bg-\[\#0b141a\] { background-color: var(--background); }
-  .bg-\[\#0e3b33\] { background-color: var(--brand-900); }
-  .bg-\[\#111b21\] { background-color: var(--background); }
-  .bg-\[\#128c7e\] { background-color: var(--brand-600); }
-  .bg-\[\#182229\]\/90 { background-color: color-mix(in oklab, var(--card) 90%, transparent); }
-  .bg-\[\#1e293b\] { background-color: var(--card); }
-  .bg-\[\#202c33\] { background-color: var(--card); }
-  .bg-\[\#2a3942\] { background-color: var(--secondary); }
-  .border-\[\#00a884\]\/40 { border-color: color-mix(in oklab, var(--primary) 40%, transparent); }
-  .border-\[\#222d34\] { border-color: var(--border); }
-  .border-\[\#222d34\]\/60 { border-color: color-mix(in oklab, var(--border) 60%, transparent); }
-  .focus-visible\:ring-\[\#00a884\]:focus-visible { --tw-ring-color: var(--primary); }
-  .hover\:bg-\[\#008f6f\]:hover { background-color: var(--primary-hover); }
-  .hover\:bg-\[\#02906f\]:hover { background-color: var(--primary-hover); }
-  .hover\:bg-\[\#202c33\]:hover { background-color: var(--card); }
-  .hover\:bg-\[\#2a3942\]:hover { background-color: var(--secondary); }
-  .hover\:text-\[\#d1d7db\]:hover { color: var(--foreground); }
+  /* Surfaces */
+  .wa-inbox .wa-chat { background-color: var(--wa-chat); }
+  .wa-inbox .wa-bar { background-color: var(--wa-bar); }
+  /* The message field sits on the bar; WhatsApp gives it its own fill. */
+  .wa-bar .bg-\[\#202c33\] { background-color: var(--wa-input); }
+  .bg-\[\#0b141a\] { background-color: var(--wa-chat); }
+  .bg-\[\#111b21\] { background-color: var(--wa-panel); }
+  .bg-\[\#202c33\] { background-color: var(--wa-in); }
+  .bg-\[\#1e293b\] { background-color: var(--wa-bar); }
+  .bg-\[\#2a3942\] { background-color: var(--wa-hover); }
+  .bg-\[\#182229\]\/90 { background-color: color-mix(in oklab, var(--wa-chip) 90%, transparent); }
+  .bg-\[\#005c4b\] { background-color: var(--wa-out); }
+  .bg-\[\#0e3b33\] { background-color: color-mix(in oklab, var(--wa-green) 20%, var(--wa-panel)); }
+  .bg-\[\#00a884\] { background-color: var(--wa-green); }
+  .bg-\[\#00a884\]\/20 { background-color: color-mix(in oklab, var(--wa-green) 20%, transparent); }
+  [data-mode="dark"] .dark\:bg-\[\#202c33\] { background-color: var(--wa-in); }
+  .hover\:bg-\[\#202c33\]:hover { background-color: var(--wa-bar); }
+  .hover\:bg-\[\#2a3942\]:hover,
+  .active\:bg-\[\#2a3942\]:active { background-color: var(--wa-hover); }
+  .hover\:bg-\[\#008f6f\]:hover,
+  .hover\:bg-\[\#02906f\]:hover { background-color: var(--wa-green-hover); }
+
+  /* Borders & rings */
+  .border-\[\#222d34\] { border-color: var(--wa-border); }
+  .border-\[\#222d34\]\/60 { border-color: color-mix(in oklab, var(--wa-border) 60%, transparent); }
+  .border-\[\#00a884\]\/40 { border-color: color-mix(in oklab, var(--wa-green) 40%, transparent); }
   @media (width >= 64rem) {
-    .lg\:border-\[\#00a884\] { border-color: var(--primary); }
+    .lg\:border-\[\#00a884\] { border-color: var(--wa-green); }
   }
-  .placeholder\:text-\[\#8696a0\]::placeholder { color: var(--muted-foreground); }
-  .ring-\[\#111b21\] { --tw-ring-color: var(--background); }
-  .text-\[\#00a884\] { color: var(--primary); }
-  .text-\[\#111b21\] { color: var(--background); }
-  .text-\[\#8696a0\] { color: var(--muted-foreground); }
-  .text-\[\#94a3b8\] { color: var(--muted-foreground); }
-  .text-\[\#aebac1\] { color: var(--muted-foreground); }
-  .text-\[\#d1d7db\] { color: var(--foreground); }
-  .text-\[\#e9edef\] { color: var(--foreground); }
-  [data-mode="dark"] .dark\:bg-\[\#202c33\] { background-color: var(--card); }
-  /* Incoming bubbles pair this surface with text-white; once the
-   * surface follows the theme, the text must too (white-on-white in
-   * light mode otherwise). */
-  .bg-\[\#202c33\].text-white { color: var(--card-foreground); }
-  /* Outgoing bubbles in light mode: a whisper of the accent with dark
-   * text (WhatsApp-light style) instead of a solid fill. Everything
-   * inside that assumed white-on-primary is re-pointed to match. */
-  html[data-mode="light"] .bg-\[\#005c4b\] {
-    background-color: color-mix(in oklch, var(--primary) 11%, var(--card));
-    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--primary) 18%, transparent);
-  }
-  html[data-mode="light"] .bg-\[\#005c4b\].text-white,
-  html[data-mode="light"] .bg-\[\#005c4b\] .text-white { color: var(--foreground); }
-  html[data-mode="light"] .bg-\[\#005c4b\] :is(.text-emerald-100\/75, .text-emerald-200\/70) { color: var(--muted-foreground); }
-  html[data-mode="light"] .bg-\[\#005c4b\] .text-primary-foreground { color: var(--primary); }
-  html[data-mode="light"] .bg-\[\#005c4b\] .border-primary-foreground\/50 { border-color: color-mix(in oklch, var(--primary) 50%, transparent); }
-  html[data-mode="light"] .bg-\[\#005c4b\] :is(.bg-primary-foreground\/15, .bg-primary-foreground\/20, .bg-white\/20) {
-    background-color: color-mix(in oklch, var(--primary) 12%, transparent);
-  }
-  html[data-mode="light"] .bg-\[\#005c4b\] .bg-white\/20.text-white { color: var(--primary); }
+  .ring-\[\#111b21\] { --tw-ring-color: var(--wa-panel); }
+  .focus-visible\:ring-\[\#00a884\]:focus-visible { --tw-ring-color: var(--wa-green); }
+
+  /* Text */
+  .text-\[\#e9edef\],
+  .text-\[\#d1d7db\],
+  .hover\:text-\[\#d1d7db\]:hover { color: var(--wa-text); }
+  .text-\[\#8696a0\],
+  .text-\[\#94a3b8\] { color: var(--wa-sub); }
+  .placeholder\:text-\[\#8696a0\]::placeholder { color: var(--wa-sub); }
+  .text-\[\#aebac1\] { color: var(--wa-icon); }
+  .text-\[\#00a884\] { color: var(--wa-green); }
+  .text-\[\#111b21\] { color: var(--wa-panel); }
+
+  /* Incoming bubbles (and the composer field) pair #202c33 with
+   * text-white; in WhatsApp Light that surface is white, so the text
+   * follows the WhatsApp text colour instead. */
+  .bg-\[\#202c33\].text-white { color: var(--wa-text); }
+
+  /* Outgoing bubbles: WhatsApp's own text and meta colours, and
+   * everything inside that assumed white-on-primary re-pointed. */
+  .bg-\[\#005c4b\].text-white,
+  .bg-\[\#005c4b\] .text-white { color: var(--wa-out-text); }
+  .bg-\[\#005c4b\] :is(.text-emerald-100\/75, .text-emerald-200\/70) { color: var(--wa-out-meta); }
+  .bg-\[\#005c4b\] .text-primary-foreground { color: var(--wa-out-accent); }
+  .bg-\[\#005c4b\] .border-primary-foreground\/50 { border-color: color-mix(in oklab, var(--wa-out-accent) 55%, transparent); }
+  .bg-\[\#005c4b\] :is(.bg-primary-foreground\/15, .bg-primary-foreground\/20, .bg-white\/20) { background-color: var(--wa-out-quote); }
+  .bg-\[\#005c4b\] .bg-white\/20.text-white { color: var(--wa-out-accent); }
 }
 
 /* Dashboard conversations chart draws its series with literal hex

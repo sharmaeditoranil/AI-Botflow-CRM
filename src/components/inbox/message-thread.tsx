@@ -157,7 +157,7 @@ const STATUS_OPTIONS: { label: string; value: ConversationStatus; color: string 
  * if we ever switch the asset, both spots update together.
  */
 const DOODLE_BG_CLASSES =
-  "bg-background bg-[url('/inbox-doodle.svg')] bg-repeat";
+  "wa-chat bg-background bg-[url('/inbox-doodle.svg')] bg-repeat";
 
 export function MessageThread({
   conversation,
@@ -931,7 +931,7 @@ export function MessageThread({
     // Issue #257.
     <div className={cn("flex min-w-0 flex-1 flex-col", DOODLE_BG_CLASSES)}>
       {/* Header — Screenshot 1 styling */}
-      <div className="flex items-center justify-between gap-2 border-b border-border bg-card px-3 py-2.5 sm:px-4 shrink-0">
+      <div className="wa-bar flex items-center justify-between gap-2 border-b border-border bg-card px-3 py-2.5 sm:px-4 shrink-0">
         <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           {/* Back-to-list button — mobile only. */}
           {onBack && (
@@ -1167,7 +1167,7 @@ export function MessageThread({
 
       {/* Customer Tags Bar: Directly accessible in Inbox (Desktop only to match Screenshot 1) */}
       {effectiveContact?.id && (
-        <div className="hidden lg:block border-b border-border/60 bg-card/60 px-3 py-1.5 sm:px-4">
+        <div className="wa-bar hidden lg:block border-b border-border/60 bg-card/60 px-3 py-1.5 sm:px-4">
           <ContactTagBar contactId={effectiveContact.id} />
         </div>
       )}
