@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: 'Enterprise WhatsApp CRM with AI conversation memory, dynamic broadcasts, and multi-channel automations.',
     start_url: '/',
     display: 'standalone',
-    background_color: '#0a0a0f',
-    theme_color: '#7c3aed',
+    background_color: '#111b21',
+    theme_color: '#00a884',
     icons: [
       {
         src: '/brand/app-icon-64.png?v=6',
