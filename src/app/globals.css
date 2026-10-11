@@ -625,7 +625,12 @@ span.rounded-full[style*="rgb(124, 58, 237)"] { background: var(--primary) !impo
   --hairline-strong: color-mix(in oklch, var(--foreground) 16%, transparent);
   --halo: 0 0 0 3px color-mix(in oklch, var(--primary) 22%, transparent);
   /* Signature accent: violet leaning into azure. */
-  --accent-gradient: linear-gradient(135deg, var(--primary) 0%, color-mix(in oklch, var(--primary) 55%, var(--azure-500)) 100%);
+  --accent-gradient: linear-gradient(135deg, var(--primary) 0%, color-mix(in oklch, var(--primary) 55%, var(--azure-500)) 50%, var(--primary) 100%);
+  /* The Aibotflow spectrum — the signature hairline. */
+  --spectrum: linear-gradient(90deg, var(--primary), var(--azure-400), var(--mint-400));
+  --spectrum-fade: linear-gradient(90deg, transparent, var(--primary) 18%, var(--azure-400) 50%, var(--mint-400) 82%, transparent);
+  --glow-accent: 0 8px 22px -10px color-mix(in oklch, var(--primary) 70%, transparent),
+    0 4px 14px -8px color-mix(in oklch, var(--azure-500) 60%, transparent);
 }
 
 @keyframes ui-fade-in {
@@ -709,11 +714,13 @@ span.rounded-full[style*="rgb(124, 58, 237)"] { background: var(--primary) !impo
   /* Solid filled raw buttons: subtle top highlight, accent halo on hover. */
   :is(button, a):not([data-slot]):is(.bg-primary, .bg-emerald-600, .bg-emerald-500, .bg-blue-600, .bg-purple-600, .bg-violet-600, .bg-indigo-600) {
     background-image: var(--accent-gradient);
+    background-size: 200% 100%;
+    transition: background-position 0.5s var(--ease-out-soft), box-shadow 0.25s ease, transform 0.15s var(--ease-out-soft), filter 0.2s ease;
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 1px 2px rgb(0 0 0 / 0.25);
   }
   :is(button, a):not([data-slot]):is(.bg-primary, .bg-emerald-600, .bg-emerald-500, .bg-blue-600, .bg-purple-600, .bg-violet-600, .bg-indigo-600):not(:disabled):hover {
-    filter: brightness(1.08);
-    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 1px 2px rgb(0 0 0 / 0.25), var(--halo);
+    background-position: 100% 0;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), var(--glow-accent);
   }
 }
 
@@ -722,30 +729,63 @@ span.rounded-full[style*="rgb(124, 58, 237)"] { background: var(--primary) !impo
    * Buttons
    * --------------------------------------------------------- */
   [data-slot="button"] {
+    position: relative;
+    isolation: isolate;
     transition-timing-function: var(--ease-out-soft);
-    transition-duration: 0.15s;
+    transition-duration: 0.2s;
   }
   [data-slot="button"]:not(:disabled):active {
     transform: scale(0.98);
   }
 
-  /* Primary / solid: crisp top highlight; on hover a touch brighter
-   * with a soft accent halo — the signature effect. */
+  /* Primary / solid: violet→azure gradient that slides on hover, a
+   * two-tone accent glow and a crisp top highlight. */
   [data-slot="button"]:is(.bg-primary, .bg-emerald-600, .bg-emerald-500, .bg-blue-600, .bg-purple-600, .bg-violet-600, .bg-indigo-600) {
     background-image: var(--accent-gradient);
-    --tw-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 1px 2px rgb(0 0 0 / 0.25);
+    background-size: 200% 100%;
+    background-position: 0% 0;
+    --tw-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 1px 2px rgb(0 0 0 / 0.25);
+    transition-property: background-position, box-shadow, transform, filter, opacity;
+    transition-duration: 0.5s, 0.25s, 0.15s, 0.2s, 0.2s;
   }
   [data-slot="button"]:is(.bg-primary, .bg-emerald-600, .bg-emerald-500, .bg-blue-600, .bg-purple-600, .bg-violet-600, .bg-indigo-600):not(:disabled):hover {
-    filter: brightness(1.08);
-    --tw-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 1px 2px rgb(0 0 0 / 0.25), var(--halo);
+    background-position: 100% 0;
+    --tw-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), var(--glow-accent);
+  }
+  [data-slot="button"]:is(.bg-primary, .bg-emerald-600, .bg-emerald-500, .bg-blue-600, .bg-purple-600, .bg-violet-600, .bg-indigo-600):focus-visible {
+    --tw-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), var(--halo);
   }
 
-  /* Outline / secondary: border firms up on hover. */
+  /* Outline / secondary: the spectrum draws the border on hover, with
+   * a soft accent tint behind the label. */
+  [data-slot="button"]:is(.border-border, .bg-secondary)::before {
+    content: "";
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    pointer-events: none;
+    background: var(--spectrum);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  }
   [data-slot="button"]:is(.border-border, .bg-secondary) {
     --tw-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
   }
   [data-slot="button"]:is(.border-border, .bg-secondary):not(:disabled):hover {
-    border-color: var(--hairline-strong);
+    background-image: linear-gradient(color-mix(in oklch, var(--primary) 9%, transparent), color-mix(in oklch, var(--primary) 9%, transparent));
+    --tw-shadow: 0 6px 18px -12px color-mix(in oklch, var(--primary) 70%, transparent);
+  }
+  [data-slot="button"]:is(.border-border, .bg-secondary):not(:disabled):hover::before {
+    opacity: 1;
+  }
+
+  /* Ghost: a soft accent tint on hover. */
+  [data-slot="button"]:not(:is(.bg-primary, .bg-emerald-600, .bg-emerald-500, .bg-blue-600, .bg-purple-600, .bg-violet-600, .bg-indigo-600, .border-border, .bg-secondary, .text-destructive, .underline-offset-4)):not(:disabled):hover {
+    background-image: linear-gradient(color-mix(in oklch, var(--primary) 12%, transparent), color-mix(in oklch, var(--primary) 12%, transparent));
   }
 
   /* Destructive: quiet red halo. */
@@ -756,6 +796,29 @@ span.rounded-full[style*="rgb(124, 58, 237)"] { background: var(--primary) !impo
   /* ---------------------------------------------------------
    * Cards & panels — flat, hairline, slightly firmer on hover.
    * --------------------------------------------------------- */
+  [data-slot="card"],
+  main section.bg-card {
+    position: relative;
+  }
+  /* Signature: a spectrum hairline along the top edge of every card
+   * and panel, fading out at the corners; it brightens on hover. */
+  [data-slot="card"]::after,
+  main section.bg-card::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    pointer-events: none;
+    background: var(--spectrum-fade);
+    opacity: 0.45;
+    transition: opacity 0.3s ease;
+  }
+  [data-slot="card"]:hover::after,
+  main section.bg-card:hover::after {
+    opacity: 1;
+  }
   [data-slot="card"] {
     --tw-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
     outline: 1px solid transparent;

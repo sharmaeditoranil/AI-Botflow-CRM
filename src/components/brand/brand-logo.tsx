@@ -10,6 +10,7 @@ interface BrandLogoProps {
   textClassName?: string;
   className?: string;
   imageClassName?: string;
+  /** 'glow' is kept for API compatibility and renders like 'plain'. */
   variant?: 'plain' | 'rounded-box' | 'glow';
   priority?: boolean;
 }
@@ -46,8 +47,6 @@ export function BrandLogo({
     <div
       className={cn(
         'relative flex items-center justify-center shrink-0 transition-transform select-none',
-        variant === 'glow' &&
-          'drop-shadow-[0_2px_10px_rgba(124,58,237,0.3)] dark:drop-shadow-[0_0_16px_rgba(168,85,247,0.45)]',
         variant === 'rounded-box' &&
           'rounded-xl border border-primary/20 bg-primary/5 p-1 shadow-sm backdrop-blur-sm dark:border-primary/30 dark:bg-primary/10',
         className
@@ -61,7 +60,7 @@ export function BrandLogo({
         height={pixelSize}
         priority={priority}
         className={cn(
-          'h-full w-full object-contain drop-shadow-[0_2px_6px_rgba(124,58,237,0.2)] dark:drop-shadow-[0_0_12px_rgba(168,85,247,0.35)]',
+          'h-full w-full object-contain',
           imageClassName
         )}
       />
