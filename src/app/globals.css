@@ -553,6 +553,41 @@ html[data-theme="rose"] {
   --color-stone-950: oklch(0.19 0.005 275);
 }
 
+/* Light mode readability. The app was designed dark-first, so many
+ * components hard-code light text tints (…-300/400) and deep tinted
+ * fills (…-900/950) with no light-mode variant; on a white canvas they
+ * wash out. In light mode, deepen the light tints and lighten the deep
+ * fills of the coloured families. Explicit `dark:` pairs are untouched
+ * (their light half already uses 500–700), and greys are left alone
+ * because they're used deliberately in both directions. */
+html[data-mode="light"] {
+  --brand-200: color-mix(in oklch, var(--primary) 82%, black);
+  --brand-300: color-mix(in oklch, var(--primary) 85%, black);
+  --brand-400: color-mix(in oklch, var(--primary) 90%, black);
+  --brand-900: color-mix(in oklch, var(--primary) 14%, white);
+  --brand-950: color-mix(in oklch, var(--primary) 8%, white);
+  --azure-200: oklch(0.5 0.16 250);
+  --azure-300: oklch(0.52 0.165 250);
+  --azure-400: oklch(0.55 0.17 250);
+  --azure-900: oklch(0.94 0.04 250);
+  --azure-950: oklch(0.97 0.02 250);
+  --mint-200: oklch(0.48 0.12 162);
+  --mint-300: oklch(0.5 0.125 162);
+  --mint-400: oklch(0.53 0.13 162);
+  --mint-900: oklch(0.94 0.04 162);
+  --mint-950: oklch(0.97 0.02 162);
+  --amber-200: oklch(0.5 0.12 58);
+  --amber-300: oklch(0.53 0.125 60);
+  --amber-400: oklch(0.57 0.13 62);
+  --amber-900: oklch(0.95 0.045 85);
+  --amber-950: oklch(0.975 0.022 85);
+  --color-red-200: oklch(0.5 0.19 25);
+  --color-red-300: oklch(0.52 0.2 25);
+  --color-red-400: oklch(0.56 0.21 25);
+  --color-red-900: oklch(0.94 0.04 20);
+  --color-red-950: oklch(0.97 0.02 20);
+}
+
 /* Inbox / preview screens used WhatsApp-web hex colors; map them
  * onto the same surface + brand tokens. Social logo colors
  * (WhatsApp, Messenger, Facebook, Instagram) are left untouched. */
@@ -591,6 +626,12 @@ html[data-theme="rose"] {
   .text-\[\#d1d7db\] { color: var(--foreground); }
   .text-\[\#e9edef\] { color: var(--foreground); }
   [data-mode="dark"] .dark\:bg-\[\#202c33\] { background-color: var(--card); }
+  /* Incoming bubbles pair this surface with text-white; once the
+   * surface follows the theme, the text must too (white-on-white in
+   * light mode otherwise). */
+  .bg-\[\#202c33\].text-white { color: var(--card-foreground); }
+  /* Outgoing bubbles: the deep brand fill reads heavy on white. */
+  html[data-mode="light"] .bg-\[\#005c4b\] { background-color: var(--primary); }
 }
 
 /* Dashboard conversations chart draws its series with literal hex
