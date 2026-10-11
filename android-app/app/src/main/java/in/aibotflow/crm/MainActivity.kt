@@ -253,7 +253,7 @@ class MainActivity : AppCompatActivity() {
                 val url = request?.url?.toString() ?: return false
 
                 // Keep dash.aibotflow.in internal
-                if (url.startsWith("https://dash.aibotflow.in") || url.startsWith("https://behqbokdnwsaflapewjf.supabase.co") || url.startsWith("https://zcfzzbbxionrcxypcbfz.supabase.co")) {
+                if (url.startsWith("https://dash.aibotflow.in") || url.startsWith("https://behqbokdnwsaflapewjf.supabase.co")) {
                     return false
                 }
 
