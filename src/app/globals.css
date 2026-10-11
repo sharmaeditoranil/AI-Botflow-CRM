@@ -88,38 +88,38 @@
 
 /* ---- MODE: neutral surfaces ---- */
 
-/* Dark mode, lifted: surfaces sit a few steps brighter than pure
- * near-black and carry a faint violet tint so every screen reads as
- * one brand palette instead of cold grey. */
+/* Dark mode: near-neutral graphite surfaces (a whisper of cool tint),
+ * a few steps above pure black so long sessions stay easy on the eyes.
+ * The sidebar sits one step darker than the canvas; cards one step
+ * lighter — depth from tone, not from glow. */
 :root,
 html[data-mode="dark"] {
-  --background: oklch(0.195 0.018 285);
-  --foreground: oklch(0.975 0.004 285);
-  --card: oklch(0.235 0.02 285);
-  --card-2: oklch(0.262 0.022 285);
-  --card-foreground: oklch(0.975 0.004 285);
-  --popover: oklch(0.245 0.022 285);
-  --popover-foreground: oklch(0.975 0.004 285);
-  --secondary: oklch(0.285 0.022 285);
-  --secondary-foreground: oklch(0.975 0.004 285);
-  --muted: oklch(0.285 0.022 285);
-  --muted-foreground: oklch(0.74 0.02 285);
-  --accent: oklch(0.29 0.03 288);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.63 0.22 25);
-  --border: oklch(0.335 0.022 285);
-  --input: oklch(0.335 0.022 285);
-  --chart-2: oklch(0.7 0.14 300);
-  --chart-3: oklch(0.62 0.12 270);
-  --chart-4: oklch(0.55 0.09 285);
-  --chart-5: oklch(0.45 0.06 285);
-  --radius: 0.7rem;
-  --sidebar: oklch(0.215 0.02 285);
-  --sidebar-foreground: oklch(0.975 0.004 285);
-  --sidebar-accent: oklch(0.29 0.03 288);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.31 0.022 285);
-  --shadow-color: 270 40% 3%;
+  --background: oklch(0.19 0.005 275);
+  --foreground: oklch(0.97 0.003 275);
+  --card: oklch(0.215 0.005 275);
+  --card-2: oklch(0.235 0.006 275);
+  --card-foreground: oklch(0.97 0.003 275);
+  --popover: oklch(0.225 0.006 275);
+  --popover-foreground: oklch(0.97 0.003 275);
+  --secondary: oklch(0.26 0.006 275);
+  --secondary-foreground: oklch(0.97 0.003 275);
+  --muted: oklch(0.255 0.006 275);
+  --muted-foreground: oklch(0.71 0.01 275);
+  --accent: oklch(0.26 0.006 275);
+  --accent-foreground: oklch(0.97 0.003 275);
+  --destructive: oklch(0.63 0.19 25);
+  --border: oklch(0.285 0.006 275);
+  --input: oklch(0.305 0.006 275);
+  --chart-2: oklch(0.72 0.012 275);
+  --chart-3: oklch(0.6 0.01 275);
+  --chart-4: oklch(0.48 0.008 275);
+  --chart-5: oklch(0.38 0.006 275);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.17 0.005 275);
+  --sidebar-foreground: oklch(0.97 0.003 275);
+  --sidebar-accent: oklch(0.235 0.006 275);
+  --sidebar-accent-foreground: oklch(0.97 0.003 275);
+  --sidebar-border: oklch(0.255 0.006 275);
 }
 
 html[data-mode="light"] {
@@ -155,16 +155,16 @@ html[data-mode="light"] {
 
 :root,
 html[data-theme="violet"] {
-  --primary: oklch(0.58 0.235 292);
+  --primary: oklch(0.585 0.205 289);
   --primary-foreground: oklch(0.99 0 0);
-  --primary-hover: oklch(0.64 0.22 292);
-  --primary-soft: oklch(0.58 0.235 292 / 0.14);
-  --primary-soft-2: oklch(0.58 0.235 292 / 0.24);
-  --ring: oklch(0.62 0.22 292);
-  --chart-1: oklch(0.62 0.235 292);
-  --sidebar-primary: oklch(0.58 0.235 292);
+  --primary-hover: oklch(0.64 0.19 289);
+  --primary-soft: oklch(0.585 0.205 289 / 0.12);
+  --primary-soft-2: oklch(0.585 0.205 289 / 0.2);
+  --ring: oklch(0.62 0.19 289);
+  --chart-1: oklch(0.62 0.2 289);
+  --sidebar-primary: oklch(0.585 0.205 289);
   --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-ring: oklch(0.62 0.22 292);
+  --sidebar-ring: oklch(0.62 0.19 289);
 }
 
 html[data-theme="emerald"] {
@@ -257,22 +257,17 @@ html[data-theme="rose"] {
 }
 
 /* ============================================================
- * COLOR SYSTEM — one curated, analogous palette.
+ * COLOR SYSTEM — one accent, quiet semantics, neutral everything else.
  *
- * Components hard-code Tailwind color families. Instead of
- * touching component code, the palette is remapped onto three
- * neighbouring hues derived from --primary (so the whole set also
- * follows the accent chosen in Settings → Appearance):
+ * Components hard-code Tailwind color families. Instead of touching
+ * component code, the palette is remapped so only these remain:
  *
- *   iris    (primary hue − 20°) ← indigo blue sky cyan teal
- *                                  emerald green lime
- *   brand   (primary hue)       ← violet purple fuchsia
- *   orchid  (primary hue + 36°) ← amber orange yellow pink
- *   red                         ← red rose  (errors, destructive)
- *   neutral (violet-tinted)     ← slate gray zinc neutral stone
- *
- * Neighbouring hues keep the UI rich and layered without the
- * clash of unrelated defaults. Rating stars keep a soft gold.
+ *   brand   ← violet purple fuchsia indigo blue sky cyan teal
+ *             emerald green lime   (derived from --primary, so it
+ *             follows the accent chosen in Settings → Appearance)
+ *   amber   ← amber orange yellow  (warnings, ratings — muted)
+ *   red     ← red rose pink        (errors, destructive)
+ *   neutral ← slate gray zinc neutral stone (matches the surfaces)
  * ============================================================ */
 
 :root {
@@ -287,30 +282,17 @@ html[data-theme="rose"] {
   --brand-800: color-mix(in oklch, var(--primary) 58%, black);
   --brand-900: color-mix(in oklch, var(--primary) 44%, black);
   --brand-950: color-mix(in oklch, var(--primary) 30%, black);
-  --iris-50: oklch(from var(--brand-50) l c calc(h - 20));
-  --iris-100: oklch(from var(--brand-100) l c calc(h - 20));
-  --iris-200: oklch(from var(--brand-200) l c calc(h - 20));
-  --iris-300: oklch(from var(--brand-300) l c calc(h - 20));
-  --iris-400: oklch(from var(--brand-400) l c calc(h - 20));
-  --iris-500: oklch(from var(--brand-500) l c calc(h - 20));
-  --iris-600: oklch(from var(--brand-600) l c calc(h - 20));
-  --iris-700: oklch(from var(--brand-700) l c calc(h - 20));
-  --iris-800: oklch(from var(--brand-800) l c calc(h - 20));
-  --iris-900: oklch(from var(--brand-900) l c calc(h - 20));
-  --iris-950: oklch(from var(--brand-950) l c calc(h - 20));
-  --orchid-50: oklch(from var(--brand-50) l calc(c * 0.92) calc(h + 36));
-  --orchid-100: oklch(from var(--brand-100) l calc(c * 0.92) calc(h + 36));
-  --orchid-200: oklch(from var(--brand-200) l calc(c * 0.92) calc(h + 36));
-  --orchid-300: oklch(from var(--brand-300) l calc(c * 0.92) calc(h + 36));
-  --orchid-400: oklch(from var(--brand-400) l calc(c * 0.92) calc(h + 36));
-  --orchid-500: oklch(from var(--brand-500) l calc(c * 0.92) calc(h + 36));
-  --orchid-600: oklch(from var(--brand-600) l calc(c * 0.92) calc(h + 36));
-  --orchid-700: oklch(from var(--brand-700) l calc(c * 0.92) calc(h + 36));
-  --orchid-800: oklch(from var(--brand-800) l calc(c * 0.92) calc(h + 36));
-  --orchid-900: oklch(from var(--brand-900) l calc(c * 0.92) calc(h + 36));
-  --orchid-950: oklch(from var(--brand-950) l calc(c * 0.92) calc(h + 36));
-  --gold-400: oklch(0.84 0.13 82);
-  --gold-500: oklch(0.79 0.14 74);
+  --amber-50: oklch(0.98 0.02 85);
+  --amber-100: oklch(0.955 0.04 85);
+  --amber-200: oklch(0.91 0.075 82);
+  --amber-300: oklch(0.86 0.1 80);
+  --amber-400: oklch(0.8 0.12 76);
+  --amber-500: oklch(0.74 0.13 70);
+  --amber-600: oklch(0.64 0.125 62);
+  --amber-700: oklch(0.54 0.11 56);
+  --amber-800: oklch(0.45 0.09 54);
+  --amber-900: oklch(0.38 0.07 54);
+  --amber-950: oklch(0.27 0.05 54);
 }
 
 @theme inline {
@@ -347,138 +329,127 @@ html[data-theme="rose"] {
   --color-fuchsia-800: var(--brand-800);
   --color-fuchsia-900: var(--brand-900);
   --color-fuchsia-950: var(--brand-950);
-  --color-indigo-50: var(--iris-50);
-  --color-indigo-100: var(--iris-100);
-  --color-indigo-200: var(--iris-200);
-  --color-indigo-300: var(--iris-300);
-  --color-indigo-400: var(--iris-400);
-  --color-indigo-500: var(--iris-500);
-  --color-indigo-600: var(--iris-600);
-  --color-indigo-700: var(--iris-700);
-  --color-indigo-800: var(--iris-800);
-  --color-indigo-900: var(--iris-900);
-  --color-indigo-950: var(--iris-950);
-  --color-blue-50: var(--iris-50);
-  --color-blue-100: var(--iris-100);
-  --color-blue-200: var(--iris-200);
-  --color-blue-300: var(--iris-300);
-  --color-blue-400: var(--iris-400);
-  --color-blue-500: var(--iris-500);
-  --color-blue-600: var(--iris-600);
-  --color-blue-700: var(--iris-700);
-  --color-blue-800: var(--iris-800);
-  --color-blue-900: var(--iris-900);
-  --color-blue-950: var(--iris-950);
-  --color-sky-50: var(--iris-50);
-  --color-sky-100: var(--iris-100);
-  --color-sky-200: var(--iris-200);
-  --color-sky-300: var(--iris-300);
-  --color-sky-400: var(--iris-400);
-  --color-sky-500: var(--iris-500);
-  --color-sky-600: var(--iris-600);
-  --color-sky-700: var(--iris-700);
-  --color-sky-800: var(--iris-800);
-  --color-sky-900: var(--iris-900);
-  --color-sky-950: var(--iris-950);
-  --color-cyan-50: var(--iris-50);
-  --color-cyan-100: var(--iris-100);
-  --color-cyan-200: var(--iris-200);
-  --color-cyan-300: var(--iris-300);
-  --color-cyan-400: var(--iris-400);
-  --color-cyan-500: var(--iris-500);
-  --color-cyan-600: var(--iris-600);
-  --color-cyan-700: var(--iris-700);
-  --color-cyan-800: var(--iris-800);
-  --color-cyan-900: var(--iris-900);
-  --color-cyan-950: var(--iris-950);
-  --color-teal-50: var(--iris-50);
-  --color-teal-100: var(--iris-100);
-  --color-teal-200: var(--iris-200);
-  --color-teal-300: var(--iris-300);
-  --color-teal-400: var(--iris-400);
-  --color-teal-500: var(--iris-500);
-  --color-teal-600: var(--iris-600);
-  --color-teal-700: var(--iris-700);
-  --color-teal-800: var(--iris-800);
-  --color-teal-900: var(--iris-900);
-  --color-teal-950: var(--iris-950);
-  --color-emerald-50: var(--iris-50);
-  --color-emerald-100: var(--iris-100);
-  --color-emerald-200: var(--iris-200);
-  --color-emerald-300: var(--iris-300);
-  --color-emerald-400: var(--iris-400);
-  --color-emerald-500: var(--iris-500);
-  --color-emerald-600: var(--iris-600);
-  --color-emerald-700: var(--iris-700);
-  --color-emerald-800: var(--iris-800);
-  --color-emerald-900: var(--iris-900);
-  --color-emerald-950: var(--iris-950);
-  --color-green-50: var(--iris-50);
-  --color-green-100: var(--iris-100);
-  --color-green-200: var(--iris-200);
-  --color-green-300: var(--iris-300);
-  --color-green-400: var(--iris-400);
-  --color-green-500: var(--iris-500);
-  --color-green-600: var(--iris-600);
-  --color-green-700: var(--iris-700);
-  --color-green-800: var(--iris-800);
-  --color-green-900: var(--iris-900);
-  --color-green-950: var(--iris-950);
-  --color-lime-50: var(--iris-50);
-  --color-lime-100: var(--iris-100);
-  --color-lime-200: var(--iris-200);
-  --color-lime-300: var(--iris-300);
-  --color-lime-400: var(--iris-400);
-  --color-lime-500: var(--iris-500);
-  --color-lime-600: var(--iris-600);
-  --color-lime-700: var(--iris-700);
-  --color-lime-800: var(--iris-800);
-  --color-lime-900: var(--iris-900);
-  --color-lime-950: var(--iris-950);
-  --color-amber-50: var(--orchid-50);
-  --color-amber-100: var(--orchid-100);
-  --color-amber-200: var(--orchid-200);
-  --color-amber-300: var(--orchid-300);
-  --color-amber-400: var(--orchid-400);
-  --color-amber-500: var(--orchid-500);
-  --color-amber-600: var(--orchid-600);
-  --color-amber-700: var(--orchid-700);
-  --color-amber-800: var(--orchid-800);
-  --color-amber-900: var(--orchid-900);
-  --color-amber-950: var(--orchid-950);
-  --color-orange-50: var(--orchid-50);
-  --color-orange-100: var(--orchid-100);
-  --color-orange-200: var(--orchid-200);
-  --color-orange-300: var(--orchid-300);
-  --color-orange-400: var(--orchid-400);
-  --color-orange-500: var(--orchid-500);
-  --color-orange-600: var(--orchid-600);
-  --color-orange-700: var(--orchid-700);
-  --color-orange-800: var(--orchid-800);
-  --color-orange-900: var(--orchid-900);
-  --color-orange-950: var(--orchid-950);
-  --color-yellow-50: var(--orchid-50);
-  --color-yellow-100: var(--orchid-100);
-  --color-yellow-200: var(--orchid-200);
-  --color-yellow-300: var(--orchid-300);
-  --color-yellow-400: var(--orchid-400);
-  --color-yellow-500: var(--orchid-500);
-  --color-yellow-600: var(--orchid-600);
-  --color-yellow-700: var(--orchid-700);
-  --color-yellow-800: var(--orchid-800);
-  --color-yellow-900: var(--orchid-900);
-  --color-yellow-950: var(--orchid-950);
-  --color-pink-50: var(--orchid-50);
-  --color-pink-100: var(--orchid-100);
-  --color-pink-200: var(--orchid-200);
-  --color-pink-300: var(--orchid-300);
-  --color-pink-400: var(--orchid-400);
-  --color-pink-500: var(--orchid-500);
-  --color-pink-600: var(--orchid-600);
-  --color-pink-700: var(--orchid-700);
-  --color-pink-800: var(--orchid-800);
-  --color-pink-900: var(--orchid-900);
-  --color-pink-950: var(--orchid-950);
+  --color-indigo-50: var(--brand-50);
+  --color-indigo-100: var(--brand-100);
+  --color-indigo-200: var(--brand-200);
+  --color-indigo-300: var(--brand-300);
+  --color-indigo-400: var(--brand-400);
+  --color-indigo-500: var(--brand-500);
+  --color-indigo-600: var(--brand-600);
+  --color-indigo-700: var(--brand-700);
+  --color-indigo-800: var(--brand-800);
+  --color-indigo-900: var(--brand-900);
+  --color-indigo-950: var(--brand-950);
+  --color-blue-50: var(--brand-50);
+  --color-blue-100: var(--brand-100);
+  --color-blue-200: var(--brand-200);
+  --color-blue-300: var(--brand-300);
+  --color-blue-400: var(--brand-400);
+  --color-blue-500: var(--brand-500);
+  --color-blue-600: var(--brand-600);
+  --color-blue-700: var(--brand-700);
+  --color-blue-800: var(--brand-800);
+  --color-blue-900: var(--brand-900);
+  --color-blue-950: var(--brand-950);
+  --color-sky-50: var(--brand-50);
+  --color-sky-100: var(--brand-100);
+  --color-sky-200: var(--brand-200);
+  --color-sky-300: var(--brand-300);
+  --color-sky-400: var(--brand-400);
+  --color-sky-500: var(--brand-500);
+  --color-sky-600: var(--brand-600);
+  --color-sky-700: var(--brand-700);
+  --color-sky-800: var(--brand-800);
+  --color-sky-900: var(--brand-900);
+  --color-sky-950: var(--brand-950);
+  --color-cyan-50: var(--brand-50);
+  --color-cyan-100: var(--brand-100);
+  --color-cyan-200: var(--brand-200);
+  --color-cyan-300: var(--brand-300);
+  --color-cyan-400: var(--brand-400);
+  --color-cyan-500: var(--brand-500);
+  --color-cyan-600: var(--brand-600);
+  --color-cyan-700: var(--brand-700);
+  --color-cyan-800: var(--brand-800);
+  --color-cyan-900: var(--brand-900);
+  --color-cyan-950: var(--brand-950);
+  --color-teal-50: var(--brand-50);
+  --color-teal-100: var(--brand-100);
+  --color-teal-200: var(--brand-200);
+  --color-teal-300: var(--brand-300);
+  --color-teal-400: var(--brand-400);
+  --color-teal-500: var(--brand-500);
+  --color-teal-600: var(--brand-600);
+  --color-teal-700: var(--brand-700);
+  --color-teal-800: var(--brand-800);
+  --color-teal-900: var(--brand-900);
+  --color-teal-950: var(--brand-950);
+  --color-emerald-50: var(--brand-50);
+  --color-emerald-100: var(--brand-100);
+  --color-emerald-200: var(--brand-200);
+  --color-emerald-300: var(--brand-300);
+  --color-emerald-400: var(--brand-400);
+  --color-emerald-500: var(--brand-500);
+  --color-emerald-600: var(--brand-600);
+  --color-emerald-700: var(--brand-700);
+  --color-emerald-800: var(--brand-800);
+  --color-emerald-900: var(--brand-900);
+  --color-emerald-950: var(--brand-950);
+  --color-green-50: var(--brand-50);
+  --color-green-100: var(--brand-100);
+  --color-green-200: var(--brand-200);
+  --color-green-300: var(--brand-300);
+  --color-green-400: var(--brand-400);
+  --color-green-500: var(--brand-500);
+  --color-green-600: var(--brand-600);
+  --color-green-700: var(--brand-700);
+  --color-green-800: var(--brand-800);
+  --color-green-900: var(--brand-900);
+  --color-green-950: var(--brand-950);
+  --color-lime-50: var(--brand-50);
+  --color-lime-100: var(--brand-100);
+  --color-lime-200: var(--brand-200);
+  --color-lime-300: var(--brand-300);
+  --color-lime-400: var(--brand-400);
+  --color-lime-500: var(--brand-500);
+  --color-lime-600: var(--brand-600);
+  --color-lime-700: var(--brand-700);
+  --color-lime-800: var(--brand-800);
+  --color-lime-900: var(--brand-900);
+  --color-lime-950: var(--brand-950);
+  --color-amber-50: var(--amber-50);
+  --color-amber-100: var(--amber-100);
+  --color-amber-200: var(--amber-200);
+  --color-amber-300: var(--amber-300);
+  --color-amber-400: var(--amber-400);
+  --color-amber-500: var(--amber-500);
+  --color-amber-600: var(--amber-600);
+  --color-amber-700: var(--amber-700);
+  --color-amber-800: var(--amber-800);
+  --color-amber-900: var(--amber-900);
+  --color-amber-950: var(--amber-950);
+  --color-orange-50: var(--amber-50);
+  --color-orange-100: var(--amber-100);
+  --color-orange-200: var(--amber-200);
+  --color-orange-300: var(--amber-300);
+  --color-orange-400: var(--amber-400);
+  --color-orange-500: var(--amber-500);
+  --color-orange-600: var(--amber-600);
+  --color-orange-700: var(--amber-700);
+  --color-orange-800: var(--amber-800);
+  --color-orange-900: var(--amber-900);
+  --color-orange-950: var(--amber-950);
+  --color-yellow-50: var(--amber-50);
+  --color-yellow-100: var(--amber-100);
+  --color-yellow-200: var(--amber-200);
+  --color-yellow-300: var(--amber-300);
+  --color-yellow-400: var(--amber-400);
+  --color-yellow-500: var(--amber-500);
+  --color-yellow-600: var(--amber-600);
+  --color-yellow-700: var(--amber-700);
+  --color-yellow-800: var(--amber-800);
+  --color-yellow-900: var(--amber-900);
+  --color-yellow-950: var(--amber-950);
   --color-rose-50: var(--color-red-50);
   --color-rose-100: var(--color-red-100);
   --color-rose-200: var(--color-red-200);
@@ -490,61 +461,72 @@ html[data-theme="rose"] {
   --color-rose-800: var(--color-red-800);
   --color-rose-900: var(--color-red-900);
   --color-rose-950: var(--color-red-950);
-  --color-slate-50: oklch(0.984 0.004 285);
-  --color-slate-100: oklch(0.968 0.006 285);
-  --color-slate-200: oklch(0.925 0.01 285);
-  --color-slate-300: oklch(0.865 0.014 285);
-  --color-slate-400: oklch(0.72 0.02 285);
-  --color-slate-500: oklch(0.58 0.022 285);
-  --color-slate-600: oklch(0.47 0.022 285);
-  --color-slate-700: oklch(0.39 0.022 285);
-  --color-slate-800: oklch(0.31 0.022 285);
-  --color-slate-900: oklch(0.245 0.02 285);
-  --color-slate-950: oklch(0.205 0.018 285);
-  --color-gray-50: oklch(0.984 0.004 285);
-  --color-gray-100: oklch(0.968 0.006 285);
-  --color-gray-200: oklch(0.925 0.01 285);
-  --color-gray-300: oklch(0.865 0.014 285);
-  --color-gray-400: oklch(0.72 0.02 285);
-  --color-gray-500: oklch(0.58 0.022 285);
-  --color-gray-600: oklch(0.47 0.022 285);
-  --color-gray-700: oklch(0.39 0.022 285);
-  --color-gray-800: oklch(0.31 0.022 285);
-  --color-gray-900: oklch(0.245 0.02 285);
-  --color-gray-950: oklch(0.205 0.018 285);
-  --color-zinc-50: oklch(0.984 0.004 285);
-  --color-zinc-100: oklch(0.968 0.006 285);
-  --color-zinc-200: oklch(0.925 0.01 285);
-  --color-zinc-300: oklch(0.865 0.014 285);
-  --color-zinc-400: oklch(0.72 0.02 285);
-  --color-zinc-500: oklch(0.58 0.022 285);
-  --color-zinc-600: oklch(0.47 0.022 285);
-  --color-zinc-700: oklch(0.39 0.022 285);
-  --color-zinc-800: oklch(0.31 0.022 285);
-  --color-zinc-900: oklch(0.245 0.02 285);
-  --color-zinc-950: oklch(0.205 0.018 285);
-  --color-neutral-50: oklch(0.984 0.004 285);
-  --color-neutral-100: oklch(0.968 0.006 285);
-  --color-neutral-200: oklch(0.925 0.01 285);
-  --color-neutral-300: oklch(0.865 0.014 285);
-  --color-neutral-400: oklch(0.72 0.02 285);
-  --color-neutral-500: oklch(0.58 0.022 285);
-  --color-neutral-600: oklch(0.47 0.022 285);
-  --color-neutral-700: oklch(0.39 0.022 285);
-  --color-neutral-800: oklch(0.31 0.022 285);
-  --color-neutral-900: oklch(0.245 0.02 285);
-  --color-neutral-950: oklch(0.205 0.018 285);
-  --color-stone-50: oklch(0.984 0.004 285);
-  --color-stone-100: oklch(0.968 0.006 285);
-  --color-stone-200: oklch(0.925 0.01 285);
-  --color-stone-300: oklch(0.865 0.014 285);
-  --color-stone-400: oklch(0.72 0.02 285);
-  --color-stone-500: oklch(0.58 0.022 285);
-  --color-stone-600: oklch(0.47 0.022 285);
-  --color-stone-700: oklch(0.39 0.022 285);
-  --color-stone-800: oklch(0.31 0.022 285);
-  --color-stone-900: oklch(0.245 0.02 285);
-  --color-stone-950: oklch(0.205 0.018 285);
+  --color-pink-50: var(--color-red-50);
+  --color-pink-100: var(--color-red-100);
+  --color-pink-200: var(--color-red-200);
+  --color-pink-300: var(--color-red-300);
+  --color-pink-400: var(--color-red-400);
+  --color-pink-500: var(--color-red-500);
+  --color-pink-600: var(--color-red-600);
+  --color-pink-700: var(--color-red-700);
+  --color-pink-800: var(--color-red-800);
+  --color-pink-900: var(--color-red-900);
+  --color-pink-950: var(--color-red-950);
+  --color-slate-50: oklch(0.985 0.002 275);
+  --color-slate-100: oklch(0.967 0.003 275);
+  --color-slate-200: oklch(0.925 0.005 275);
+  --color-slate-300: oklch(0.87 0.006 275);
+  --color-slate-400: oklch(0.71 0.01 275);
+  --color-slate-500: oklch(0.56 0.01 275);
+  --color-slate-600: oklch(0.45 0.009 275);
+  --color-slate-700: oklch(0.37 0.008 275);
+  --color-slate-800: oklch(0.29 0.006 275);
+  --color-slate-900: oklch(0.235 0.006 275);
+  --color-slate-950: oklch(0.19 0.005 275);
+  --color-gray-50: oklch(0.985 0.002 275);
+  --color-gray-100: oklch(0.967 0.003 275);
+  --color-gray-200: oklch(0.925 0.005 275);
+  --color-gray-300: oklch(0.87 0.006 275);
+  --color-gray-400: oklch(0.71 0.01 275);
+  --color-gray-500: oklch(0.56 0.01 275);
+  --color-gray-600: oklch(0.45 0.009 275);
+  --color-gray-700: oklch(0.37 0.008 275);
+  --color-gray-800: oklch(0.29 0.006 275);
+  --color-gray-900: oklch(0.235 0.006 275);
+  --color-gray-950: oklch(0.19 0.005 275);
+  --color-zinc-50: oklch(0.985 0.002 275);
+  --color-zinc-100: oklch(0.967 0.003 275);
+  --color-zinc-200: oklch(0.925 0.005 275);
+  --color-zinc-300: oklch(0.87 0.006 275);
+  --color-zinc-400: oklch(0.71 0.01 275);
+  --color-zinc-500: oklch(0.56 0.01 275);
+  --color-zinc-600: oklch(0.45 0.009 275);
+  --color-zinc-700: oklch(0.37 0.008 275);
+  --color-zinc-800: oklch(0.29 0.006 275);
+  --color-zinc-900: oklch(0.235 0.006 275);
+  --color-zinc-950: oklch(0.19 0.005 275);
+  --color-neutral-50: oklch(0.985 0.002 275);
+  --color-neutral-100: oklch(0.967 0.003 275);
+  --color-neutral-200: oklch(0.925 0.005 275);
+  --color-neutral-300: oklch(0.87 0.006 275);
+  --color-neutral-400: oklch(0.71 0.01 275);
+  --color-neutral-500: oklch(0.56 0.01 275);
+  --color-neutral-600: oklch(0.45 0.009 275);
+  --color-neutral-700: oklch(0.37 0.008 275);
+  --color-neutral-800: oklch(0.29 0.006 275);
+  --color-neutral-900: oklch(0.235 0.006 275);
+  --color-neutral-950: oklch(0.19 0.005 275);
+  --color-stone-50: oklch(0.985 0.002 275);
+  --color-stone-100: oklch(0.967 0.003 275);
+  --color-stone-200: oklch(0.925 0.005 275);
+  --color-stone-300: oklch(0.87 0.006 275);
+  --color-stone-400: oklch(0.71 0.01 275);
+  --color-stone-500: oklch(0.56 0.01 275);
+  --color-stone-600: oklch(0.45 0.009 275);
+  --color-stone-700: oklch(0.37 0.008 275);
+  --color-stone-800: oklch(0.29 0.006 275);
+  --color-stone-900: oklch(0.235 0.006 275);
+  --color-stone-950: oklch(0.19 0.005 275);
 }
 
 /* Inbox / preview screens used WhatsApp-web hex colors; map them
@@ -587,59 +569,37 @@ html[data-theme="rose"] {
   [data-mode="dark"] .dark\:bg-\[\#202c33\] { background-color: var(--card); }
 }
 
-/* Rating stars (fill-amber-*) keep a soft gold instead of orchid. */
-@layer utilities {
-  .fill-amber-300, .fill-amber-400, .fill-amber-500,
-  .fill-yellow-400, .fill-yellow-500 { fill: var(--gold-400); }
-  svg.fill-amber-300, svg.fill-amber-400, svg.fill-amber-500,
-  svg.fill-yellow-400, svg.fill-yellow-500 { color: var(--gold-500); }
-}
-
 /* Dashboard conversations chart draws its series with literal hex
  * SVG attributes; CSS beats presentation attributes, so retint
- * "incoming" to iris and "outgoing" to primary. The legend dots use
- * inline styles, hence the attribute match. */
-svg [stroke="#3b82f6"] { stroke: var(--iris-400); }
-svg [fill="#3b82f6"] { fill: var(--iris-400); }
+ * "incoming" to a neutral grey and "outgoing" to the accent. The
+ * legend dots use inline styles, hence the attribute match. */
+svg [stroke="#3b82f6"] { stroke: var(--color-slate-400); }
+svg [fill="#3b82f6"] { fill: var(--color-slate-400); }
 svg [stroke="#7c3aed"] { stroke: var(--primary); }
 svg [fill="#7c3aed"] { fill: var(--primary); }
 span.rounded-full[style*="#3b82f6"],
-span.rounded-full[style*="rgb(59, 130, 246)"] { background: var(--iris-400) !important; }
+span.rounded-full[style*="rgb(59, 130, 246)"] { background: var(--color-slate-400) !important; }
 span.rounded-full[style*="#7c3aed"],
 span.rounded-full[style*="rgb(124, 58, 237)"] { background: var(--primary) !important; }
 
 /* ============================================================
- * POLISH — depth, gentle motion and signature button effects.
+ * POLISH — clean SaaS finish.
  *
- * Pure presentation: everything hooks onto existing `data-slot`
- * attributes and native elements, so no component markup or
- * behavior changes. Shadows go through `--tw-shadow` so they
- * compose with Tailwind's ring / focus utilities. Entry and scroll
- * animations use only `opacity` and the individual `translate`
- * property, never `transform`, so dnd-kit drag transforms and
- * `fixed` children are unaffected.
+ * Restraint over decoration: neutral surfaces, hairline borders,
+ * one accent, crisp typography and short, quiet transitions. All of
+ * it hooks onto existing `data-slot` attributes and native elements,
+ * so no component markup or behavior changes. Shadows go through
+ * `--tw-shadow` so they compose with Tailwind's ring / focus
+ * utilities. Motion uses only `opacity` and the individual
+ * `translate` property, never `transform` on cards, so dnd-kit drag
+ * transforms and `fixed` children are unaffected.
  * ============================================================ */
 
 :root {
-  --brand-gradient: linear-gradient(120deg, var(--iris-500) 0%, var(--primary) 50%, var(--orchid-500) 100%);
-  --brand-gradient-soft: linear-gradient(120deg,
-    color-mix(in oklch, var(--iris-500) 20%, transparent),
-    color-mix(in oklch, var(--primary) 16%, transparent),
-    color-mix(in oklch, var(--orchid-500) 14%, transparent));
-  /* Buttons rest on violet → orchid and pan toward iris on hover. */
-  --btn-gradient: linear-gradient(120deg, var(--brand-600) 0%, var(--primary) 28%,
-    color-mix(in oklch, var(--primary) 55%, var(--orchid-500)) 55%, var(--iris-500) 100%);
-  --brand-ring: linear-gradient(120deg, var(--iris-400), var(--primary), var(--orchid-400));
-  --glow-sm: 0 4px 14px -4px color-mix(in oklch, var(--primary) 55%, transparent);
-  --glow-md: 0 10px 30px -8px color-mix(in oklch, var(--primary) 70%, transparent),
-    0 4px 14px -6px color-mix(in oklch, var(--orchid-500) 45%, transparent);
-  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-@property --ui-angle {
-  syntax: "<angle>";
-  initial-value: 0deg;
-  inherits: false;
+  --ease-out-soft: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --hairline: color-mix(in oklch, var(--foreground) 9%, transparent);
+  --hairline-strong: color-mix(in oklch, var(--foreground) 16%, transparent);
+  --halo: 0 0 0 3px color-mix(in oklch, var(--primary) 22%, transparent);
 }
 
 @keyframes ui-fade-in {
@@ -647,30 +607,31 @@ span.rounded-full[style*="rgb(124, 58, 237)"] { background: var(--primary) !impo
   to { opacity: 1; }
 }
 
-@keyframes ui-shine {
-  from { background-position: 120% 0; }
-  to { background-position: -20% 0; }
-}
-
-@keyframes ui-spin {
-  to { --ui-angle: 360deg; }
-}
-
 @keyframes ui-reveal {
-  from { opacity: 0; translate: 0 16px; }
+  from { opacity: 0; translate: 0 8px; }
   to { opacity: 1; translate: none; }
 }
 
 @layer base {
+  html {
+    /* Inter's cleaner alternates: open digits, straight-sided l, etc. */
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    text-rendering: optimizeLegibility;
+  }
+
+  h1, h2, h3 {
+    letter-spacing: -0.015em;
+  }
+
   ::selection {
-    background: color-mix(in oklch, var(--primary) 38%, transparent);
+    background: color-mix(in oklch, var(--primary) 32%, transparent);
     color: var(--foreground);
   }
 
-  /* Thin, gradient scrollbars. */
+  /* Thin, neutral scrollbars. */
   * {
     scrollbar-width: thin;
-    scrollbar-color: color-mix(in oklch, var(--primary) 40%, var(--border)) transparent;
+    scrollbar-color: var(--hairline-strong) transparent;
   }
   ::-webkit-scrollbar {
     width: 8px;
@@ -680,61 +641,45 @@ span.rounded-full[style*="rgb(124, 58, 237)"] { background: var(--primary) !impo
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: var(--brand-gradient);
+    background: var(--hairline-strong);
     border-radius: 999px;
     border: 2px solid transparent;
     background-clip: padding-box;
-    opacity: 0.6;
   }
-
-  /* Signature backdrop: two soft colour glows over a faint dot grid. */
-  main {
-    background-image:
-      radial-gradient(1100px 420px at 10% -12%, color-mix(in oklch, var(--iris-500) 11%, transparent), transparent 70%),
-      radial-gradient(900px 380px at 100% -5%, color-mix(in oklch, var(--orchid-500) 9%, transparent), transparent 70%),
-      radial-gradient(circle at 1px 1px, color-mix(in oklch, var(--foreground) 6%, transparent) 1px, transparent 0);
-    background-size: auto, auto, 22px 22px;
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklch, var(--foreground) 26%, transparent);
+    background-clip: padding-box;
   }
 
   /* Every page fades in when its route mounts. */
   main > * {
-    animation: ui-fade-in 0.35s var(--ease-out-soft) backwards;
-  }
-
-  /* Page titles: subtle foreground → brand gradient. */
-  main h1 {
-    background-image: linear-gradient(100deg, var(--foreground) 35%, var(--brand-300) 75%, var(--orchid-300));
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
+    animation: ui-fade-in 0.25s var(--ease-out-soft) backwards;
   }
 
   a {
-    transition: color 0.2s ease, opacity 0.2s ease;
+    transition: color 0.15s ease, opacity 0.15s ease;
   }
 
-  /* Plain <button>s that don't use the Button component still get
-   * a tactile press. */
+  /* Plain <button>s that don't use the Button component still get a
+   * quiet press. */
   button:not([data-slot]),
   [role="button"]:not([data-slot]) {
     transition-property: color, background-color, border-color, box-shadow, transform, opacity, filter;
-    transition-duration: 0.2s;
+    transition-duration: 0.15s;
     transition-timing-function: var(--ease-out-soft);
   }
   button:not([data-slot]):not(:disabled):active,
   [role="button"]:not([data-slot]):active {
-    transform: scale(0.97);
+    transform: scale(0.98);
   }
 
-  /* Solid filled raw buttons/links share the primary gradient. */
+  /* Solid filled raw buttons: subtle top highlight, accent halo on hover. */
   :is(button, a):not([data-slot]):is(.bg-primary, .bg-emerald-600, .bg-emerald-500, .bg-blue-600, .bg-purple-600, .bg-violet-600, .bg-indigo-600) {
-    background-image: var(--btn-gradient);
-    background-size: 200% 100%;
-    transition: background-position 0.6s var(--ease-out-soft), box-shadow 0.3s ease, transform 0.2s var(--ease-out-soft), filter 0.2s ease;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 1px 2px rgb(0 0 0 / 0.25);
   }
   :is(button, a):not([data-slot]):is(.bg-primary, .bg-emerald-600, .bg-emerald-500, .bg-blue-600, .bg-purple-600, .bg-violet-600, .bg-indigo-600):not(:disabled):hover {
-    background-position: 100% 0;
-    box-shadow: var(--glow-md);
+    filter: brightness(1.08);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 1px 2px rgb(0 0 0 / 0.25), var(--halo);
   }
 }
 
@@ -743,168 +688,62 @@ span.rounded-full[style*="rgb(124, 58, 237)"] { background: var(--primary) !impo
    * Buttons
    * --------------------------------------------------------- */
   [data-slot="button"] {
-    position: relative;
-    isolation: isolate;
     transition-timing-function: var(--ease-out-soft);
-    transition-duration: 0.22s;
-  }
-  [data-slot="button"]:not(:disabled):not(.underline-offset-4):hover {
-    transform: translateY(-1px);
+    transition-duration: 0.15s;
   }
   [data-slot="button"]:not(:disabled):active {
-    transform: translateY(0) scale(0.97);
-  }
-  [data-slot="button"] svg {
-    transition: transform 0.3s var(--ease-out-soft);
-  }
-  [data-slot="button"]:not(:disabled):hover svg {
-    transform: scale(1.1);
+    transform: scale(0.98);
   }
 
-  /* Primary (and solid colour buttons): panning tri-tone gradient,
-   * rotating gradient ring, glow and a light sweep. */
+  /* Primary / solid: crisp top highlight; on hover a touch brighter
+   * with a soft accent halo — the signature effect. */
   [data-slot="button"]:is(.bg-primary, .bg-emerald-600, .bg-emerald-500, .bg-blue-600, .bg-purple-600, .bg-violet-600, .bg-indigo-600) {
-    background-image: var(--btn-gradient);
-    background-size: 200% 100%;
-    background-position: 0% 0;
-    --tw-shadow: inset 0 1px 0 rgb(255 255 255 / 0.2), var(--glow-sm);
-    transition-property: background-position, box-shadow, transform, filter, opacity;
-    transition-duration: 0.6s, 0.3s, 0.22s, 0.2s, 0.2s;
+    --tw-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 1px 2px rgb(0 0 0 / 0.25);
   }
   [data-slot="button"]:is(.bg-primary, .bg-emerald-600, .bg-emerald-500, .bg-blue-600, .bg-purple-600, .bg-violet-600, .bg-indigo-600):not(:disabled):hover {
-    background-position: 100% 0;
-    --tw-shadow: inset 0 1px 0 rgb(255 255 255 / 0.25), var(--glow-md);
-  }
-  /* Rotating conic ring — border only, via mask. */
-  [data-slot="button"]:is(.bg-primary, .bg-emerald-600, .bg-emerald-500, .bg-blue-600, .bg-purple-600, .bg-violet-600, .bg-indigo-600)::before {
-    content: "";
-    position: absolute;
-    inset: -1px;
-    border-radius: inherit;
-    padding: 1.5px;
-    pointer-events: none;
-    background: conic-gradient(from var(--ui-angle), var(--iris-300), var(--orchid-300), white, var(--brand-300), var(--iris-300));
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
-    opacity: 0;
-    transition: opacity 0.35s ease;
-  }
-  [data-slot="button"]:is(.bg-primary, .bg-emerald-600, .bg-emerald-500, .bg-blue-600, .bg-purple-600, .bg-violet-600, .bg-indigo-600):not(:disabled):hover::before {
-    opacity: 0.9;
-    animation: ui-spin 2.6s linear infinite;
-  }
-  /* Light sweep, painted between background and label. */
-  [data-slot="button"]:is(.bg-primary, .bg-emerald-600, .bg-emerald-500, .bg-blue-600, .bg-purple-600, .bg-violet-600, .bg-indigo-600)::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    border-radius: inherit;
-    pointer-events: none;
-    background: linear-gradient(105deg, transparent 35%, rgb(255 255 255 / 0.3) 50%, transparent 65%) no-repeat;
-    background-size: 250% 100%;
-    background-position: 120% 0;
-  }
-  [data-slot="button"]:is(.bg-primary, .bg-emerald-600, .bg-emerald-500, .bg-blue-600, .bg-purple-600, .bg-violet-600, .bg-indigo-600):not(:disabled):hover::after {
-    animation: ui-shine 0.9s var(--ease-out-soft);
+    filter: brightness(1.08);
+    --tw-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), 0 1px 2px rgb(0 0 0 / 0.25), var(--halo);
   }
 
-  /* Outline / secondary: gradient border fades in, soft tri-tone
-   * tint behind the label. */
-  [data-slot="button"]:is(.border-border, .bg-secondary)::before {
-    content: "";
-    position: absolute;
-    inset: -1px;
-    border-radius: inherit;
-    padding: 1px;
-    pointer-events: none;
-    background: var(--brand-ring);
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-  [data-slot="button"]:is(.border-border, .bg-secondary):not(:disabled):hover::before {
-    opacity: 1;
+  /* Outline / secondary: border firms up on hover. */
+  [data-slot="button"]:is(.border-border, .bg-secondary) {
+    --tw-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
   }
   [data-slot="button"]:is(.border-border, .bg-secondary):not(:disabled):hover {
-    background-image: var(--brand-gradient-soft);
-    --tw-shadow: 0 8px 22px -12px color-mix(in oklch, var(--primary) 75%, transparent);
+    border-color: var(--hairline-strong);
   }
 
-  /* Ghost: soft tint on hover. */
-  [data-slot="button"]:not(:is(.bg-primary, .border-border, .bg-secondary, .text-destructive, .underline-offset-4)):not(:disabled):hover {
-    background-image: var(--brand-gradient-soft);
-  }
-
-  /* Destructive: red glow on hover. */
+  /* Destructive: quiet red halo. */
   [data-slot="button"].text-destructive:not(:disabled):hover {
-    --tw-shadow: 0 8px 20px -10px color-mix(in oklch, var(--destructive) 80%, transparent);
+    --tw-shadow: 0 0 0 3px color-mix(in oklch, var(--destructive) 18%, transparent);
   }
 
   /* ---------------------------------------------------------
-   * Cards & panels
+   * Cards & panels — flat, hairline, slightly firmer on hover.
    * --------------------------------------------------------- */
   [data-slot="card"] {
-    position: relative;
-    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.035), transparent 40%);
-    --tw-shadow: 0 1px 2px rgb(0 0 0 / 0.14), 0 10px 28px -18px rgb(0 0 0 / 0.5);
-    transition: box-shadow 0.35s ease, background-color 0.3s ease;
-    animation: ui-fade-in 0.4s var(--ease-out-soft) backwards;
-  }
-  /* Gradient hairline border that lights up on hover. */
-  [data-slot="card"]::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    padding: 1px;
-    pointer-events: none;
-    background: var(--brand-ring);
-    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
-    opacity: 0;
-    transition: opacity 0.4s ease;
-  }
-  [data-slot="card"]:hover::before {
-    opacity: 0.55;
+    --tw-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
+    outline: 1px solid transparent;
+    outline-offset: 0;
+    transition: outline-color 0.2s ease, box-shadow 0.2s ease;
+    animation: ui-fade-in 0.3s var(--ease-out-soft) backwards;
   }
   [data-slot="card"]:hover {
-    --tw-shadow: 0 1px 2px rgb(0 0 0 / 0.14), 0 18px 40px -22px color-mix(in oklch, var(--primary) 60%, transparent);
+    outline-color: var(--hairline-strong);
   }
 
   main section.bg-card {
-    background-image: linear-gradient(180deg, rgb(255 255 255 / 0.035), transparent 40%);
-    transition: box-shadow 0.35s ease, border-color 0.35s ease;
+    transition: border-color 0.2s ease;
   }
   main section.bg-card:hover {
-    border-color: color-mix(in oklch, var(--primary) 35%, var(--border));
-    box-shadow: 0 18px 40px -24px color-mix(in oklch, var(--primary) 60%, transparent);
+    border-color: var(--hairline-strong);
   }
 
   /* ---------------------------------------------------------
    * Sidebar navigation
    * --------------------------------------------------------- */
   .group\/nav {
-    transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.3s ease;
-  }
-  .group\/nav svg {
-    transition: color 0.2s ease, translate 0.25s var(--ease-out-soft);
-  }
-  .group\/nav:hover svg {
-    translate: 2px 0;
-  }
-  .group\/nav.bg-primary\/15 {
-    background-image: var(--brand-gradient-soft);
-    box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--primary) 22%, transparent),
-      0 6px 18px -12px color-mix(in oklch, var(--primary) 80%, transparent);
-  }
-  .group\/nav > span.bg-primary {
-    background-image: linear-gradient(180deg, var(--iris-400), var(--primary), var(--orchid-400));
-    box-shadow: 0 0 10px color-mix(in oklch, var(--primary) 70%, transparent);
+    transition: background-color 0.15s ease, color 0.15s ease;
   }
 
   /* ---------------------------------------------------------
@@ -913,49 +752,37 @@ span.rounded-full[style*="rgb(124, 58, 237)"] { background: var(--primary) !impo
   [data-slot="input"],
   [data-slot="textarea"],
   [data-slot="select-trigger"] {
-    transition: border-color 0.2s ease, box-shadow 0.25s ease, background-color 0.2s ease;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
   }
   [data-slot="input"]:hover:not(:disabled):not(:focus),
   [data-slot="textarea"]:hover:not(:disabled):not(:focus),
   [data-slot="select-trigger"]:hover:not(:disabled) {
-    border-color: color-mix(in oklch, var(--primary) 35%, var(--input));
+    border-color: var(--hairline-strong);
   }
   [data-slot="input"]:focus,
   [data-slot="textarea"]:focus {
-    border-color: color-mix(in oklch, var(--primary) 70%, var(--input));
-    --tw-shadow: 0 0 0 4px var(--primary-soft), 0 8px 24px -14px color-mix(in oklch, var(--primary) 80%, transparent);
+    border-color: color-mix(in oklch, var(--primary) 65%, var(--input));
+    --tw-shadow: var(--halo);
   }
 
   [data-slot="switch"],
   [data-slot="checkbox"],
   [data-slot="radio-group-item"] {
-    transition: background-color 0.25s var(--ease-out-soft), border-color 0.25s ease, box-shadow 0.25s ease;
-  }
-  [data-slot="switch"][data-checked],
-  [data-slot="checkbox"][data-checked] {
-    background-image: var(--brand-gradient);
-    --tw-shadow: 0 0 14px -3px color-mix(in oklch, var(--primary) 70%, transparent);
+    transition: background-color 0.2s var(--ease-out-soft), border-color 0.2s ease, box-shadow 0.2s ease;
   }
   [data-slot="switch-thumb"] {
-    transition: translate 0.3s var(--ease-out-soft), transform 0.3s var(--ease-out-soft);
+    transition: translate 0.2s var(--ease-out-soft), transform 0.2s var(--ease-out-soft);
   }
 
   /* ---------------------------------------------------------
    * Tabs, tables, menus, floating surfaces
    * --------------------------------------------------------- */
   [data-slot="tabs-trigger"] {
-    transition: color 0.2s ease, background-color 0.25s var(--ease-out-soft), box-shadow 0.25s ease;
-  }
-  [data-slot="tabs-trigger"]:hover:not([data-active]) {
-    color: var(--foreground);
-  }
-  [data-slot="tabs-trigger"][data-active] {
-    background-image: var(--brand-gradient-soft);
-    --tw-shadow: 0 4px 14px -8px color-mix(in oklch, var(--primary) 75%, transparent);
+    transition: color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
   }
 
   [data-slot="table-row"] {
-    transition: background-color 0.2s ease;
+    transition: background-color 0.15s ease;
   }
 
   [data-slot="dialog-content"],
@@ -964,33 +791,20 @@ span.rounded-full[style*="rgb(124, 58, 237)"] { background: var(--primary) !impo
   [data-slot="dropdown-menu-content"],
   [data-slot="dropdown-menu-sub-content"],
   [data-slot="select-content"] {
-    background-image: linear-gradient(180deg, color-mix(in oklch, var(--primary) 6%, transparent), transparent 120px);
-    --tw-shadow: 0 24px 60px -20px rgb(0 0 0 / 0.6), 0 0 0 1px color-mix(in oklch, var(--primary) 16%, transparent);
+    --tw-shadow: 0 16px 40px -12px rgb(0 0 0 / 0.55), 0 0 0 1px var(--hairline);
   }
   [data-slot="dialog-overlay"],
   [data-slot="sheet-overlay"] {
-    backdrop-filter: blur(6px) saturate(1.1);
-    -webkit-backdrop-filter: blur(6px) saturate(1.1);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
   }
   [data-slot="dropdown-menu-item"],
   [data-slot="select-item"] {
-    transition: background-color 0.15s ease, color 0.15s ease, padding-left 0.2s var(--ease-out-soft);
-  }
-  [data-slot="dropdown-menu-item"]:hover,
-  [data-slot="select-item"]:hover {
-    background-image: var(--brand-gradient-soft);
-  }
-
-  [data-slot="tooltip-content"] {
-    --tw-shadow: 0 8px 24px -10px color-mix(in oklch, var(--primary) 55%, transparent);
-  }
-
-  [data-slot="avatar"] {
-    transition: box-shadow 0.25s ease;
+    transition: background-color 0.12s ease, color 0.12s ease;
   }
 }
 
-/* Gentle scroll reveal: cards and panels drift up as they enter the
+/* Quiet scroll reveal: cards and panels settle in as they enter the
  * scroll viewport. Where scroll-driven animations aren't supported
  * the plain fade-in above applies instead. */
 @supports (animation-timeline: view()) {
@@ -998,7 +812,7 @@ span.rounded-full[style*="rgb(124, 58, 237)"] { background: var(--primary) !impo
     main :is([data-slot="card"], section.bg-card) {
       animation: ui-reveal linear both;
       animation-timeline: view();
-      animation-range: entry 0% entry 40%;
+      animation-range: entry 0% entry 30%;
     }
   }
 }
@@ -1011,7 +825,6 @@ span.rounded-full[style*="rgb(124, 58, 237)"] { background: var(--primary) !impo
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-  [data-slot="button"]:hover,
   [data-slot="button"]:active {
     transform: none !important;
   }
