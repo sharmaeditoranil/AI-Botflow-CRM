@@ -257,17 +257,19 @@ html[data-theme="rose"] {
 }
 
 /* ============================================================
- * COLOR SYSTEM — one accent, quiet semantics, neutral everything else.
+ * COLOR SYSTEM — a tuned, harmonious set on a neutral base.
  *
  * Components hard-code Tailwind color families. Instead of touching
- * component code, the palette is remapped so only these remain:
+ * component code, the palette is remapped onto five families that
+ * share the same lightness and chroma curve, so they sit together
+ * calmly instead of clashing like the raw defaults did:
  *
- *   brand   ← violet purple fuchsia indigo blue sky cyan teal
- *             emerald green lime   (derived from --primary, so it
- *             follows the accent chosen in Settings → Appearance)
- *   amber   ← amber orange yellow  (warnings, ratings — muted)
- *   red     ← red rose pink        (errors, destructive)
- *   neutral ← slate gray zinc neutral stone (matches the surfaces)
+ *   brand  ← violet purple fuchsia   (derived from --primary)
+ *   azure  ← blue sky cyan indigo    (info, links, charts)
+ *   mint   ← emerald green teal lime (success, online, paid)
+ *   amber  ← amber orange yellow     (warnings, ratings)
+ *   red    ← red rose pink           (errors, destructive)
+ *   neutral← slate gray zinc neutral stone (matches surfaces)
  * ============================================================ */
 
 :root {
@@ -282,17 +284,39 @@ html[data-theme="rose"] {
   --brand-800: color-mix(in oklch, var(--primary) 58%, black);
   --brand-900: color-mix(in oklch, var(--primary) 44%, black);
   --brand-950: color-mix(in oklch, var(--primary) 30%, black);
-  --amber-50: oklch(0.98 0.02 85);
-  --amber-100: oklch(0.955 0.04 85);
-  --amber-200: oklch(0.91 0.075 82);
-  --amber-300: oklch(0.86 0.1 80);
-  --amber-400: oklch(0.8 0.12 76);
-  --amber-500: oklch(0.74 0.13 70);
-  --amber-600: oklch(0.64 0.125 62);
-  --amber-700: oklch(0.54 0.11 56);
-  --amber-800: oklch(0.45 0.09 54);
-  --amber-900: oklch(0.38 0.07 54);
-  --amber-950: oklch(0.27 0.05 54);
+  --azure-50: oklch(0.975 0.021 250);
+  --azure-100: oklch(0.95 0.042 250);
+  --azure-200: oklch(0.9 0.084 250);
+  --azure-300: oklch(0.84 0.126 250);
+  --azure-400: oklch(0.77 0.158 250);
+  --azure-500: oklch(0.69 0.168 250);
+  --azure-600: oklch(0.6 0.158 250);
+  --azure-700: oklch(0.51 0.137 250);
+  --azure-800: oklch(0.43 0.116 250);
+  --azure-900: oklch(0.36 0.095 250);
+  --azure-950: oklch(0.26 0.063 250);
+  --mint-50: oklch(0.975 0.019 162);
+  --mint-100: oklch(0.95 0.038 162);
+  --mint-200: oklch(0.9 0.076 162);
+  --mint-300: oklch(0.84 0.114 162);
+  --mint-400: oklch(0.77 0.142 162);
+  --mint-500: oklch(0.69 0.152 162);
+  --mint-600: oklch(0.6 0.142 162);
+  --mint-700: oklch(0.51 0.123 162);
+  --mint-800: oklch(0.43 0.104 162);
+  --mint-900: oklch(0.36 0.085 162);
+  --mint-950: oklch(0.26 0.057 162);
+  --amber-50: oklch(0.975 0.02 75);
+  --amber-100: oklch(0.95 0.04 75);
+  --amber-200: oklch(0.9 0.08 75);
+  --amber-300: oklch(0.84 0.12 75);
+  --amber-400: oklch(0.77 0.15 75);
+  --amber-500: oklch(0.69 0.16 75);
+  --amber-600: oklch(0.6 0.15 75);
+  --amber-700: oklch(0.51 0.13 75);
+  --amber-800: oklch(0.43 0.11 75);
+  --amber-900: oklch(0.36 0.09 75);
+  --amber-950: oklch(0.26 0.06 75);
 }
 
 @theme inline {
@@ -329,94 +353,94 @@ html[data-theme="rose"] {
   --color-fuchsia-800: var(--brand-800);
   --color-fuchsia-900: var(--brand-900);
   --color-fuchsia-950: var(--brand-950);
-  --color-indigo-50: var(--brand-50);
-  --color-indigo-100: var(--brand-100);
-  --color-indigo-200: var(--brand-200);
-  --color-indigo-300: var(--brand-300);
-  --color-indigo-400: var(--brand-400);
-  --color-indigo-500: var(--brand-500);
-  --color-indigo-600: var(--brand-600);
-  --color-indigo-700: var(--brand-700);
-  --color-indigo-800: var(--brand-800);
-  --color-indigo-900: var(--brand-900);
-  --color-indigo-950: var(--brand-950);
-  --color-blue-50: var(--brand-50);
-  --color-blue-100: var(--brand-100);
-  --color-blue-200: var(--brand-200);
-  --color-blue-300: var(--brand-300);
-  --color-blue-400: var(--brand-400);
-  --color-blue-500: var(--brand-500);
-  --color-blue-600: var(--brand-600);
-  --color-blue-700: var(--brand-700);
-  --color-blue-800: var(--brand-800);
-  --color-blue-900: var(--brand-900);
-  --color-blue-950: var(--brand-950);
-  --color-sky-50: var(--brand-50);
-  --color-sky-100: var(--brand-100);
-  --color-sky-200: var(--brand-200);
-  --color-sky-300: var(--brand-300);
-  --color-sky-400: var(--brand-400);
-  --color-sky-500: var(--brand-500);
-  --color-sky-600: var(--brand-600);
-  --color-sky-700: var(--brand-700);
-  --color-sky-800: var(--brand-800);
-  --color-sky-900: var(--brand-900);
-  --color-sky-950: var(--brand-950);
-  --color-cyan-50: var(--brand-50);
-  --color-cyan-100: var(--brand-100);
-  --color-cyan-200: var(--brand-200);
-  --color-cyan-300: var(--brand-300);
-  --color-cyan-400: var(--brand-400);
-  --color-cyan-500: var(--brand-500);
-  --color-cyan-600: var(--brand-600);
-  --color-cyan-700: var(--brand-700);
-  --color-cyan-800: var(--brand-800);
-  --color-cyan-900: var(--brand-900);
-  --color-cyan-950: var(--brand-950);
-  --color-teal-50: var(--brand-50);
-  --color-teal-100: var(--brand-100);
-  --color-teal-200: var(--brand-200);
-  --color-teal-300: var(--brand-300);
-  --color-teal-400: var(--brand-400);
-  --color-teal-500: var(--brand-500);
-  --color-teal-600: var(--brand-600);
-  --color-teal-700: var(--brand-700);
-  --color-teal-800: var(--brand-800);
-  --color-teal-900: var(--brand-900);
-  --color-teal-950: var(--brand-950);
-  --color-emerald-50: var(--brand-50);
-  --color-emerald-100: var(--brand-100);
-  --color-emerald-200: var(--brand-200);
-  --color-emerald-300: var(--brand-300);
-  --color-emerald-400: var(--brand-400);
-  --color-emerald-500: var(--brand-500);
-  --color-emerald-600: var(--brand-600);
-  --color-emerald-700: var(--brand-700);
-  --color-emerald-800: var(--brand-800);
-  --color-emerald-900: var(--brand-900);
-  --color-emerald-950: var(--brand-950);
-  --color-green-50: var(--brand-50);
-  --color-green-100: var(--brand-100);
-  --color-green-200: var(--brand-200);
-  --color-green-300: var(--brand-300);
-  --color-green-400: var(--brand-400);
-  --color-green-500: var(--brand-500);
-  --color-green-600: var(--brand-600);
-  --color-green-700: var(--brand-700);
-  --color-green-800: var(--brand-800);
-  --color-green-900: var(--brand-900);
-  --color-green-950: var(--brand-950);
-  --color-lime-50: var(--brand-50);
-  --color-lime-100: var(--brand-100);
-  --color-lime-200: var(--brand-200);
-  --color-lime-300: var(--brand-300);
-  --color-lime-400: var(--brand-400);
-  --color-lime-500: var(--brand-500);
-  --color-lime-600: var(--brand-600);
-  --color-lime-700: var(--brand-700);
-  --color-lime-800: var(--brand-800);
-  --color-lime-900: var(--brand-900);
-  --color-lime-950: var(--brand-950);
+  --color-blue-50: var(--azure-50);
+  --color-blue-100: var(--azure-100);
+  --color-blue-200: var(--azure-200);
+  --color-blue-300: var(--azure-300);
+  --color-blue-400: var(--azure-400);
+  --color-blue-500: var(--azure-500);
+  --color-blue-600: var(--azure-600);
+  --color-blue-700: var(--azure-700);
+  --color-blue-800: var(--azure-800);
+  --color-blue-900: var(--azure-900);
+  --color-blue-950: var(--azure-950);
+  --color-sky-50: var(--azure-50);
+  --color-sky-100: var(--azure-100);
+  --color-sky-200: var(--azure-200);
+  --color-sky-300: var(--azure-300);
+  --color-sky-400: var(--azure-400);
+  --color-sky-500: var(--azure-500);
+  --color-sky-600: var(--azure-600);
+  --color-sky-700: var(--azure-700);
+  --color-sky-800: var(--azure-800);
+  --color-sky-900: var(--azure-900);
+  --color-sky-950: var(--azure-950);
+  --color-cyan-50: var(--azure-50);
+  --color-cyan-100: var(--azure-100);
+  --color-cyan-200: var(--azure-200);
+  --color-cyan-300: var(--azure-300);
+  --color-cyan-400: var(--azure-400);
+  --color-cyan-500: var(--azure-500);
+  --color-cyan-600: var(--azure-600);
+  --color-cyan-700: var(--azure-700);
+  --color-cyan-800: var(--azure-800);
+  --color-cyan-900: var(--azure-900);
+  --color-cyan-950: var(--azure-950);
+  --color-indigo-50: var(--azure-50);
+  --color-indigo-100: var(--azure-100);
+  --color-indigo-200: var(--azure-200);
+  --color-indigo-300: var(--azure-300);
+  --color-indigo-400: var(--azure-400);
+  --color-indigo-500: var(--azure-500);
+  --color-indigo-600: var(--azure-600);
+  --color-indigo-700: var(--azure-700);
+  --color-indigo-800: var(--azure-800);
+  --color-indigo-900: var(--azure-900);
+  --color-indigo-950: var(--azure-950);
+  --color-emerald-50: var(--mint-50);
+  --color-emerald-100: var(--mint-100);
+  --color-emerald-200: var(--mint-200);
+  --color-emerald-300: var(--mint-300);
+  --color-emerald-400: var(--mint-400);
+  --color-emerald-500: var(--mint-500);
+  --color-emerald-600: var(--mint-600);
+  --color-emerald-700: var(--mint-700);
+  --color-emerald-800: var(--mint-800);
+  --color-emerald-900: var(--mint-900);
+  --color-emerald-950: var(--mint-950);
+  --color-green-50: var(--mint-50);
+  --color-green-100: var(--mint-100);
+  --color-green-200: var(--mint-200);
+  --color-green-300: var(--mint-300);
+  --color-green-400: var(--mint-400);
+  --color-green-500: var(--mint-500);
+  --color-green-600: var(--mint-600);
+  --color-green-700: var(--mint-700);
+  --color-green-800: var(--mint-800);
+  --color-green-900: var(--mint-900);
+  --color-green-950: var(--mint-950);
+  --color-teal-50: var(--mint-50);
+  --color-teal-100: var(--mint-100);
+  --color-teal-200: var(--mint-200);
+  --color-teal-300: var(--mint-300);
+  --color-teal-400: var(--mint-400);
+  --color-teal-500: var(--mint-500);
+  --color-teal-600: var(--mint-600);
+  --color-teal-700: var(--mint-700);
+  --color-teal-800: var(--mint-800);
+  --color-teal-900: var(--mint-900);
+  --color-teal-950: var(--mint-950);
+  --color-lime-50: var(--mint-50);
+  --color-lime-100: var(--mint-100);
+  --color-lime-200: var(--mint-200);
+  --color-lime-300: var(--mint-300);
+  --color-lime-400: var(--mint-400);
+  --color-lime-500: var(--mint-500);
+  --color-lime-600: var(--mint-600);
+  --color-lime-700: var(--mint-700);
+  --color-lime-800: var(--mint-800);
+  --color-lime-900: var(--mint-900);
+  --color-lime-950: var(--mint-950);
   --color-amber-50: var(--amber-50);
   --color-amber-100: var(--amber-100);
   --color-amber-200: var(--amber-200);
@@ -571,14 +595,14 @@ html[data-theme="rose"] {
 
 /* Dashboard conversations chart draws its series with literal hex
  * SVG attributes; CSS beats presentation attributes, so retint
- * "incoming" to a neutral grey and "outgoing" to the accent. The
+ * "incoming" to azure and "outgoing" to the accent. The
  * legend dots use inline styles, hence the attribute match. */
-svg [stroke="#3b82f6"] { stroke: var(--color-slate-400); }
-svg [fill="#3b82f6"] { fill: var(--color-slate-400); }
+svg [stroke="#3b82f6"] { stroke: var(--azure-400); }
+svg [fill="#3b82f6"] { fill: var(--azure-400); }
 svg [stroke="#7c3aed"] { stroke: var(--primary); }
 svg [fill="#7c3aed"] { fill: var(--primary); }
 span.rounded-full[style*="#3b82f6"],
-span.rounded-full[style*="rgb(59, 130, 246)"] { background: var(--color-slate-400) !important; }
+span.rounded-full[style*="rgb(59, 130, 246)"] { background: var(--azure-400) !important; }
 span.rounded-full[style*="#7c3aed"],
 span.rounded-full[style*="rgb(124, 58, 237)"] { background: var(--primary) !important; }
 
@@ -600,6 +624,8 @@ span.rounded-full[style*="rgb(124, 58, 237)"] { background: var(--primary) !impo
   --hairline: color-mix(in oklch, var(--foreground) 9%, transparent);
   --hairline-strong: color-mix(in oklch, var(--foreground) 16%, transparent);
   --halo: 0 0 0 3px color-mix(in oklch, var(--primary) 22%, transparent);
+  /* Signature accent: violet leaning into azure. */
+  --accent-gradient: linear-gradient(135deg, var(--primary) 0%, color-mix(in oklch, var(--primary) 55%, var(--azure-500)) 100%);
 }
 
 @keyframes ui-fade-in {
@@ -651,6 +677,13 @@ span.rounded-full[style*="rgb(124, 58, 237)"] { background: var(--primary) !impo
     background-clip: padding-box;
   }
 
+  /* A faint wash of colour at the top of every page. */
+  main {
+    background-image:
+      radial-gradient(900px 320px at 0% 0%, color-mix(in oklch, var(--primary) 9%, transparent), transparent 70%),
+      radial-gradient(800px 300px at 100% 0%, color-mix(in oklch, var(--azure-500) 7%, transparent), transparent 70%);
+  }
+
   /* Every page fades in when its route mounts. */
   main > * {
     animation: ui-fade-in 0.25s var(--ease-out-soft) backwards;
@@ -675,6 +708,7 @@ span.rounded-full[style*="rgb(124, 58, 237)"] { background: var(--primary) !impo
 
   /* Solid filled raw buttons: subtle top highlight, accent halo on hover. */
   :is(button, a):not([data-slot]):is(.bg-primary, .bg-emerald-600, .bg-emerald-500, .bg-blue-600, .bg-purple-600, .bg-violet-600, .bg-indigo-600) {
+    background-image: var(--accent-gradient);
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 1px 2px rgb(0 0 0 / 0.25);
   }
   :is(button, a):not([data-slot]):is(.bg-primary, .bg-emerald-600, .bg-emerald-500, .bg-blue-600, .bg-purple-600, .bg-violet-600, .bg-indigo-600):not(:disabled):hover {
@@ -698,6 +732,7 @@ span.rounded-full[style*="rgb(124, 58, 237)"] { background: var(--primary) !impo
   /* Primary / solid: crisp top highlight; on hover a touch brighter
    * with a soft accent halo — the signature effect. */
   [data-slot="button"]:is(.bg-primary, .bg-emerald-600, .bg-emerald-500, .bg-blue-600, .bg-purple-600, .bg-violet-600, .bg-indigo-600) {
+    background-image: var(--accent-gradient);
     --tw-shadow: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 1px 2px rgb(0 0 0 / 0.25);
   }
   [data-slot="button"]:is(.bg-primary, .bg-emerald-600, .bg-emerald-500, .bg-blue-600, .bg-purple-600, .bg-violet-600, .bg-indigo-600):not(:disabled):hover {
@@ -729,14 +764,15 @@ span.rounded-full[style*="rgb(124, 58, 237)"] { background: var(--primary) !impo
     animation: ui-fade-in 0.3s var(--ease-out-soft) backwards;
   }
   [data-slot="card"]:hover {
-    outline-color: var(--hairline-strong);
+    outline-color: color-mix(in oklch, var(--primary) 35%, transparent);
+    --tw-shadow: 0 1px 2px rgb(0 0 0 / 0.18), 0 12px 30px -18px color-mix(in oklch, var(--primary) 55%, transparent);
   }
 
   main section.bg-card {
     transition: border-color 0.2s ease;
   }
   main section.bg-card:hover {
-    border-color: var(--hairline-strong);
+    border-color: color-mix(in oklch, var(--primary) 35%, var(--border));
   }
 
   /* ---------------------------------------------------------
@@ -744,6 +780,12 @@ span.rounded-full[style*="rgb(124, 58, 237)"] { background: var(--primary) !impo
    * --------------------------------------------------------- */
   .group\/nav {
     transition: background-color 0.15s ease, color 0.15s ease;
+  }
+  .group\/nav.bg-primary\/15 {
+    background-image: linear-gradient(90deg, color-mix(in oklch, var(--primary) 14%, transparent), color-mix(in oklch, var(--azure-500) 6%, transparent));
+  }
+  .group\/nav > span.bg-primary {
+    background-image: linear-gradient(180deg, var(--primary), var(--azure-400));
   }
 
   /* ---------------------------------------------------------
@@ -769,6 +811,10 @@ span.rounded-full[style*="rgb(124, 58, 237)"] { background: var(--primary) !impo
   [data-slot="checkbox"],
   [data-slot="radio-group-item"] {
     transition: background-color 0.2s var(--ease-out-soft), border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  [data-slot="switch"][data-checked],
+  [data-slot="checkbox"][data-checked] {
+    background-image: var(--accent-gradient);
   }
   [data-slot="switch-thumb"] {
     transition: translate 0.2s var(--ease-out-soft), transform 0.2s var(--ease-out-soft);
