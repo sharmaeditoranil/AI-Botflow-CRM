@@ -11,7 +11,7 @@ import { SettingsOverview } from '@/components/settings/settings-overview';
 import { ProfileForm } from '@/components/settings/profile-form';
 import { SecurityPanel } from '@/components/settings/security-panel';
 import { AppearancePanel } from '@/components/settings/appearance-panel';
-import { WhatsAppConfig } from '@/components/settings/whatsapp-config';
+import { WhatsAppNumbers } from '@/components/settings/whatsapp-numbers';
 import { WhatsAppBusinessProfileManager } from '@/components/settings/whatsapp-business-profile';
 import { SocialChannelsConfig } from '@/components/settings/social-channels-config';
 import { TemplateManager } from '@/components/settings/template-manager';
@@ -77,7 +77,7 @@ function SettingsPageInner() {
     profile: <ProfileForm />,
     security: <SecurityPanel />,
     appearance: <AppearancePanel />,
-    whatsapp: <WhatsAppConfig />,
+    whatsapp: <WhatsAppNumbers />,
     'wa-profile': <WhatsAppBusinessProfileManager />,
     social: <SocialChannelsConfig />,
     templates: <TemplateManager />,

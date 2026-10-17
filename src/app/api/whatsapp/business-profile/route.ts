@@ -7,6 +7,7 @@ import {
   getWhatsAppCommerceSettings,
   updateWhatsAppCommerceSettings,
 } from '@/lib/whatsapp/meta-api'
+import { resolveWhatsAppNumber } from '@/lib/whatsapp/numbers'
 
 async function resolveAccountId(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -21,7 +22,7 @@ async function resolveAccountId(
   return data.account_id as string
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
     const supabase = await createClient()
     const {
@@ -38,13 +39,16 @@ export async function GET() {
       return NextResponse.json({ error: 'No account linked to user' }, { status: 400 })
     }
 
-    const { data: config, error: configError } = await supabase
-      .from('whatsapp_config')
-      .select('phone_number_id, access_token, status')
-      .eq('account_id', accountId)
-      .maybeSingle()
+    // Each number has its own WhatsApp profile (migration 057):
+    // ?number_id=… picks one, otherwise the default number.
+    const config = await resolveWhatsAppNumber(
+      supabase,
+      accountId,
+      req.nextUrl.searchParams.get('number_id'),
+      'phone_number_id, access_token, status'
+    )
 
-    if (configError || !config || !config.phone_number_id || !config.access_token) {
+    if (!config || !config.phone_number_id || !config.access_token) {
       return NextResponse.json({
         configured: false,
         message: 'WhatsApp is not connected for this account',
@@ -114,13 +118,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No account linked to user' }, { status: 400 })
     }
 
-    const { data: config, error: configError } = await supabase
-      .from('whatsapp_config')
-      .select('phone_number_id, access_token, status')
-      .eq('account_id', accountId)
-      .maybeSingle()
+    // Each number has its own WhatsApp profile (migration 057):
+    // ?number_id=… picks one, otherwise the default number.
+    const config = await resolveWhatsAppNumber(
+      supabase,
+      accountId,
+      req.nextUrl.searchParams.get('number_id'),
+      'phone_number_id, access_token, status'
+    )
 
-    if (configError || !config || !config.phone_number_id || !config.access_token) {
+    if (!config || !config.phone_number_id || !config.access_token) {
       return NextResponse.json(
         { error: 'WhatsApp is not configured for this account' },
         { status: 400 }

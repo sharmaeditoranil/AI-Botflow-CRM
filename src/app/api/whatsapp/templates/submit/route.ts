@@ -15,6 +15,7 @@ import {
 import { buildMetaTemplatePayload } from '@/lib/whatsapp/template-components'
 import { ensureMediaHeaderHandle } from '@/lib/whatsapp/template-header-handle'
 import { normalizeStatus } from '@/lib/whatsapp/template-status-normalize'
+import { resolveWhatsAppNumber } from '@/lib/whatsapp/numbers'
 
 /**
  * Shared upsert payload builder — both the Meta-failure path and the
@@ -24,6 +25,7 @@ import { normalizeStatus } from '@/lib/whatsapp/template-status-normalize'
 function buildUpsertRow(
   accountId: string,
   userId: string,
+  wabaId: string | null,
   payload: TemplatePayload,
   extras: {
     status: 'DRAFT' | string
@@ -36,10 +38,10 @@ function buildUpsertRow(
     // of migration 017. Without this an INSERT throws on the
     // not-null constraint.
     account_id: accountId,
-    // Original author — kept as audit only. The unique index is
-    // still on (user_id, name, language) — see the upsert helper
-    // for the cross-teammate dedup follow-up.
+    // Original author — kept as audit only.
     user_id: userId,
+    // The WABA the template lives on (migration 057).
+    waba_id: wabaId,
     name: payload.name,
     category: payload.category,
     language: payload.language,
@@ -66,14 +68,12 @@ async function upsertTemplateRow(
   supabase: SupabaseClient,
   row: ReturnType<typeof buildUpsertRow>,
 ) {
-  // TODO(account-sharing): conflict target is still scoped to
-  // user_id. Once a follow-up migration drops the legacy unique
-  // index on (user_id, name, language) and adds (account_id,
-  // name, language), switch `onConflict` here so two teammates
-  // can't shadow each other's same-named template.
+  // One row per (account, WABA, name, language) — migration 057's
+  // unique index — so teammates share a template and two WABAs can each
+  // carry the same name.
   return supabase
     .from('message_templates')
-    .upsert(row, { onConflict: 'user_id,name,language' })
+    .upsert(row, { onConflict: 'account_id,waba_id,name,language' })
     .select()
     .single()
 }
@@ -103,8 +103,16 @@ export async function POST(request: Request) {
     const { supabase, accountId, userId } = await requireRole('admin')
 
     let payload: TemplatePayload
+    // Which number's WABA to submit to (migration 057); default number
+    // when omitted.
+    let numberId: string | null = null
     try {
-      payload = (await request.json()) as TemplatePayload
+      const raw = (await request.json()) as TemplatePayload & {
+        whatsapp_number_id?: unknown
+      }
+      numberId = typeof raw.whatsapp_number_id === 'string' ? raw.whatsapp_number_id : null
+      delete raw.whatsapp_number_id
+      payload = raw
     } catch {
       return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 })
     }
@@ -135,16 +143,15 @@ export async function POST(request: Request) {
     let metaTemplateId: string
     let metaStatus: string
 
+    const number = await resolveWhatsAppNumber(supabase, accountId, numberId, '*')
+    const wabaId = (number?.waba_id as string | null | undefined) ?? null
+
     if (dryRun) {
       metaTemplateId = `dry-run-${crypto.randomUUID()}`
       metaStatus = 'PENDING'
     } else {
-      const { data: config, error: configError } = await supabase
-        .from('whatsapp_config')
-        .select('*')
-        .eq('account_id', accountId)
-        .single()
-      if (configError || !config) {
+      const config = number
+      if (!config) {
         return NextResponse.json(
           {
             error:
@@ -194,7 +201,7 @@ export async function POST(request: Request) {
         // until they fix and re-submit.
         await upsertTemplateRow(
           supabase,
-          buildUpsertRow(accountId, userId, payload, {
+          buildUpsertRow(accountId, userId, wabaId, payload, {
             status: 'DRAFT',
             metaTemplateId: null,
             submissionError: message,
@@ -214,7 +221,7 @@ export async function POST(request: Request) {
 
     const { data: row, error: upsertErr } = await upsertTemplateRow(
       supabase,
-      buildUpsertRow(accountId, userId, payload, {
+      buildUpsertRow(accountId, userId, wabaId, payload, {
         status: normalizeStatus(metaStatus),
         metaTemplateId,
         submissionError: null,

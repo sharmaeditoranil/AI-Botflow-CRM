@@ -41,6 +41,7 @@ import {
   isRecipientNotAllowedError,
 } from '@/lib/whatsapp/phone-utils';
 import { resolveContactSendTarget } from '@/lib/whatsapp/wa-identity';
+import { resolveWhatsAppNumber } from '@/lib/whatsapp/numbers';
 import type { MessageTemplate } from '@/types';
 import {
   resolveTemplateRow,
@@ -365,14 +366,16 @@ export async function sendMessageToConversation(
   const hasValidPhone = resolvedTarget.isPhone;
   const sanitizedPhone = hasValidPhone ? sendTarget : '';
 
-  // WhatsApp config, account-scoped.
-  const { data: config, error: configError } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', accountId)
-    .single();
+  // The WhatsApp number this chat lives on, or the account default when
+  // it has none / its number was removed (migration 057).
+  const config = await resolveWhatsAppNumber(
+    db,
+    accountId,
+    conversation.whatsapp_config_id,
+    '*'
+  );
 
-  if (configError || !config) {
+  if (!config) {
     throw new SendMessageError(
       'whatsapp_not_configured',
       'WhatsApp not configured. Please set up your WhatsApp integration first.',
@@ -437,7 +440,8 @@ export async function sendMessageToConversation(
       db,
       accountId,
       templateName,
-      templateLanguage
+      templateLanguage,
+      config.waba_id
     );
     if (resolved.malformed) {
       throw new SendMessageError(

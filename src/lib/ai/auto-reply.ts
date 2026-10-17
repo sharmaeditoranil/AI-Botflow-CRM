@@ -253,7 +253,7 @@ export async function dispatchInboundToAiReply(
     // show the customer "typing…" (and mark their message read) while the
     // retrieval + LLM round trips run (WhatsApp only).
     if (inboundMessageId && convChannel === 'whatsapp') {
-      await showTypingIndicator(db, accountId, inboundMessageId)
+      await showTypingIndicator(db, accountId, conversationId, inboundMessageId)
     }
 
     // Load contact memory & profile for long-term customer awareness
@@ -440,12 +440,14 @@ export async function dispatchInboundToAiReply(
 async function showTypingIndicator(
   db: ReturnType<typeof supabaseAdmin>,
   accountId: string,
+  conversationId: string,
   inboundMessageId: string,
 ): Promise<void> {
   try {
     const { phoneNumberId, accessToken } = await loadAccountMetaCredentials(
       db,
       accountId,
+      conversationId,
     )
     await sendTypingIndicator({
       phoneNumberId,

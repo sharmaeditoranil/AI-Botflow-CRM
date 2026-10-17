@@ -30,6 +30,8 @@ import {
   parseDealLeadDetails,
 } from '@/lib/pipelines/deal-merger'
 import { ensureDefaultPipelineForAccount } from '@/lib/pipelines/default-pipeline'
+import { getDefaultWhatsAppNumber } from '@/lib/whatsapp/numbers'
+import { findOrCreateNumberConversation } from '@/lib/conversations/number-conversation'
 import {
   findSmartName,
   findSmartService,
@@ -814,11 +816,14 @@ async function resolveConversationId(args: ExecuteArgs): Promise<string> {
   if (!args.contactId) throw new Error('cannot resolve conversation: no contact')
 
   const db = supabaseAdmin()
+  // With several WhatsApp numbers a contact can have one chat per number
+  // (migration 057); continue the one they were most recently active on.
   const { data, error } = await db
     .from('conversations')
     .select('id')
     .eq('account_id', args.automation.account_id)
     .eq('contact_id', args.contactId)
+    .order('last_message_at', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
     .limit(1)
 
@@ -834,19 +839,23 @@ async function resolveConversationId(args: ExecuteArgs): Promise<string> {
     .eq('account_id', args.automation.account_id)
     .maybeSingle()
 
-  if (contact) {
-    const { data: newConv } = await db
-      .from('conversations')
-      .insert({
-        account_id: args.automation.account_id,
-        contact_id: args.contactId,
-        user_id: contact.user_id || args.automation.user_id,
-        status: 'open',
-        unread_count: 0,
+  // A brand-new chat opens on the account's default number.
+  const number = contact
+    ? await getDefaultWhatsAppNumber(db, args.automation.account_id, 'id')
+    : null
+  if (contact && number) {
+    try {
+      const { conversation } = await findOrCreateNumberConversation(db, {
+        accountId: args.automation.account_id,
+        contactId: args.contactId,
+        numberId: number.id,
+        userId: contact.user_id || args.automation.user_id,
+        insertExtras: { status: 'open', unread_count: 0 },
       })
-      .select('id')
-      .maybeSingle()
-    if (newConv?.id) return newConv.id as string
+      return conversation.id
+    } catch (err) {
+      console.warn('[automations] could not open a conversation:', err)
+    }
   }
 
   const prefix = args.triggerEvent === 'tag_added'

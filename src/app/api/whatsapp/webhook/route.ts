@@ -380,7 +380,8 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
               config.account_id,
               config.user_id,
               decryptedAccessToken,
-              config.mirror_inbound_media !== false
+              config.mirror_inbound_media !== false,
+              config.id
             )
           } else {
             console.warn('[webhook] Echo message missing recipient identifier; skipping:', message.id)
@@ -406,7 +407,10 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
           // Default ON: the column is NOT NULL DEFAULT TRUE, but a row
           // read before migration 039 lands would have it undefined,
           // and losing attachments is the failure mode worth avoiding.
-          config.mirror_inbound_media !== false
+          config.mirror_inbound_media !== false,
+          // The number this delivery arrived on — the chat lives on it
+          // and every reply goes back out through it (migration 057).
+          config.id
         )
       }
     }
@@ -711,7 +715,9 @@ async function processMessage(
   accessToken: string,
   // Per-account opt-out for the inbound-media mirror (migration 039).
   // See parseMessageContent for what it turns off.
-  mirrorMedia: boolean
+  mirrorMedia: boolean,
+  // whatsapp_config.id of the receiving number (migration 057).
+  numberId: string
 ) {
   // Phone number OR business-scoped user ID — Meta sends only the
   // latter for a sender who has adopted a WhatsApp username (#519).
@@ -740,7 +746,8 @@ async function processMessage(
   const convResult = await findOrCreateConversation(
     accountId,
     configOwnerUserId,
-    contactRecord.id
+    contactRecord.id,
+    numberId
   )
   if (!convResult) return
   const conversation = convResult.conversation
@@ -1057,7 +1064,8 @@ async function processMessageEcho(
   accountId: string,
   configOwnerUserId: string,
   accessToken: string,
-  mirrorMedia: boolean
+  mirrorMedia: boolean,
+  numberId: string
 ) {
   const recipientIdentity: WaIdentity = {
     phone: normalizePhone(recipientPhoneOrId),
@@ -1087,7 +1095,8 @@ async function processMessageEcho(
   const convResult = await findOrCreateConversation(
     accountId,
     configOwnerUserId,
-    contactRecord.id
+    contactRecord.id,
+    numberId
   )
   if (!convResult) return
   const conversation = convResult.conversation
@@ -1566,8 +1575,12 @@ async function findOrCreateConversation(
   accountId: string,
   configOwnerUserId: string,
   contactId: string,
+  // The receiving number (migration 057): a contact has one WhatsApp
+  // chat per number, so a customer who writes to "Sales" and "Support"
+  // gets two threads, each replying from its own number.
+  numberId: string,
 ) {
-  // Look for an existing conversation in this account, oldest-first.
+  // Look for an existing conversation on this number, oldest-first.
   //
   // We deliberately do NOT use `.single()` here. `.single()` errors on
   // *both* 0 rows and ≥2 rows, and the old code treated any error as
@@ -1580,13 +1593,17 @@ async function findOrCreateConversation(
   // Ordering oldest-first and taking one row makes the lookup resolve to
   // the same canonical survivor the dedup migration (036) keeps, so any
   // pre-existing duplicates converge instead of compounding.
-  const { data: existingRows, error: findError } = await supabaseAdmin()
-    .from('conversations')
-    .select('*')
-    .eq('account_id', accountId)
-    .eq('contact_id', contactId)
-    .order('created_at', { ascending: true })
-    .limit(1)
+  const findOnNumber = () =>
+    supabaseAdmin()
+      .from('conversations')
+      .select('*')
+      .eq('account_id', accountId)
+      .eq('contact_id', contactId)
+      .eq('whatsapp_config_id', numberId)
+      .order('created_at', { ascending: true })
+      .limit(1)
+
+  const { data: existingRows, error: findError } = await findOnNumber()
 
   if (findError) {
     console.error('Error finding conversation:', findError)
@@ -1597,6 +1614,35 @@ async function findOrCreateConversation(
     return { conversation: existingRows[0], created: false }
   }
 
+  // A WhatsApp chat with no number recorded (its number was removed, or
+  // it predates migration 057's backfill) is adopted by this number
+  // rather than splitting the customer's history.
+  const { data: legacyRows } = await supabaseAdmin()
+    .from('conversations')
+    .select('*')
+    .eq('account_id', accountId)
+    .eq('contact_id', contactId)
+    .is('whatsapp_config_id', null)
+    .eq('channel', 'whatsapp')
+    .order('created_at', { ascending: true })
+    .limit(1)
+
+  if (legacyRows && legacyRows.length > 0) {
+    const legacy = legacyRows[0]
+    const { error: adoptError } = await supabaseAdmin()
+      .from('conversations')
+      .update({ whatsapp_config_id: numberId })
+      .eq('id', legacy.id)
+    if (!adoptError) {
+      return {
+        conversation: { ...legacy, whatsapp_config_id: numberId },
+        created: false,
+      }
+    }
+    // A chat on this number appeared meanwhile (unique index) — fall
+    // through and re-resolve it below.
+  }
+
   // Create new conversation. Same tenancy + audit split as
   // findOrCreateContact above.
   const { data: newConv, error: createError } = await supabaseAdmin()
@@ -1605,6 +1651,7 @@ async function findOrCreateConversation(
       account_id: accountId,
       user_id: configOwnerUserId,
       contact_id: contactId,
+      whatsapp_config_id: numberId,
     })
     .select()
     .single()
@@ -1612,16 +1659,10 @@ async function findOrCreateConversation(
   if (createError) {
     // Lost a race: a concurrent inbound delivery created the
     // conversation between our lookup and insert, and the unique index
-    // (migration 036) rejected the duplicate. Re-resolve the winning
+    // (migration 057) rejected the duplicate. Re-resolve the winning
     // row instead of dropping the message — mirrors findOrCreateContact.
     if (isUniqueViolation(createError)) {
-      const { data: raced } = await supabaseAdmin()
-        .from('conversations')
-        .select('*')
-        .eq('account_id', accountId)
-        .eq('contact_id', contactId)
-        .order('created_at', { ascending: true })
-        .limit(1)
+      const { data: raced } = await findOnNumber()
       if (raced && raced.length > 0) {
         return { conversation: raced[0], created: false }
       }

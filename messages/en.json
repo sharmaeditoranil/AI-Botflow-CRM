@@ -167,7 +167,10 @@
       "clearAll": "Clear all",
       "noConversations": "No conversations found",
       "noMessagesYet": "No messages yet",
-      "unknown": "Unknown"
+      "unknown": "Unknown",
+      "allNumbers": "All numbers",
+      "removedNumber": "Removed number",
+      "onNumber": "On {name}"
     },
     "messageThread": {
       "backToConversations": "Back to conversations",
@@ -198,7 +201,9 @@
       "sendTemplateFailed": "Failed to send template: {reason}",
       "waitForSending": "Wait for the message to finish sending",
       "reactionFailed": "Reaction failed: {reason}",
-      "assignmentUpdateFailed": "Failed to update assignment"
+      "assignmentUpdateFailed": "Failed to update assignment",
+      "viaNumber": "via {name}",
+      "numberRemoved": "Number removed — replies use your default number"
     },
     "sessionTimer": {
       "expired": "Expired",
@@ -763,7 +768,8 @@
         "variablesCount": "{count} variables",
         "noVariables": "No variables",
         "statusMapped": "Mapped & Ready",
-        "statusNeedsMapping": "Needs Mapping"
+        "statusNeedsMapping": "Needs Mapping",
+        "sendFrom": "Send from"
       },
       "selectAudience": {
         "title": "Select Audience",
@@ -1617,7 +1623,10 @@
       "toastInvalidDocument": "Header document must be a PDF, Word, PowerPoint, Excel or text file.",
       "toastMediaTooLarge": "File is {size} MB — the upload limit is {max} MB.",
       "toastUploadSuccess": "File uploaded.",
-      "toastUploadFailed": "Upload failed."
+      "toastUploadFailed": "Upload failed.",
+      "whatsappAccount": "WhatsApp account",
+      "whatsappAccountHint": "Templates are approved per WhatsApp Business Account. Numbers on the same account share their templates.",
+      "onWhatsappAccount": "On {name}"
     },
     "roles": {
       "admin": "Admin",
@@ -1731,7 +1740,10 @@
       "phoneNumberIdNotNumeric": "Phone Number ID must contain only digits. Copy the numeric id from Meta → WhatsApp → API Setup, not the phone number itself.",
       "wabaIdNotNumeric": "WhatsApp Business Account ID must contain only digits. Copy it from Meta → WhatsApp → API Setup.",
       "wabaSubscribed": "The WhatsApp Business Account is subscribed to this app — inbound webhooks can be delivered.",
-      "wabaNotSubscribed": "The WhatsApp Business Account is not subscribed to this app, so Meta will not deliver inbound webhooks. Re-enter the access token and save again to subscribe it."
+      "wabaNotSubscribed": "The WhatsApp Business Account is not subscribed to this app, so Meta will not deliver inbound webhooks. Re-enter the access token and save again to subscribe it.",
+      "numberName": "Number name",
+      "numberNamePlaceholder": "e.g. Sales, Support, Delhi branch",
+      "numberNameHint": "Shown on chats in the inbox so your team knows which number a customer wrote to."
     },
     "sections": {
       "overview": "Overview",
@@ -1991,6 +2003,27 @@
       "editDoc": "Edit",
       "deleteDoc": "Delete",
       "loading": "Loading…"
+    },
+    "whatsappNumbers": {
+      "title": "Your WhatsApp numbers",
+      "usage": "{count} of {limit} numbers used on your plan",
+      "add": "Add number",
+      "limitReached": "Plan limit reached — upgrade for more numbers",
+      "default": "Default",
+      "phoneId": "Phone number ID {id}",
+      "live": "Live",
+      "needsAttention": "Needs attention",
+      "edit": "Edit",
+      "makeDefault": "Make default",
+      "remove": "Remove",
+      "defaultHint": "New chats, broadcasts and automations use the default number unless you pick another. Replies always go out from the number the customer wrote to.",
+      "addTitle": "Add a WhatsApp number",
+      "editTitle": "Editing {name}",
+      "cancel": "Cancel",
+      "defaultSet": "{name} is now your default number",
+      "removed": "{name} removed. Its chats stay in your inbox.",
+      "removeConfirm": "Remove {name}? Its chats stay in your inbox, but you won't be able to send from this number until you connect it again.",
+      "actionFailed": "Something went wrong. Please try again."
     }
   },
   "SignupPage": {

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { usePresence } from "@/hooks/use-presence";
+import { useWhatsAppNumbers, numberName } from "@/hooks/use-whatsapp-numbers";
 import { PresenceDot } from "@/components/presence/presence-dot";
 import { presenceLabel } from "@/lib/presence";
 import { cn } from "@/lib/utils";
@@ -181,6 +182,7 @@ export function MessageThread({
 
   const { user } = useAuth();
   const { getPresence, getRow, now } = usePresence();
+  const { isMulti: multiNumber, byId: numberById } = useWhatsAppNumbers();
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
@@ -899,6 +901,15 @@ export function MessageThread({
   };
 
   const channel = conversation.channel || "whatsapp";
+  // With several numbers, say which one this chat (and every reply) is on.
+  const chatNumber =
+    multiNumber && channel === "whatsapp" ? numberById(conversation.whatsapp_config_id) : null;
+  const chatNumberText =
+    multiNumber && channel === "whatsapp"
+      ? chatNumber
+        ? `${t("viaNumber", { name: numberName(chatNumber) })}${chatNumber.label && chatNumber.display_phone_number ? ` · ${chatNumber.display_phone_number}` : ""}`
+        : t("numberRemoved")
+      : null;
   const displayName =
     effectiveContact.name ||
     contactHandle(effectiveContact as Contact) ||
@@ -990,7 +1001,8 @@ export function MessageThread({
               <div className="flex items-center gap-1.5 text-xs">
                 <span className="h-2 w-2 rounded-full bg-[#25D366] shrink-0" />
                 <span className="truncate font-medium text-emerald-500">
-                  {channel === "whatsapp" ? "Online on WhatsApp" : channel === "facebook" ? "Active on Facebook" : "Active on Instagram"}
+                  {chatNumberText ??
+                    (channel === "whatsapp" ? "Online on WhatsApp" : channel === "facebook" ? "Active on Facebook" : "Active on Instagram")}
                 </span>
               </div>
             </div>

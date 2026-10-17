@@ -14,6 +14,7 @@ import {
   isRecipientNotAllowedError,
 } from '@/lib/whatsapp/phone-utils'
 import { resolveContactSendTarget } from '@/lib/whatsapp/wa-identity'
+import { getWhatsAppNumberForConversation } from '@/lib/whatsapp/numbers'
 import { supabaseAdmin } from './admin-client'
 
 // ------------------------------------------------------------
@@ -32,21 +33,25 @@ import { supabaseAdmin } from './admin-client'
 // ------------------------------------------------------------
 
 /**
- * Resolve the account's Meta sending credentials: the phone number id
- * plus the DECRYPTED access token from `whatsapp_config`. The single
- * home for that decrypt step — callers outside this file (the AI
- * auto-reply's typing indicator) reuse it rather than growing a copy.
+ * Resolve the Meta sending credentials: the phone number id plus the
+ * DECRYPTED access token from `whatsapp_config`. With a conversation,
+ * that's the number the chat lives on; without one, the account's
+ * default number (migration 057). The single home for that decrypt
+ * step — callers outside this file (the AI auto-reply's typing
+ * indicator) reuse it rather than growing a copy.
  */
 export async function loadAccountMetaCredentials(
   db: ReturnType<typeof supabaseAdmin>,
   accountId: string,
+  conversationId?: string | null,
 ): Promise<{ phoneNumberId: string; accessToken: string }> {
-  const { data: config, error: configErr } = await db
-    .from('whatsapp_config')
-    .select('phone_number_id, access_token')
-    .eq('account_id', accountId)
-    .single()
-  if (configErr || !config) {
+  const config = await getWhatsAppNumberForConversation(
+    db,
+    accountId,
+    conversationId,
+    'phone_number_id, access_token',
+  )
+  if (!config) {
     throw new Error('WhatsApp not configured for this account')
   }
   return {
@@ -113,6 +118,7 @@ export async function engineSendText(
   const { phoneNumberId, accessToken } = await loadAccountMetaCredentials(
     db,
     args.accountId,
+    args.conversationId,
   )
 
   const attempt = async (phone: string): Promise<string> => {
@@ -222,6 +228,7 @@ export async function engineSendMedia(
   const { phoneNumberId, accessToken } = await loadAccountMetaCredentials(
     db,
     args.accountId,
+    args.conversationId,
   )
 
   const attempt = async (phone: string): Promise<string> => {
@@ -373,6 +380,7 @@ async function sendInteractiveViaMeta(
   const { phoneNumberId, accessToken } = await loadAccountMetaCredentials(
     db,
     input.accountId,
+    input.conversationId,
   )
 
   const attempt = async (phone: string): Promise<string> => {

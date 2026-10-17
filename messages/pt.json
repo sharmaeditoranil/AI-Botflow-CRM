@@ -192,7 +192,10 @@
       "clearAll": "Limpar tudo",
       "noConversations": "Nenhuma conversa encontrada",
       "noMessagesYet": "Nenhuma mensagem ainda",
-      "unknown": "Desconhecido"
+      "unknown": "Desconhecido",
+      "allNumbers": "All numbers",
+      "removedNumber": "Removed number",
+      "onNumber": "On {name}"
     },
     "messageThread": {
       "backToConversations": "Voltar às conversas",
@@ -223,7 +226,9 @@
       "sendTemplateFailed": "Falha ao enviar o modelo: {reason}",
       "waitForSending": "Aguarde a mensagem terminar de ser enviada",
       "reactionFailed": "Falha na reação: {reason}",
-      "assignmentUpdateFailed": "Falha ao atualizar a atribuição"
+      "assignmentUpdateFailed": "Falha ao atualizar a atribuição",
+      "viaNumber": "via {name}",
+      "numberRemoved": "Number removed — replies use your default number"
     },
     "sessionTimer": {
       "expired": "Expirada",
@@ -788,7 +793,8 @@
         "variablesCount": "{count} variables",
         "noVariables": "No variables",
         "statusMapped": "Mapped & Ready",
-        "statusNeedsMapping": "Needs Mapping"
+        "statusNeedsMapping": "Needs Mapping",
+        "sendFrom": "Send from"
       },
       "selectAudience": {
         "title": "Selecionar público",
@@ -1642,7 +1648,10 @@
       "fieldCompany": "Company",
       "fieldTodayDate": "Today's Date (DD/MM/YYYY)",
       "fieldTodayIso": "Today's Date (YYYY-MM-DD)",
-      "fieldStaticText": "Static Custom Text"
+      "fieldStaticText": "Static Custom Text",
+      "whatsappAccount": "WhatsApp account",
+      "whatsappAccountHint": "Templates are approved per WhatsApp Business Account. Numbers on the same account share their templates.",
+      "onWhatsappAccount": "On {name}"
     },
     "roles": {
       "admin": "Administrador",
@@ -1756,7 +1765,10 @@
       "phoneNumberIdNotNumeric": "O Phone Number ID deve conter apenas dígitos. Copie o id numérico em Meta → WhatsApp → Configuração da API, não o número de telefone em si.",
       "wabaIdNotNumeric": "O ID da conta do WhatsApp Business deve conter apenas dígitos. Copie-o em Meta → WhatsApp → Configuração da API.",
       "wabaSubscribed": "A conta do WhatsApp Business está inscrita neste app — os webhooks de entrada podem ser entregues.",
-      "wabaNotSubscribed": "A conta do WhatsApp Business não está inscrita neste app, então a Meta não entregará webhooks de entrada. Informe novamente o token de acesso e salve de novo para inscrevê-la."
+      "wabaNotSubscribed": "A conta do WhatsApp Business não está inscrita neste app, então a Meta não entregará webhooks de entrada. Informe novamente o token de acesso e salve de novo para inscrevê-la.",
+      "numberName": "Number name",
+      "numberNamePlaceholder": "e.g. Sales, Support, Delhi branch",
+      "numberNameHint": "Shown on chats in the inbox so your team knows which number a customer wrote to."
     },
     "sections": {
       "overview": "Visão geral",
@@ -2016,6 +2028,27 @@
       "editDoc": "Editar",
       "deleteDoc": "Excluir",
       "loading": "Carregando…"
+    },
+    "whatsappNumbers": {
+      "title": "Your WhatsApp numbers",
+      "usage": "{count} of {limit} numbers used on your plan",
+      "add": "Add number",
+      "limitReached": "Plan limit reached — upgrade for more numbers",
+      "default": "Default",
+      "phoneId": "Phone number ID {id}",
+      "live": "Live",
+      "needsAttention": "Needs attention",
+      "edit": "Edit",
+      "makeDefault": "Make default",
+      "remove": "Remove",
+      "defaultHint": "New chats, broadcasts and automations use the default number unless you pick another. Replies always go out from the number the customer wrote to.",
+      "addTitle": "Add a WhatsApp number",
+      "editTitle": "Editing {name}",
+      "cancel": "Cancel",
+      "defaultSet": "{name} is now your default number",
+      "removed": "{name} removed. Its chats stay in your inbox.",
+      "removeConfirm": "Remove {name}? Its chats stay in your inbox, but you won't be able to send from this number until you connect it again.",
+      "actionFailed": "Something went wrong. Please try again."
     }
   },
   "ForgotPasswordPage": {

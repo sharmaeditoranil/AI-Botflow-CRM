@@ -20,6 +20,7 @@ import {
   Bot,
   Share2,
   SlidersHorizontal,
+  Phone,
 } from 'lucide-react';
 import { InstagramIcon } from '@/components/icons/social-icons';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -40,6 +41,8 @@ interface Plan {
   price_yearly: number;
   max_contacts: number;
   max_team_members: number;
+  /** WhatsApp numbers an account may connect (migration 057). */
+  max_whatsapp_numbers?: number;
   max_broadcasts_monthly: number;
   max_automations: number;
   is_active: boolean;
@@ -331,6 +334,12 @@ export default function SuperAdminPlansPage() {
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="flex items-center gap-1">
+                        <Phone className="h-3.5 w-3.5 text-primary" /> WhatsApp Numbers
+                      </span>
+                      <span className="font-semibold text-foreground">{p.max_whatsapp_numbers ?? 1}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1">
                         <Zap className="h-3.5 w-3.5 text-primary" /> Automations
                       </span>
                       <span className="font-semibold text-foreground">{p.max_automations}</span>
@@ -495,6 +504,23 @@ export default function SuperAdminPlansPage() {
                     className="border-border bg-muted"
                   />
                 </div>
+              </div>
+
+              {/* WhatsApp numbers (migration 057) */}
+              <div className="space-y-1">
+                <Label className="text-muted-foreground">Max WhatsApp Numbers</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={editingPlan.max_whatsapp_numbers ?? 1}
+                  onChange={(e) =>
+                    setEditingPlan({
+                      ...editingPlan,
+                      max_whatsapp_numbers: Number(e.target.value),
+                    })
+                  }
+                  className="border-border bg-muted"
+                />
               </div>
 
               {/* Seats & Automations */}

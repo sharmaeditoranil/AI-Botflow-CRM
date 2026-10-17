@@ -4,6 +4,7 @@ import { sendTemplateMessage } from '@/lib/whatsapp/meta-api'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import type { SendTimeParams } from '@/lib/whatsapp/template-send-builder'
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body'
+import { resolveWhatsAppNumber } from '@/lib/whatsapp/numbers'
 import {
   sanitizePhoneForMeta,
   isValidE164,
@@ -95,6 +96,7 @@ export async function POST(request: Request) {
       template_name,
       template_language,
       template_params,
+      whatsapp_config_id,
     } = body
 
     // Normalize to a list of {phone, params} regardless of shape.
@@ -140,13 +142,15 @@ export async function POST(request: Request) {
       )
     }
 
-    const { data: config, error: configError } = await supabase
-      .from('whatsapp_config')
-      .select('*')
-      .eq('account_id', accountId)
-      .single()
+    // The number chosen for this broadcast, else the default (057).
+    const config = await resolveWhatsAppNumber(
+      supabase,
+      accountId,
+      typeof whatsapp_config_id === 'string' ? whatsapp_config_id : null,
+      '*'
+    )
 
-    if (configError || !config) {
+    if (!config) {
       return NextResponse.json(
         {
           error:
@@ -168,6 +172,7 @@ export async function POST(request: Request) {
       accountId,
       template_name,
       template_language,
+      config.waba_id,
     )
     if (resolvedTemplate.malformed) {
       return NextResponse.json(

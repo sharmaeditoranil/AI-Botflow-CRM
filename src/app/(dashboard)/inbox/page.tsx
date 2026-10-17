@@ -224,13 +224,15 @@ function InboxPageInner() {
         return;
       }
 
+      // Connected when any of the account's numbers is (migration 057).
       const { data } = await supabase
         .from("whatsapp_config")
         .select("status")
-        .eq("account_id", accountId)
-        .maybeSingle();
+        .eq("account_id", accountId);
 
-      setWhatsappConnected(data?.status === "connected");
+      setWhatsappConnected(
+        (data ?? []).some((r: { status: string }) => r.status === "connected"),
+      );
     };
 
     checkConnection();
@@ -653,6 +655,16 @@ function InboxPageInner() {
           }
 
           if (resolvedContactId) {
+            // A new chat opens on the account's default number (057).
+            const { data: defaultNumber } = await supabase
+              .from("whatsapp_config")
+              .select("id")
+              .eq("account_id", accountId)
+              .order("is_default", { ascending: false })
+              .order("created_at", { ascending: true })
+              .limit(1)
+              .maybeSingle();
+
             const { data: newConvRow, error: insertErr } = await supabase
               .from("conversations")
               .insert({
@@ -660,6 +672,7 @@ function InboxPageInner() {
                 account_id: accountId,
                 contact_id: resolvedContactId,
                 status: "open",
+                whatsapp_config_id: defaultNumber?.id ?? null,
               })
               .select(CONVERSATION_SELECT)
               .single();
@@ -672,6 +685,8 @@ function InboxPageInner() {
                 .select(CONVERSATION_SELECT)
                 .eq("account_id", accountId)
                 .eq("contact_id", resolvedContactId)
+                .order("last_message_at", { ascending: false, nullsFirst: false })
+                .limit(1)
                 .maybeSingle();
               if (existing) {
                 targetConv = normalizeConversation(existing as any);

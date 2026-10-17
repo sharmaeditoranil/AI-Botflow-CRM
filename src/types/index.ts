@@ -208,6 +208,12 @@ export interface Conversation {
   ai_autoreply_disabled?: boolean;
   ai_reply_count?: number;
   ai_handoff_summary?: string | null;
+  /**
+   * The WhatsApp number this chat lives on (migration 057). A contact
+   * has one chat per number. NULL for Facebook / Instagram chats and
+   * for WhatsApp chats whose number was removed.
+   */
+  whatsapp_config_id?: string | null;
 }
 
 // ============================================================
@@ -340,6 +346,15 @@ export interface WhatsAppConfig {
    * the CRM panel. Migration 044.
    */
   coexistence?: boolean;
+  /** Friendly name shown in the inbox, e.g. "Sales" (migration 057). */
+  label?: string | null;
+  /** Human-readable number from Meta, e.g. "+91 98765 43210". */
+  display_phone_number?: string | null;
+  /** The number used when nothing more specific is chosen. Exactly one
+   *  per account. */
+  is_default?: boolean;
+  account_id?: string;
+  created_at?: string;
 }
 
 export interface MetaSocialConfig {
@@ -406,6 +421,9 @@ export interface MessageTemplate {
   id: string;
   user_id: string;
   account_id?: string;
+  /** WABA the template belongs to (migration 057). Numbers on the same
+   *  WABA share templates. */
+  waba_id?: string | null;
   name: string;
   category: 'Marketing' | 'Utility' | 'Authentication';
   language?: string;
@@ -495,6 +513,9 @@ export interface Broadcast {
    * send. Added in migration 038.
    */
   delivery_locked_at?: string | null;
+  /** WhatsApp number the broadcast sends from (migration 057). NULL means
+   *  the account's default number. */
+  whatsapp_config_id?: string | null;
   created_at: string;
 }
 

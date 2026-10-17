@@ -55,7 +55,13 @@ const VERTICAL_OPTIONS = [
   { value: 'TRAVEL', label: 'Travel & Tourism' },
 ];
 
-export function WhatsAppBusinessProfileManager() {
+export function WhatsAppBusinessProfileManager({
+  numberId,
+}: {
+  /** Each WhatsApp number has its own profile (migration 057). */
+  numberId?: string | null;
+} = {}) {
+  const profileUrl = `/api/whatsapp/business-profile${numberId ? `?number_id=${encodeURIComponent(numberId)}` : ''}`;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [configured, setConfigured] = useState(false);
@@ -76,7 +82,7 @@ export function WhatsAppBusinessProfileManager() {
   const fetchProfile = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/whatsapp/business-profile');
+      const res = await fetch(profileUrl);
       const data = await res.json();
 
       if (!res.ok || !data.configured) {
@@ -110,7 +116,8 @@ export function WhatsAppBusinessProfileManager() {
 
   useEffect(() => {
     fetchProfile();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload per number
+  }, [profileUrl]);
 
   const handleSave = async () => {
     if (about.length > 139) {
@@ -131,7 +138,7 @@ export function WhatsAppBusinessProfileManager() {
         is_cart_enabled: isCartEnabled,
       };
 
-      const res = await fetch('/api/whatsapp/business-profile', {
+      const res = await fetch(profileUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

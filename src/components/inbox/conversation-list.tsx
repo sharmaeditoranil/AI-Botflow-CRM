@@ -9,6 +9,7 @@ import {
   normalizeConversations,
 } from "@/lib/inbox/conversations";
 import { useAuth } from "@/hooks/use-auth";
+import { useWhatsAppNumbers, numberName } from "@/hooks/use-whatsapp-numbers";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus, Tag, Contact } from "@/types";
 import { Search, ChevronDown, X, ListFilter, UserPlus } from "lucide-react";
@@ -93,6 +94,13 @@ export function ConversationList({
   const [tabFilter, setTabFilter] = useState<TabFilter>("all");
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>("all");
+  // Which WhatsApp number's chats to show (migration 057). Only offered
+  // when the account has more than one number.
+  const [numberFilter, setNumberFilter] = useState<string>("all");
+  const { numbers: waNumbers, isMulti: multiNumber, byId: numberById } = useWhatsAppNumbers();
+  // A removed number (or single-number account) shows everything.
+  const activeNumberFilter =
+    multiNumber && waNumbers.some((n) => n.id === numberFilter) ? numberFilter : "all";
 
   // Contact-based filters
   const [tags, setTags] = useState<Tag[]>([]);
@@ -200,6 +208,13 @@ export function ConversationList({
       result = result.filter((c) => (c.channel || "whatsapp") === platformFilter);
     }
 
+    // WhatsApp number
+    if (activeNumberFilter !== "all") {
+      result = result.filter(
+        (c) => (c.channel || "whatsapp") === "whatsapp" && c.whatsapp_config_id === activeNumberFilter
+      );
+    }
+
     // Tab Filter
     if (tabFilter === "unread") {
       result = result.filter((c) => (Number(c.unread_count) || 0) > 0);
@@ -235,7 +250,17 @@ export function ConversationList({
     }
 
     return result;
-  }, [conversations, platformFilter, tabFilter, filter, userId, selectedTagIds, selectedCompany, search]);
+  }, [conversations, platformFilter, activeNumberFilter, tabFilter, filter, userId, selectedTagIds, selectedCompany, search]);
+
+  const numberCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of conversations) {
+      if ((c.channel || "whatsapp") !== "whatsapp" || !c.whatsapp_config_id) continue;
+      m.set(c.whatsapp_config_id, (m.get(c.whatsapp_config_id) ?? 0) + 1);
+    }
+    return m;
+  }, [conversations]);
+
 
   const toggleTag = useCallback((id: string) => {
     setSelectedTagIds((prev) =>
@@ -535,6 +560,62 @@ export function ConversationList({
           </DropdownMenuContent>
         </DropdownMenu>
 
+        {/* WhatsApp number filter — only with several numbers (057) */}
+        {multiNumber && (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className={cn(
+                "inline-flex items-center gap-1.5 shrink-0 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all active:scale-95 max-w-[11rem]",
+                activeNumberFilter !== "all"
+                  ? "bg-[#00a884]/20 text-[#00a884] font-bold border border-[#00a884]/40"
+                  : "bg-[#202c33] text-[#aebac1] hover:bg-[#2a3942] lg:border-border/40 lg:bg-muted/70 lg:text-muted-foreground"
+              )}
+            >
+              <span className="truncate">
+                {activeNumberFilter === "all"
+                  ? t("allNumbers")
+                  : numberName(numberById(activeNumberFilter) ?? { label: null, display_phone_number: null, phone_number_id: "" })}
+              </span>
+              <ChevronDown className="h-3 w-3 shrink-0 opacity-70" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="border-border bg-popover shadow-md min-w-52">
+              <DropdownMenuItem
+                onClick={() => setNumberFilter("all")}
+                className={cn(
+                  "text-sm flex items-center justify-between gap-3",
+                  activeNumberFilter === "all" && "text-primary font-bold"
+                )}
+              >
+                <span>{t("allNumbers")}</span>
+              </DropdownMenuItem>
+              {waNumbers.map((n) => (
+                <DropdownMenuItem
+                  key={n.id}
+                  onClick={() => setNumberFilter(n.id)}
+                  className={cn(
+                    "text-sm flex items-center justify-between gap-3",
+                    activeNumberFilter === n.id && "text-primary font-bold"
+                  )}
+                >
+                  <span className="flex min-w-0 flex-col">
+                    <span className="truncate">{numberName(n)}</span>
+                    {n.label && n.display_phone_number && (
+                      <span className="truncate text-[11px] font-normal text-muted-foreground">
+                        {n.display_phone_number}
+                      </span>
+                    )}
+                  </span>
+                  {(numberCounts.get(n.id) ?? 0) > 0 && (
+                    <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.2 text-[10px] font-bold text-muted-foreground">
+                      {numberCounts.get(n.id)}
+                    </span>
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
         {/* Unread · 3 */}
         <button
           type="button"
@@ -641,6 +722,14 @@ export function ConversationList({
               isActive={conv.id === activeConversationId}
               onSelect={handleSelect}
               t={t}
+              numberLabel={
+                multiNumber && (conv.channel || "whatsapp") === "whatsapp"
+                  ? (() => {
+                      const n = numberById(conv.whatsapp_config_id);
+                      return n ? numberName(n) : t("removedNumber");
+                    })()
+                  : null
+              }
             />
           ))
         )}
@@ -665,7 +754,10 @@ interface ConversationItemProps {
   contact?: Contact | null;
   isActive: boolean;
   onSelect: (conversation: Conversation) => void;
-  t: (key: string) => string;
+  t: (key: string, values?: Record<string, string | number>) => string;
+  /** Which WhatsApp number this chat is on — set only for multi-number
+   *  accounts (migration 057). */
+  numberLabel?: string | null;
 }
 
 function ConversationItem({
@@ -674,6 +766,7 @@ function ConversationItem({
   isActive,
   onSelect,
   t,
+  numberLabel,
 }: ConversationItemProps) {
   const displayName =
     contact?.name ||
@@ -768,6 +861,14 @@ function ConversationItem({
             >
               {channel === "facebook" ? "FB" : channel === "instagram" ? "IG" : "WA"}
             </span>
+            {numberLabel && (
+              <span
+                className="inline-flex min-w-0 max-w-[7.5rem] shrink items-center rounded px-1.5 py-0.2 text-[10px] font-semibold border border-[#222d34] text-[#8696a0] lg:border-border/60 lg:text-muted-foreground"
+                title={t("onNumber", { name: numberLabel })}
+              >
+                <span className="truncate">{numberLabel}</span>
+              </span>
+            )}
           </div>
           <p className="truncate text-[13px] text-[#8696a0] font-normal leading-relaxed mt-0.5">
             {previewText}

@@ -10,6 +10,7 @@ import {
   isRecipientNotAllowedError,
 } from '@/lib/whatsapp/phone-utils'
 import { resolveContactSendTarget } from '@/lib/whatsapp/wa-identity'
+import { getWhatsAppNumberForConversation } from '@/lib/whatsapp/numbers'
 import {
   resolveTemplateRow,
   templateContentText,
@@ -140,12 +141,14 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
   }
   const sanitized = sendTarget.target
 
-  const { data: config, error: configErr } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', input.accountId)
-    .single()
-  if (configErr || !config) {
+  // The number this chat lives on (or the account default) — 057.
+  const config = await getWhatsAppNumberForConversation(
+    db,
+    input.accountId,
+    input.conversationId,
+    '*',
+  )
+  if (!config) {
     throw new Error('WhatsApp not configured for this account')
   }
 
@@ -163,6 +166,7 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
             input.accountId,
             input.templateName,
             input.language,
+            config.waba_id,
           )
         ).row
       : null

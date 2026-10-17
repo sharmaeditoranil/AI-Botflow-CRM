@@ -3,6 +3,7 @@ import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { sendReactionMessage } from '@/lib/whatsapp/meta-api';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import { resolveContactSendTarget } from '@/lib/whatsapp/wa-identity';
+import { resolveWhatsAppNumber } from '@/lib/whatsapp/numbers';
 import {
   checkRateLimit,
   rateLimitResponse,
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
 
     const { data: conversation, error: convError } = await supabase
       .from('conversations')
-      .select('id, account_id, contact:contacts(phone, wa_user_id)')
+      .select('id, account_id, whatsapp_config_id, contact:contacts(phone, wa_user_id)')
       .eq('id', targetMessage.conversation_id)
       .eq('account_id', accountId)
       .maybeSingle();
@@ -91,14 +92,15 @@ export async function POST(request: Request) {
       );
     }
 
-    // WhatsApp config + access token. Account-scoped post-multi-user.
-    const { data: config, error: configError } = await supabase
-      .from('whatsapp_config')
-      .select('phone_number_id, access_token')
-      .eq('account_id', accountId)
-      .single();
+    // React from the number the chat lives on (migration 057).
+    const config = await resolveWhatsAppNumber(
+      supabase,
+      accountId,
+      conversation.whatsapp_config_id,
+      'phone_number_id, access_token',
+    );
 
-    if (configError || !config) {
+    if (!config) {
       return NextResponse.json(
         { error: 'WhatsApp not configured.' },
         { status: 400 },

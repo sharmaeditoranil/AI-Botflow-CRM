@@ -91,7 +91,7 @@ function makeSupabaseMock() {
 
     const b: Record<string, unknown> = {}
     const chain = () => b
-    for (const m of ['select', 'eq', 'in', 'order', 'limit', 'update', 'delete']) {
+    for (const m of ['select', 'eq', 'in', 'is', 'order', 'limit', 'update', 'delete']) {
       b[m] = vi.fn(chain)
     }
     b.insert = vi.fn((payload: Record<string, unknown>) => {
@@ -110,8 +110,15 @@ function makeSupabaseMock() {
     })
     b.single = vi.fn(terminal)
     b.maybeSingle = vi.fn(terminal)
-    b.then = (resolve: (v: unknown) => unknown) =>
-      resolve(didInsert ? insertResult() : selectResult())
+    b.then = (resolve: (v: unknown) => unknown) => {
+      // Number lookups list the account's numbers (migration 057).
+      if (!didInsert && (table === 'whatsapp_config' || table === 'conversations')) {
+        // List reads: the number list, and the find-or-create chat lookup.
+        const r = selectResult() as { data: unknown }
+        return resolve({ data: r.data ? [r.data] : [], error: null })
+      }
+      return resolve(didInsert ? insertResult() : selectResult())
+    }
     return b
   }
 

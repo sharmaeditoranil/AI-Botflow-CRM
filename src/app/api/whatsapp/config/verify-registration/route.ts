@@ -5,6 +5,7 @@ import {
   getSubscribedApps,
   verifyPhoneNumber,
 } from '@/lib/whatsapp/meta-api'
+import { resolveWhatsAppNumber } from '@/lib/whatsapp/numbers'
 
 /**
  * GET /api/whatsapp/config/verify-registration
@@ -28,7 +29,7 @@ import {
  * rather than a generic error toast. The combined `live` flag is
  * what the UI badges on.
  */
-export async function GET() {
+export async function GET(request: Request) {
   const supabase = await createClient()
   const {
     data: { user },
@@ -55,11 +56,13 @@ export async function GET() {
     })
   }
 
-  const { data: config } = await supabase
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', accountId)
-    .maybeSingle()
+  // ?number_id=… checks one number; otherwise the default (057).
+  const config = await resolveWhatsAppNumber(
+    supabase,
+    accountId,
+    new URL(request.url).searchParams.get('number_id'),
+    '*'
+  )
 
   if (!config) {
     return NextResponse.json({
@@ -157,6 +160,7 @@ export async function GET() {
           last_registration_error: null,
           updated_at: now,
         })
+        .eq('id', config.id)
         .eq('account_id', accountId)
     }
 

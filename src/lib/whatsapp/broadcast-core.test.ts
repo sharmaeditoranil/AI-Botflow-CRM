@@ -61,17 +61,17 @@ function makeDb(rpcResult: { data: unknown; error: unknown }) {
   const database = {
     from(table: string) {
       if (table === 'whatsapp_config') {
-        return {
-          select: () => ({
-            eq: () => ({
-              single: () =>
-                Promise.resolve({
-                  data: { phone_number_id: 'pn-1', access_token: 'enc' },
-                  error: null,
-                }),
-            }),
-          }),
+        // Default-number lookup lists the account's numbers (057).
+        const rows = [{ id: 'wa-1', phone_number_id: 'pn-1', access_token: 'enc' }];
+        const chain: Record<string, unknown> = {
+          select: () => chain,
+          eq: () => chain,
+          order: () => chain,
+          maybeSingle: () => Promise.resolve({ data: rows[0], error: null }),
+          then: (resolve: (r: { data: unknown[]; error: null }) => unknown) =>
+            resolve({ data: rows, error: null }),
         };
+        return chain;
       }
       if (table === 'message_templates') {
         const chain: Record<string, unknown> = {

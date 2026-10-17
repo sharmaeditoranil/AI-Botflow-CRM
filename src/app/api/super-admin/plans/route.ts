@@ -44,6 +44,7 @@ export async function PATCH(req: NextRequest) {
       max_contacts,
       max_broadcasts_monthly,
       max_team_members,
+      max_whatsapp_numbers,
       max_automations,
       max_flows,
       ai_agents_enabled,
@@ -62,6 +63,10 @@ export async function PATCH(req: NextRequest) {
     if (max_contacts !== undefined) updates.max_contacts = Number(max_contacts);
     if (max_broadcasts_monthly !== undefined) updates.max_broadcasts_monthly = Number(max_broadcasts_monthly);
     if (max_team_members !== undefined) updates.max_team_members = Number(max_team_members);
+    if (max_whatsapp_numbers !== undefined) {
+      // At least one number per plan (migration 057).
+      updates.max_whatsapp_numbers = Math.max(1, Math.floor(Number(max_whatsapp_numbers) || 1));
+    }
     if (max_automations !== undefined) updates.max_automations = Number(max_automations);
     if (max_flows !== undefined) updates.max_flows = Number(max_flows);
     if (ai_agents_enabled !== undefined) updates.ai_agents_enabled = Boolean(ai_agents_enabled);

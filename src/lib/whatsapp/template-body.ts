@@ -87,12 +87,18 @@ export interface ResolvedTemplate {
  * omitted the language matched no row: no header components, and no
  * body to persist. Matching falls back through
  * exact → same base language → a sensible default.
+ *
+ * `wabaId` (migration 057): templates belong to a WABA. When the
+ * sending number's WABA is known, its templates (and legacy rows with
+ * no WABA recorded) are preferred, so two WABAs carrying the same
+ * template name each resolve their own row.
  */
 export async function resolveTemplateRow(
   db: SupabaseClient,
   accountId: string,
   templateName: string,
-  requestedLanguage?: string | null
+  requestedLanguage?: string | null,
+  wabaId?: string | null
 ): Promise<ResolvedTemplate> {
   const { data } = await db
     .from('message_templates')
@@ -103,7 +109,14 @@ export async function resolveTemplateRow(
   // Sorted here rather than with `.order()` so the only query-builder
   // surface this helper depends on is select + eq — the same shape the
   // callers' existing fakes implement.
-  const rows = ((Array.isArray(data) ? data : []) as { language?: string }[])
+  const allRows = (Array.isArray(data) ? data : []) as {
+    language?: string;
+    waba_id?: string | null;
+  }[];
+  const sameWaba = wabaId
+    ? allRows.filter((r) => !r.waba_id || r.waba_id === wabaId)
+    : allRows;
+  const rows = (sameWaba.length > 0 ? sameWaba : allRows)
     .slice()
     .sort((a, b) => (a.language ?? '').localeCompare(b.language ?? ''));
   const fallbackLanguage = requestedLanguage || 'en_US';

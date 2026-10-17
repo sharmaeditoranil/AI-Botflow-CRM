@@ -66,6 +66,7 @@ import {
   TEMPLATE_LIMITS,
 } from '@/lib/whatsapp/template-validators';
 import { TemplateDataMappingDialog } from './template-data-mapping-dialog';
+import { useWhatsAppNumbers, numberName } from '@/hooks/use-whatsapp-numbers';
 
 const CATEGORIES = ['Marketing', 'Utility', 'Authentication'] as const;
 type HeaderFormat = 'none' | 'text' | 'image' | 'video' | 'document';
@@ -157,6 +158,26 @@ export function TemplateManager() {
   // dialog title + CTA. Set to the template id to pre-fill from a row.
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Templates belong to a WABA (migration 057). When the account's numbers
+  // span several WABAs, a new template is created on the one picked here,
+  // and each template shows which WhatsApp account it lives on.
+  const { numbers: waNumbers, defaultNumber } = useWhatsAppNumbers();
+  const wabaOptions = useMemo(() => {
+    const byWaba = new Map<string, { numberId: string; names: string[] }>();
+    for (const n of waNumbers) {
+      if (!n.waba_id) continue;
+      const entry = byWaba.get(n.waba_id) ?? { numberId: n.id, names: [] };
+      entry.names.push(numberName(n));
+      byWaba.set(n.waba_id, entry);
+    }
+    return Array.from(byWaba, ([wabaId, v]) => ({ wabaId, numberId: v.numberId, label: v.names.join(', ') }));
+  }, [waNumbers]);
+  const multiWaba = wabaOptions.length > 1;
+  const [templateWabaId, setTemplateWabaId] = useState<string | null>(null);
+  const activeTemplateWaba = templateWabaId ?? defaultNumber?.waba_id ?? wabaOptions[0]?.wabaId ?? null;
+  const wabaLabel = (wabaId: string | null | undefined) =>
+    wabaOptions.find((o) => o.wabaId === wabaId)?.label ?? null;
   // Template selected for the confirm-delete dialog.
   const [templateToDelete, setTemplateToDelete] =
     useState<MessageTemplate | null>(null);
@@ -348,6 +369,10 @@ export function TemplateManager() {
         Object.keys(form.variable_mapping).length > 0
           ? form.variable_mapping
           : undefined,
+      // Which WABA to create it on, via one of its numbers (057).
+      whatsapp_number_id: multiWaba
+        ? wabaOptions.find((o) => o.wabaId === activeTemplateWaba)?.numberId
+        : undefined,
     };
   }
 
@@ -696,6 +721,15 @@ export function TemplateManager() {
                       <Badge className={`text-xs border ${status.classes}`}>
                         {status.label}
                       </Badge>
+                      {multiWaba && wabaLabel(template.waba_id) && (
+                        <Badge
+                          variant="outline"
+                          className="max-w-[12rem] truncate text-xs text-muted-foreground"
+                          title={t('onWhatsappAccount', { name: wabaLabel(template.waba_id) ?? '' })}
+                        >
+                          {wabaLabel(template.waba_id)}
+                        </Badge>
+                      )}
 
                       {/* Header media indicator */}
                       {template.header_type && template.header_type !== 'text' && (
@@ -876,6 +910,29 @@ export function TemplateManager() {
           )}
 
           <div className="space-y-4 py-2">
+            {multiWaba && !editingId && (
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">{t('whatsappAccount')}</Label>
+                <div className="flex flex-wrap gap-2">
+                  {wabaOptions.map((o) => (
+                    <button
+                      key={o.wabaId}
+                      type="button"
+                      onClick={() => setTemplateWabaId(o.wabaId)}
+                      className={`max-w-[16rem] truncate rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                        activeTemplateWaba === o.wabaId
+                          ? 'border-primary bg-primary/10 font-semibold text-foreground'
+                          : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'
+                      }`}
+                    >
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">{t('whatsappAccountHint')}</p>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label className="text-muted-foreground">{t('templateName')}</Label>
               <Input

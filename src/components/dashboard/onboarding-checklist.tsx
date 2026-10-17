@@ -82,13 +82,15 @@ export function OnboardingChecklist() {
         const supabase = createClient();
 
         // 1. WhatsApp connected?
-        const { data: waConfig } = await supabase
+        // Any connected number counts (migration 057).
+        const { data: waConfigs } = await supabase
           .from('whatsapp_config')
           .select('status')
-          .eq('account_id', accountId)
-          .maybeSingle();
+          .eq('account_id', accountId);
 
-        const isWaConnected = waConfig?.status === 'connected';
+        const isWaConnected = (waConfigs ?? []).some(
+          (r: { status: string }) => r.status === 'connected',
+        );
 
         // 2. Any contacts?
         const { count: contactsCount } = await supabase

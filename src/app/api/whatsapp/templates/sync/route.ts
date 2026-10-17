@@ -8,6 +8,7 @@ import {
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { normalizeStatus } from '@/lib/whatsapp/template-status-normalize'
 import type { TemplateButton, TemplateSampleValues } from '@/types'
+import { listWhatsAppNumbers } from '@/lib/whatsapp/numbers'
 
 /**
  * Sync message templates from Meta → local message_templates table.
@@ -135,13 +136,15 @@ export async function POST() {
     // Resolving account_id off the profile only proved membership.
     const { supabase, accountId, userId } = await requireRole('admin')
 
-    const { data: config, error: configError } = await supabase
-      .from('whatsapp_config')
-      .select('*')
-      .eq('account_id', accountId)
-      .single()
+    // Templates belong to a WABA (migration 057). Sync each distinct WABA
+    // the account's numbers sit on once, using the first number's token —
+    // two numbers on one WABA share one catalog.
+    const numbers = await listWhatsAppNumbers<{
+      waba_id: string | null
+      access_token: string
+    }>(supabase, accountId, 'waba_id, access_token')
 
-    if (configError || !config) {
+    if (numbers.length === 0) {
       return NextResponse.json(
         {
           error:
@@ -151,7 +154,12 @@ export async function POST() {
       )
     }
 
-    if (!config.waba_id) {
+    const wabas = new Map<string, string>()
+    for (const n of numbers) {
+      if (n.waba_id && !wabas.has(n.waba_id)) wabas.set(n.waba_id, n.access_token)
+    }
+
+    if (wabas.size === 0) {
       return NextResponse.json(
         {
           error:
@@ -161,138 +169,162 @@ export async function POST() {
       )
     }
 
-    const accessToken = decrypt(config.access_token)
-
-    const metaTemplates: MetaTemplate[] = []
-    let nextUrl:
-      | string
-      | null = `${META_API_BASE}/${config.waba_id}/message_templates?limit=100&fields=id,name,language,status,category,components,quality_score`
-    const PAGE_CAP = 20
-    let pageCount = 0
-
-    while (nextUrl && pageCount < PAGE_CAP) {
-      pageCount++
-      const metaRes: Response = await fetch(nextUrl, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      })
-
-      if (!metaRes.ok) {
-        let metaErr = `Meta API error: ${metaRes.status}`
-        try {
-          const body = await metaRes.json()
-          if (body?.error?.message) metaErr = body.error.message
-        } catch {
-          // response wasn't JSON — keep the fallback
-        }
-        return NextResponse.json({ error: metaErr }, { status: 502 })
-      }
-
-      const metaBody: {
-        data?: MetaTemplate[]
-        paging?: { next?: string }
-      } = await metaRes.json()
-      if (metaBody.data) metaTemplates.push(...metaBody.data)
-      nextUrl = metaBody.paging?.next ?? null
-    }
-
     let inserted = 0
     let updated = 0
+    let total = 0
+    let truncated = false
     const errors: { name: string; language: string; message: string }[] = []
+    const wabaErrors: { waba_id: string; message: string }[] = []
 
-    for (const t of metaTemplates) {
-      const body = (t.components ?? []).find((c) => c.type === 'BODY')
-      const header = (t.components ?? []).find((c) => c.type === 'HEADER')
-      const footer = (t.components ?? []).find((c) => c.type === 'FOOTER')
-      const buttons = (t.components ?? []).find((c) => c.type === 'BUTTONS')
+    for (const [wabaId, encryptedToken] of wabas) {
+      const accessToken = decrypt(encryptedToken)
 
-      const parsedButtons = parseButtons(buttons?.buttons)
-      const sampleValues = extractSampleValues(body, header)
+      const metaTemplates: MetaTemplate[] = []
+      let nextUrl:
+        | string
+        | null = `${META_API_BASE}/${wabaId}/message_templates?limit=100&fields=id,name,language,status,category,components,quality_score`
+      const PAGE_CAP = 20
+      let pageCount = 0
+      let fetchFailed = false
 
-      const headerFormat = header?.format?.toUpperCase()
-      const headerType =
-        headerFormat === 'TEXT' ||
-        headerFormat === 'IMAGE' ||
-        headerFormat === 'VIDEO' ||
-        headerFormat === 'DOCUMENT'
-          ? headerFormat.toLowerCase()
-          : null
-
-      const row = {
-        // Account tenancy + user audit, same split as the submit
-        // route. account_id is NOT NULL on message_templates
-        // post-017, so an INSERT without it errors.
-        account_id: accountId,
-        user_id: userId,
-        name: t.name,
-        category: normalizeCategory(t.category),
-        language: t.language,
-        header_type: headerType,
-        header_content: header?.text ?? null,
-        header_handle: header?.example?.header_handle?.[0] ?? null,
-        body_text: body?.text ?? '',
-        footer_text: footer?.text ?? null,
-        buttons: parsedButtons.length ? parsedButtons : null,
-        sample_values: sampleValues,
-        status: normalizeStatus(t.status),
-        meta_template_id: t.id,
-        quality_score: normalizeQualityScore(t.quality_score),
-        updated_at: new Date().toISOString(),
-      }
-
-      const { data: existing, error: lookupErr } = await supabase
-        .from('message_templates')
-        .select('id')
-        .eq('account_id', accountId)
-        .eq('name', t.name)
-        .eq('language', t.language)
-        .maybeSingle()
-
-      if (lookupErr) {
-        errors.push({
-          name: t.name,
-          language: t.language,
-          message: lookupErr.message,
+      while (nextUrl && pageCount < PAGE_CAP) {
+        pageCount++
+        const metaRes: Response = await fetch(nextUrl, {
+          headers: { Authorization: `Bearer ${accessToken}` },
         })
-        continue
-      }
 
-      if (existing?.id) {
-        const { error: updErr } = await supabase
-          .from('message_templates')
-          .update(row)
-          .eq('id', existing.id)
-        if (updErr) {
-          errors.push({
-            name: t.name,
-            language: t.language,
-            message: updErr.message,
-          })
-        } else {
-          updated++
+        if (!metaRes.ok) {
+          let metaErr = `Meta API error: ${metaRes.status}`
+          try {
+            const body = await metaRes.json()
+            if (body?.error?.message) metaErr = body.error.message
+          } catch {
+            // response wasn't JSON — keep the fallback
+          }
+          wabaErrors.push({ waba_id: wabaId, message: metaErr })
+          fetchFailed = true
+          break
         }
-      } else {
-        const { error: insErr } = await supabase
+
+        const metaBody: {
+          data?: MetaTemplate[]
+          paging?: { next?: string }
+        } = await metaRes.json()
+        if (metaBody.data) metaTemplates.push(...metaBody.data)
+        nextUrl = metaBody.paging?.next ?? null
+      }
+      if (fetchFailed) continue
+      if (pageCount >= PAGE_CAP && nextUrl !== null) truncated = true
+      total += metaTemplates.length
+
+      for (const t of metaTemplates) {
+        const body = (t.components ?? []).find((c) => c.type === 'BODY')
+        const header = (t.components ?? []).find((c) => c.type === 'HEADER')
+        const footer = (t.components ?? []).find((c) => c.type === 'FOOTER')
+        const buttons = (t.components ?? []).find((c) => c.type === 'BUTTONS')
+
+        const parsedButtons = parseButtons(buttons?.buttons)
+        const sampleValues = extractSampleValues(body, header)
+
+        const headerFormat = header?.format?.toUpperCase()
+        const headerType =
+          headerFormat === 'TEXT' ||
+          headerFormat === 'IMAGE' ||
+          headerFormat === 'VIDEO' ||
+          headerFormat === 'DOCUMENT'
+            ? headerFormat.toLowerCase()
+            : null
+
+        const row = {
+          // Account tenancy + user audit, same split as the submit
+          // route. account_id is NOT NULL on message_templates
+          // post-017, so an INSERT without it errors.
+          account_id: accountId,
+          user_id: userId,
+          waba_id: wabaId,
+          name: t.name,
+          category: normalizeCategory(t.category),
+          language: t.language,
+          header_type: headerType,
+          header_content: header?.text ?? null,
+          header_handle: header?.example?.header_handle?.[0] ?? null,
+          body_text: body?.text ?? '',
+          footer_text: footer?.text ?? null,
+          buttons: parsedButtons.length ? parsedButtons : null,
+          sample_values: sampleValues,
+          status: normalizeStatus(t.status),
+          meta_template_id: t.id,
+          quality_score: normalizeQualityScore(t.quality_score),
+          updated_at: new Date().toISOString(),
+        }
+
+        // This WABA's row, else a legacy row with no WABA recorded yet
+        // (adopted so it isn't duplicated).
+        const { data: candidates, error: lookupErr } = await supabase
           .from('message_templates')
-          .insert(row)
-        if (insErr) {
+          .select('id, waba_id')
+          .eq('account_id', accountId)
+          .eq('name', t.name)
+          .eq('language', t.language)
+
+        if (lookupErr) {
           errors.push({
             name: t.name,
             language: t.language,
-            message: insErr.message,
+            message: lookupErr.message,
           })
+          continue
+        }
+
+        const rows = (candidates ?? []) as { id: string; waba_id: string | null }[]
+        const existing =
+          rows.find((r) => r.waba_id === wabaId) ?? rows.find((r) => !r.waba_id)
+
+        if (existing?.id) {
+          const { error: updErr } = await supabase
+            .from('message_templates')
+            .update(row)
+            .eq('id', existing.id)
+          if (updErr) {
+            errors.push({
+              name: t.name,
+              language: t.language,
+              message: updErr.message,
+            })
+          } else {
+            updated++
+          }
         } else {
-          inserted++
+          const { error: insErr } = await supabase
+            .from('message_templates')
+            .insert(row)
+          if (insErr) {
+            errors.push({
+              name: t.name,
+              language: t.language,
+              message: insErr.message,
+            })
+          } else {
+            inserted++
+          }
         }
       }
+    }
+
+    // Every WABA failed at Meta — surface it as before (single-WABA
+    // accounts see exactly the previous 502 + message).
+    if (wabaErrors.length === wabas.size) {
+      return NextResponse.json({ error: wabaErrors[0].message }, { status: 502 })
     }
 
     return NextResponse.json({
-      success: errors.length === 0,
-      total: metaTemplates.length,
+      success: errors.length === 0 && wabaErrors.length === 0,
+      total,
       inserted,
       updated,
       errors,
-      truncated: pageCount >= PAGE_CAP && nextUrl !== null,
+      waba_errors: wabaErrors,
+      truncated,
     })
   } catch (error) {
     // Auth failures map to 401/403 rather than being folded into the

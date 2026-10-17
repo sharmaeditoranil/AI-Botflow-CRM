@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
+import { resolveWhatsAppNumber } from '@/lib/whatsapp/numbers'
+import { findOrCreateNumberConversation } from '@/lib/conversations/number-conversation'
 import {
   checkRateLimit,
   rateLimitResponse,
@@ -58,6 +60,9 @@ export async function POST(request: Request) {
       template_message_params,
       interactive_payload,
       reply_to_message_id,
+      // Optional (migration 057): which WhatsApp number to open a new
+      // chat on for the contact_id path. Defaults to the account default.
+      whatsapp_number_id,
     } = body
 
     if ((!conversationIdInput && !contact_id) || !message_type) {
@@ -130,7 +135,8 @@ export async function POST(request: Request) {
         supabase,
         accountId,
         userId,
-        contact_id
+        contact_id,
+        typeof whatsapp_number_id === 'string' ? whatsapp_number_id : null
       )
       if (!resolved) {
         return NextResponse.json(
@@ -203,30 +209,26 @@ async function findOrCreateConversation(
   accountId: string,
   userId: string,
   contactId: string,
+  numberId: string | null,
 ): Promise<string | null> {
-  const { data: existing } = await supabase
-    .from('conversations')
-    .select('id')
-    .eq('account_id', accountId)
-    .eq('contact_id', contactId)
-    .maybeSingle()
+  // The chat lives on a specific number (migration 057): the one asked
+  // for, else the account default.
+  const number = await resolveWhatsAppNumber(supabase, accountId, numberId, 'id')
+  if (!number) return null
 
-  if (existing) return existing.id
-
-  const { data: created, error } = await supabase
-    .from('conversations')
-    .insert({
-      account_id: accountId,
-      user_id: userId,
-      contact_id: contactId,
+  try {
+    const { conversation } = await findOrCreateNumberConversation(supabase, {
+      accountId,
+      contactId,
+      numberId: number.id,
+      userId,
     })
-    .select('id')
-    .single()
-
-  if (error) {
-    console.error('Error creating conversation for contact send:', error.message)
+    return conversation.id
+  } catch (err) {
+    console.error(
+      'Error creating conversation for contact send:',
+      err instanceof Error ? err.message : err
+    )
     return null
   }
-
-  return created.id
 }

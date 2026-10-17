@@ -34,6 +34,9 @@ function makeDb(script: Script): SupabaseClient {
   let mode: 'select' | 'insert' | 'update' = 'select';
   let likeCalls = 0;
   let convLookupCalls = 0;
+  // The adopt-legacy lookup (`.is('whatsapp_config_id', null)`, 057)
+  // never matches here and isn't counted as a lookup attempt.
+  let legacyLookup = false;
 
   const builder: Record<string, unknown> = {
     select: () => builder,
@@ -46,8 +49,16 @@ function makeDb(script: Script): SupabaseClient {
       return builder;
     },
     eq: () => builder,
+    is: () => {
+      legacyLookup = true;
+      return builder;
+    },
     order: () => builder,
     limit: () => {
+      if (legacyLookup) {
+        legacyLookup = false;
+        return Promise.resolve({ data: [], error: null });
+      }
       // Only the conversation lookup terminates on `.limit(1)`.
       if (table === 'conversations' && mode === 'select') {
         const row = script.existingConversationByCall
@@ -96,8 +107,18 @@ function makeDb(script: Script): SupabaseClient {
       return Promise.resolve({ data: null, error: null });
     },
     // Thenable: `await db.from().update().eq()` lands here.
-    then: (resolve: (v: { data: null; error: null }) => void) =>
-      resolve({ data: null, error: null }),
+    then: (resolve: (v: { data: unknown; error: null }) => void) =>
+      resolve({
+        // Awaited list read of the account's numbers for the
+        // default-number lookup (migration 057); null otherwise.
+        data:
+          table === 'whatsapp_config' && mode === 'select'
+            ? script.config
+              ? [{ id: 'cfg-1', ...script.config }]
+              : []
+            : null,
+        error: null,
+      }),
   };
 
   return {

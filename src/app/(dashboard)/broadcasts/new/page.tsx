@@ -45,6 +45,8 @@ export default function NewBroadcastPage() {
   >({});
   const [headerMediaUrl, setHeaderMediaUrl] = useState('');
   const [name, setName] = useState('');
+  // Number to send from (migration 057); null = the account default.
+  const [whatsappConfigId, setWhatsappConfigId] = useState<string | null>(null);
 
   async function handleSend() {
     if (!template || isProcessing) return;
@@ -62,6 +64,7 @@ export default function NewBroadcastPage() {
         },
         variables,
         headerMediaUrl,
+        whatsappConfigId,
       });
       router.push(`/broadcasts/${broadcastId}`);
     } catch (err) {
@@ -108,6 +111,7 @@ export default function NewBroadcastPage() {
       template_name: template.name,
       template_language: template.language ?? 'en_US',
       template_variables: variables,
+      whatsapp_config_id: whatsappConfigId,
       audience_filter: {
         type: audience.type,
         tagIds: audience.tagIds,
@@ -159,6 +163,7 @@ export default function NewBroadcastPage() {
         excludeTagIds: audience.excludeTagIds,
       },
       scheduled_at: scheduledDate.toISOString(),
+      whatsapp_config_id: whatsappConfigId,
       status: 'scheduled',
       total_recipients: 0,
       sent_count: 0,
@@ -237,6 +242,14 @@ export default function NewBroadcastPage() {
           <Step1ChooseTemplate
             selectedTemplate={template}
             onSelect={setTemplate}
+            numberId={whatsappConfigId}
+            onNumberChange={(id, wabaId) => {
+              setWhatsappConfigId(id);
+              // A template from another WABA can't be sent from this number.
+              if (template?.waba_id && wabaId && template.waba_id !== wabaId) {
+                setTemplate(null);
+              }
+            }}
             onNext={() => setCurrentStep(1)}
             onBack={() => router.push('/broadcasts')}
           />

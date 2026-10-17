@@ -263,6 +263,7 @@ describe('handleTemplateWebhookChange — unknown template stub (#534)', () => {
       account_id: 'acc-1',
       user_id: 'admin-1',
       meta_template_id: '555',
+      waba_id: 'WABA-1',
       name: 'created_in_meta',
       language: 'de',
       body_text: '',
@@ -321,7 +322,7 @@ describe('handleTemplateWebhookChange — unknown template stub (#534)', () => {
     const message = String(warn.mock.calls[0][0]);
     expect(message).toContain('WABA WABA-NOBODY');
     expect(message).toContain('557');
-    expect(message).toContain('no whatsapp_config rows');
+    expect(message).toContain('no accounts match');
   });
 
   it('refuses to guess the tenant when several configs share the WABA id', async () => {
@@ -345,7 +346,30 @@ describe('handleTemplateWebhookChange — unknown template stub (#534)', () => {
       stub,
     );
     expect(calls.some((c) => c.insert)).toBe(false);
-    expect(String(warn.mock.calls[0][0])).toContain('2 whatsapp_config rows');
+    expect(String(warn.mock.calls[0][0])).toContain('2 accounts match');
+  });
+
+  it('creates the stub when several numbers of ONE account share the WABA (migration 057)', async () => {
+    const { stub, calls } = makeSupabaseStub(
+      { data: [], error: null },
+      {
+        configRows: [CONFIG, { account_id: 'acc-1', user_id: 'admin-1' }],
+      },
+    );
+    await handleTemplateWebhookChange(
+      {
+        field: 'message_template_status_update',
+        value: {
+          event: 'APPROVED',
+          message_template_id: '560',
+          message_template_name: 'two_numbers',
+        },
+        wabaId: 'WABA-1',
+      },
+      stub,
+    );
+    const insert = calls.find((c) => c.insert)?.insert as Record<string, unknown>;
+    expect(insert).toMatchObject({ account_id: 'acc-1', waba_id: 'WABA-1', name: 'two_numbers' });
   });
 
   it('inserts a stub with quality_score (and no status) for a 0-row quality update', async () => {
@@ -373,6 +397,7 @@ describe('handleTemplateWebhookChange — unknown template stub (#534)', () => {
       account_id: 'acc-1',
       user_id: 'admin-1',
       meta_template_id: '559',
+      waba_id: 'WABA-1',
       name: 'created_in_meta',
       language: 'en_US',
       body_text: '',

@@ -27,6 +27,7 @@ import {
   isRecipientNotAllowedError,
 } from '@/lib/whatsapp/phone-utils';
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body';
+import { resolveWhatsAppNumber } from '@/lib/whatsapp/numbers';
 import type { MessageTemplate } from '@/types';
 import { findOrCreateContact } from '@/lib/api/v1/contacts';
 import {
@@ -60,6 +61,8 @@ export interface CreateBroadcastParams {
   templateName: string;
   templateLanguage?: string | null;
   recipients: BroadcastRecipientInput[];
+  /** Number to send from (migration 057). Empty = account default. */
+  whatsappConfigId?: string | null;
 }
 
 interface PlannedRecipient {
@@ -117,12 +120,14 @@ export async function createBroadcast(
 
   // Config (fail fast + provides the audit trail owner already resolved
   // by the caller). Meta send needs phone_number_id + decrypted token.
-  const { data: config, error: configError } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', accountId)
-    .single();
-  if (configError || !config) {
+  // The chosen number, else the account default (migration 057).
+  const config = await resolveWhatsAppNumber(
+    db,
+    accountId,
+    params.whatsappConfigId,
+    '*'
+  );
+  if (!config) {
     throw new BroadcastError(
       'whatsapp_not_configured',
       'WhatsApp not configured. Please set up your WhatsApp integration first.',
@@ -137,7 +142,8 @@ export async function createBroadcast(
     db,
     accountId,
     templateName,
-    params.templateLanguage
+    params.templateLanguage,
+    config.waba_id
   );
   if (resolvedTemplate.malformed) {
     throw new BroadcastError(
@@ -236,6 +242,8 @@ export async function createBroadcast(
       // Frozen per-recipient params (migration 038) — without them a
       // resume of this broadcast has no way to reconstruct {{1}}.
       p_template_params: deduped.map((r) => r.params),
+      // The sending number, so a later resume uses the same one (057).
+      p_whatsapp_config_id: config.id,
     }
   );
   if (createErr || !createdRows || createdRows.length === 0) {

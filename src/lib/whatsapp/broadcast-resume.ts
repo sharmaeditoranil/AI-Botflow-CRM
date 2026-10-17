@@ -21,6 +21,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { BroadcastError, type BroadcastPlan } from '@/lib/whatsapp/broadcast-core';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body';
+import { resolveWhatsAppNumber } from '@/lib/whatsapp/numbers';
 import { sanitizePhoneForMeta, isValidE164 } from '@/lib/whatsapp/phone-utils';
 
 /** Which recipients a resume pass picks up. */
@@ -146,7 +147,7 @@ export async function planBroadcastResume(
 ): Promise<ResumePlan> {
   const { data: broadcast, error: bcError } = await db
     .from('broadcasts')
-    .select('id, template_name, template_language')
+    .select('id, template_name, template_language, whatsapp_config_id')
     .eq('id', broadcastId)
     .eq('account_id', accountId)
     .maybeSingle();
@@ -205,12 +206,15 @@ export async function planBroadcastResume(
     );
   }
 
-  const { data: config, error: configError } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', accountId)
-    .single();
-  if (configError || !config) {
+  // Resume from the number the broadcast was sent from (057), else the
+  // account default.
+  const config = await resolveWhatsAppNumber(
+    db,
+    accountId,
+    broadcast.whatsapp_config_id,
+    '*'
+  );
+  if (!config) {
     throw new BroadcastError(
       'whatsapp_not_configured',
       'WhatsApp not configured. Please set up your WhatsApp integration first.',
@@ -222,7 +226,8 @@ export async function planBroadcastResume(
     db,
     accountId,
     broadcast.template_name,
-    broadcast.template_language
+    broadcast.template_language,
+    config.waba_id
   );
   if (resolvedTemplate.malformed) {
     throw new BroadcastError(

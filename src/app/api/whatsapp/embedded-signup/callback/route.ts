@@ -9,6 +9,7 @@ import {
   getWabaFromToken,
 } from '@/lib/whatsapp/meta-embedded';
 import { encrypt } from '@/lib/whatsapp/encryption';
+import { pickNumberToConnect, saveConnectedNumber } from '@/lib/whatsapp/save-connected-number';
 
 function getAdminSupabase() {
   return createAdminClient(
@@ -74,7 +75,7 @@ export async function GET(req: NextRequest) {
     console.warn('[Meta Embedded Callback] Cookie auth check error:', err);
   }
 
-  if (!targetAccountId) {
+  if (!targetAccountId || !targetUserId) {
     return NextResponse.redirect(
       `${baseUrl}/settings?tab=whatsapp&error=${encodeURIComponent('Could not identify user session. Please log in again.')}`
     );
@@ -111,15 +112,14 @@ export async function GET(req: NextRequest) {
     if (numbers.length > 0) {
       // If the account already has a connected phone number and a new number was added to the WABA,
       // pick the newly added number (which Meta appends at the end) so adding a new number works seamlessly.
-      const { data: existingRow } = await adminSupabase
+      const { data: connected } = await adminSupabase
         .from('whatsapp_config')
         .select('phone_number_id')
-        .eq('account_id', targetAccountId)
-        .maybeSingle();
-
-      const existingId = existingRow?.phone_number_id;
-      const newlyAdded = existingId ? numbers.find((n) => n.id !== existingId) : null;
-      const selected = (newlyAdded && numbers.length > 1) ? numbers[numbers.length - 1] : numbers[0];
+        .eq('account_id', targetAccountId);
+      const selected = pickNumberToConnect(
+        numbers,
+        (connected ?? []).map((r: { phone_number_id: string }) => r.phone_number_id),
+      )!;
 
       phoneNumberId = selected.id;
       displayPhoneNumber = selected.display_phone_number;
@@ -134,42 +134,24 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  // 4. Save to whatsapp_config
+  // 4. Save to whatsapp_config (adds a number or reconnects one — 057)
   const encryptedToken = encrypt(accessToken);
-  const now = new Date().toISOString();
-
-  const callbackPayload: Record<string, unknown> = {
-    account_id: targetAccountId,
-    user_id: targetUserId,
-    phone_number_id: phoneNumberId,
-    waba_id: wabaId || null,
-    access_token: encryptedToken,
-    status: 'connected',
+  const saved = await saveConnectedNumber(adminSupabase, {
+    accountId: targetAccountId,
+    userId: targetUserId,
+    phoneNumberId,
+    wabaId: wabaId || null,
+    encryptedAccessToken: encryptedToken,
     coexistence: isCoexistence,
-    connected_at: now,
-    registered_at: now,
-    subscribed_apps_at: now,
-    updated_at: now,
-  };
+    displayPhoneNumber: displayPhoneNumber || null,
+  });
 
-  let { error: dbError } = await adminSupabase
-    .from('whatsapp_config')
-    .upsert(callbackPayload, { onConflict: 'account_id' });
-
-  // If the database has not run migration 044 yet, gracefully retry without the coexistence column
-  if (dbError && (dbError.message?.includes('coexistence') || dbError.code === 'PGRST204')) {
-    console.warn('[Meta Embedded Callback] coexistence column not in schema yet, falling back:', dbError.message);
-    delete callbackPayload.coexistence;
-    const retry = await adminSupabase
-      .from('whatsapp_config')
-      .upsert(callbackPayload, { onConflict: 'account_id' });
-    dbError = retry.error;
-  }
-
-  if (dbError) {
-    console.error('[Meta Embedded Callback] DB save error:', dbError);
+  if (!saved.ok) {
+    console.error('[Meta Embedded Callback] DB save error:', saved.message);
+    const message =
+      saved.code === 'db_error' ? 'Failed to save WhatsApp configuration to database.' : saved.message;
     return NextResponse.redirect(
-      `${baseUrl}/settings?tab=whatsapp&error=${encodeURIComponent('Failed to save WhatsApp configuration to database.')}`
+      `${baseUrl}/settings?tab=whatsapp&error=${encodeURIComponent(message)}`
     );
   }
 

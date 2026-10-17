@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getMediaUrl, downloadMedia } from '@/lib/whatsapp/meta-api'
 import { decrypt } from '@/lib/whatsapp/encryption'
+import { listWhatsAppNumbers } from '@/lib/whatsapp/numbers'
 
 export async function GET(
   request: Request,
@@ -48,24 +49,36 @@ export async function GET(
       )
     }
 
-    // Fetch and decrypt WhatsApp config
-    const { data: config, error: configError } = await supabase
-      .from('whatsapp_config')
-      .select('*')
-      .eq('account_id', accountId)
-      .single()
+    // The media id doesn't say which number received it, so try the
+    // account's numbers default-first and use the first token Meta
+    // accepts (migration 057). A single-number account makes one call,
+    // exactly as before.
+    const numbers = await listWhatsAppNumbers<{ access_token: string }>(
+      supabase,
+      accountId,
+      'access_token'
+    )
 
-    if (configError || !config) {
+    if (numbers.length === 0) {
       return NextResponse.json(
         { error: 'WhatsApp not configured' },
         { status: 400 }
       )
     }
 
-    const accessToken = decrypt(config.access_token)
-
-    // Get the download URL from Meta
-    const mediaInfo = await getMediaUrl({ mediaId, accessToken })
+    let accessToken = ''
+    let mediaInfo: Awaited<ReturnType<typeof getMediaUrl>> | null = null
+    let lastError: unknown = null
+    for (const n of numbers) {
+      try {
+        accessToken = decrypt(n.access_token)
+        mediaInfo = await getMediaUrl({ mediaId, accessToken })
+        break
+      } catch (err) {
+        lastError = err
+      }
+    }
+    if (!mediaInfo) throw lastError ?? new Error('media not found')
 
     // Download the binary data
     const { buffer, contentType } = await downloadMedia({

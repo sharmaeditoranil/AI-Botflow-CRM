@@ -224,6 +224,7 @@ function sendPathDb(
       const builder: Record<string, unknown> = {
         select: () => builder,
         eq: () => builder,
+        order: () => builder,
         insert: (row: Record<string, unknown>) => {
           if (table === 'messages') captured.message = row;
           return builder;
@@ -243,10 +244,16 @@ function sendPathDb(
           }
           return { data: null, error: null };
         },
-        // Bare-await result — only message_templates is read this way.
+        // Bare-await result — message_templates, and the account's number
+        // list for the default-number lookup (migration 057).
         then: (resolve: (r: { data: unknown[]; error: null }) => unknown) =>
           resolve({
-            data: table === 'message_templates' ? templateRows : [],
+            data:
+              table === 'message_templates'
+                ? templateRows
+                : table === 'whatsapp_config'
+                  ? [config]
+                  : [],
             error: null,
           }),
       };

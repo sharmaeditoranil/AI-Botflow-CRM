@@ -9,6 +9,7 @@ import {
   getWabaFromToken,
 } from '@/lib/whatsapp/meta-embedded';
 import { encrypt } from '@/lib/whatsapp/encryption';
+import { pickNumberToConnect, saveConnectedNumber } from '@/lib/whatsapp/save-connected-number';
 
 function getAdminSupabase() {
   return createAdminClient(
@@ -103,15 +104,16 @@ export async function POST(req: NextRequest) {
   if (wabaId && !phoneNumberId) {
     const numbers = await fetchWabaPhoneNumbers(wabaId, accessToken);
     if (numbers.length > 0) {
-      const { data: existingRow } = await adminSupabase
+      // Prefer a number this account hasn't connected yet, so adding a
+      // second number works (migration 057).
+      const { data: connected } = await adminSupabase
         .from('whatsapp_config')
         .select('phone_number_id')
-        .eq('account_id', profile.account_id)
-        .maybeSingle();
-
-      const existingId = existingRow?.phone_number_id;
-      const newlyAdded = existingId ? numbers.find((n) => n.id !== existingId) : null;
-      const selected = (newlyAdded && numbers.length > 1) ? numbers[numbers.length - 1] : numbers[0];
+        .eq('account_id', profile.account_id);
+      const selected = pickNumberToConnect(
+        numbers,
+        (connected ?? []).map((r: { phone_number_id: string }) => r.phone_number_id),
+      )!;
 
       phoneNumberId = selected.id;
       displayPhoneNumber = selected.display_phone_number;
@@ -138,41 +140,28 @@ export async function POST(req: NextRequest) {
 
   // 5. Save to whatsapp_config using admin client to ensure bypass of any RLS ambiguity
   const isCoexistence = Boolean(inputCoex);
-  const now = new Date().toISOString();
 
-  const configPayload: Record<string, unknown> = {
-    account_id: profile.account_id,
-    user_id: user.id,
-    phone_number_id: phoneNumberId,
-    waba_id: wabaId || null,
-    access_token: encryptedToken,
-    status: 'connected',
+  const saved = await saveConnectedNumber(adminSupabase, {
+    accountId: profile.account_id,
+    userId: user.id,
+    phoneNumberId,
+    wabaId: wabaId || null,
+    encryptedAccessToken: encryptedToken,
     coexistence: isCoexistence,
-    connected_at: now,
-    registered_at: now,
-    subscribed_apps_at: now,
-    updated_at: now,
-  };
+    displayPhoneNumber: displayPhoneNumber || null,
+  });
 
-  let { error: upsertError } = await adminSupabase
-    .from('whatsapp_config')
-    .upsert(configPayload, { onConflict: 'account_id' });
-
-  // If the database has not run migration 044 yet, gracefully retry without the coexistence column
-  if (upsertError && (upsertError.message?.includes('coexistence') || upsertError.code === 'PGRST204')) {
-    console.warn('[Meta Embedded] coexistence column not in schema yet, falling back:', upsertError.message);
-    delete configPayload.coexistence;
-    const retry = await adminSupabase
-      .from('whatsapp_config')
-      .upsert(configPayload, { onConflict: 'account_id' });
-    upsertError = retry.error;
-  }
-
-  if (upsertError) {
-    console.error('[Meta Embedded] Error upserting whatsapp_config:', upsertError);
+  if (!saved.ok) {
+    console.error('[Meta Embedded] Error saving whatsapp_config:', saved.message);
     return NextResponse.json(
-      { error: `Database error saving WhatsApp configuration: ${upsertError.message}` },
-      { status: 500 }
+      {
+        error:
+          saved.code === 'db_error'
+            ? `Database error saving WhatsApp configuration: ${saved.message}`
+            : saved.message,
+        code: saved.code,
+      },
+      { status: saved.code === 'db_error' ? 500 : saved.code === 'claimed' ? 409 : 403 }
     );
   }
 

@@ -19,6 +19,8 @@ import {
   Layers,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { useWhatsAppNumbers, numberName } from '@/hooks/use-whatsapp-numbers';
+import { cn } from '@/lib/utils';
 
 const categoryColors: Record<string, string> = {
   Marketing: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
@@ -31,10 +33,22 @@ interface Step1Props {
   onSelect: (template: MessageTemplate) => void;
   onNext: () => void;
   onBack: () => void;
+  /** Number the broadcast sends from (migration 057); null = default. */
+  numberId?: string | null;
+  onNumberChange?: (numberId: string, wabaId: string | null) => void;
 }
 
-export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack }: Step1Props) {
+export function Step1ChooseTemplate({
+  selectedTemplate,
+  onSelect,
+  onNext,
+  onBack,
+  numberId = null,
+  onNumberChange,
+}: Step1Props) {
   const t = useTranslations('Broadcasts.wizard');
+  const { numbers, isMulti, defaultNumber } = useWhatsAppNumbers();
+  const sender = numbers.find((n) => n.id === numberId) ?? defaultNumber;
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -65,8 +79,18 @@ export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack
     fetchTemplates();
   }, []);
 
+  // Templates belong to a WABA: offer only the sender's (plus legacy
+  // rows with no WABA recorded).
+  const senderTemplates = useMemo(
+    () =>
+      sender?.waba_id
+        ? templates.filter((tpl) => !tpl.waba_id || tpl.waba_id === sender.waba_id)
+        : templates,
+    [templates, sender?.waba_id],
+  );
+
   const filteredTemplates = useMemo(() => {
-    return templates.filter((tpl) => {
+    return senderTemplates.filter((tpl) => {
       const matchesSearch =
         !searchTerm.trim() ||
         tpl.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -78,15 +102,15 @@ export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack
 
       return matchesSearch && matchesCat;
     });
-  }, [templates, searchTerm, selectedCategory]);
+  }, [senderTemplates, searchTerm, selectedCategory]);
 
   const categories = useMemo(() => {
     const set = new Set<string>();
-    templates.forEach((tpl) => {
+    senderTemplates.forEach((tpl) => {
       if (tpl.category) set.add(tpl.category.toUpperCase());
     });
     return ['ALL', ...Array.from(set)];
-  }, [templates]);
+  }, [senderTemplates]);
 
   if (loading) {
     return (
@@ -112,6 +136,40 @@ export function Step1ChooseTemplate({ selectedTemplate, onSelect, onNext, onBack
           {t('chooseTemplate.subtitle')}
         </p>
       </div>
+
+      {/* Sender — only with several WhatsApp numbers (057) */}
+      {isMulti && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {t('chooseTemplate.sendFrom')}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {numbers.map((n) => {
+              const active = sender?.id === n.id;
+              return (
+                <button
+                  key={n.id}
+                  type="button"
+                  onClick={() => onNumberChange?.(n.id, n.waba_id)}
+                  className={cn(
+                    'flex min-w-0 max-w-[16rem] flex-col items-start rounded-lg border px-3 py-2 text-left transition-colors',
+                    active
+                      ? 'border-primary bg-primary/10 text-foreground'
+                      : 'border-border bg-card/60 text-muted-foreground hover:border-primary/40 hover:text-foreground',
+                  )}
+                >
+                  <span className="w-full truncate text-sm font-semibold">{numberName(n)}</span>
+                  {n.label && n.display_phone_number && (
+                    <span className="w-full truncate text-xs text-muted-foreground">
+                      {n.display_phone_number}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Search & Category Filter Bar */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
