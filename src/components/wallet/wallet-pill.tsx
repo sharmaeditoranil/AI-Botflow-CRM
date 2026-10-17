@@ -53,6 +53,10 @@ export function WalletPill() {
   const isLow = !isSuperAdmin && currentBalance < 50;
   const isCritical = !isSuperAdmin && currentBalance <= 5;
 
+  if (rates && !rates.enabled) {
+    return null;
+  }
+
   return (
     <>
       <div

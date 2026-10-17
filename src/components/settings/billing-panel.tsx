@@ -552,8 +552,9 @@ export function BillingPanel() {
         </CardContent>
       </Card>
 
-      {/* Prepaid WhatsApp Wallet & Credits Section */}
-      <Card className="border-border/80 bg-card shadow-sm overflow-hidden rounded-2xl">
+      {/* Prepaid WhatsApp Wallet & Credits Section (Only when wallet system is enabled) */}
+      {walletData?.rates?.enabled !== false && (
+        <Card className="border-border/80 bg-card shadow-sm overflow-hidden rounded-2xl">
         <div className="bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent p-5 border-b border-border/60">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -806,6 +807,7 @@ export function BillingPanel() {
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Plan Comparison Section Directly on Billing Page */}
       <div className="space-y-6">
