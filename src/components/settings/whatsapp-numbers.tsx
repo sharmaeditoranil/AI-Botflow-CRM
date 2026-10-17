@@ -126,7 +126,7 @@ export function WhatsAppNumbers() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="truncate text-sm font-semibold text-foreground">
-                        {numberName(n)}
+                        {n.label?.trim() || n.display_phone_number || numberName(n)}
                       </span>
                       {n.is_default && (
                         <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
@@ -134,13 +134,13 @@ export function WhatsAppNumbers() {
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span className="truncate">
-                        {n.label && n.display_phone_number
-                          ? n.display_phone_number
-                          : t('phoneId', { id: n.phone_number_id })}
-                      </span>
-                      <span className="text-border">•</span>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                      {n.label?.trim() && n.display_phone_number && (
+                        <>
+                          <span className="font-medium text-foreground/80">{n.display_phone_number}</span>
+                          <span className="text-border">•</span>
+                        </>
+                      )}
                       {live ? (
                         <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
                           <CheckCircle2 className="size-3" />
@@ -152,7 +152,22 @@ export function WhatsAppNumbers() {
                           {t('needsAttention')}
                         </span>
                       )}
+                      {!n.label?.trim() && canEditSettings && (
+                        <>
+                          <span className="text-border">•</span>
+                          <button
+                            type="button"
+                            onClick={() => setSelected(n.id)}
+                            className="text-primary hover:underline"
+                          >
+                            {t('addName')}
+                          </button>
+                        </>
+                      )}
                     </div>
+                    <p className="mt-0.5 truncate text-[11px] text-muted-foreground/70">
+                      {t('phoneId', { id: n.phone_number_id })}
+                    </p>
                   </div>
                   {canEditSettings && (
                     <div className="flex shrink-0 items-center gap-1">

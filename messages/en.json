@@ -2023,7 +2023,8 @@
       "defaultSet": "{name} is now your default number",
       "removed": "{name} removed. Its chats stay in your inbox.",
       "removeConfirm": "Remove {name}? Its chats stay in your inbox, but you won't be able to send from this number until you connect it again.",
-      "actionFailed": "Something went wrong. Please try again."
+      "actionFailed": "Something went wrong. Please try again.",
+      "addName": "Add a name (e.g. Sales)"
     }
   },
   "SignupPage": {
