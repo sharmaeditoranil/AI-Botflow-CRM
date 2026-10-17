@@ -182,7 +182,7 @@ export function MessageThread({
 
   const { user } = useAuth();
   const { getPresence, getRow, now } = usePresence();
-  const { isMulti: multiNumber, byId: numberById } = useWhatsAppNumbers();
+  const { isMulti: multiNumber, byId: numberById, defaultNumber } = useWhatsAppNumbers();
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
@@ -677,6 +677,7 @@ export function MessageThread({
       values: {
         body: string[];
         headerText?: string;
+        headerMediaUrl?: string;
         buttonParams?: Record<number, string>;
       },
     ) => {
@@ -713,6 +714,7 @@ export function MessageThread({
             template_message_params: {
               body: values.body,
               headerText: values.headerText,
+              headerMediaUrl: values.headerMediaUrl,
               buttonParams: values.buttonParams,
             },
             template_params: values.body,
@@ -1297,6 +1299,14 @@ export function MessageThread({
         open={templateModalOpen}
         onOpenChange={setTemplateModalOpen}
         onSelect={handleSendTemplate}
+        wabaId={
+          ((conversation?.whatsapp_config_id ? numberById(conversation.whatsapp_config_id) : null) ?? defaultNumber)?.waba_id
+        }
+        numberLabel={
+          ((conversation?.whatsapp_config_id ? numberById(conversation.whatsapp_config_id) : null) ?? defaultNumber)?.label ||
+          ((conversation?.whatsapp_config_id ? numberById(conversation.whatsapp_config_id) : null) ?? defaultNumber)?.display_phone_number ||
+          undefined
+        }
       />
 
       {/* Full-size viewer for the thread's images/videos. Renders nothing

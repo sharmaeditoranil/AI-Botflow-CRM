@@ -27,6 +27,7 @@ import { useTranslations } from "next-intl";
 export interface TemplateSendValues {
   body: string[];
   headerText?: string;
+  headerMediaUrl?: string;
   buttonParams?: Record<number, string>;
 }
 
@@ -34,6 +35,8 @@ interface TemplatePickerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelect: (template: MessageTemplate, values: TemplateSendValues) => void;
+  wabaId?: string | null;
+  numberLabel?: string | null;
 }
 
 function renderBodyPreview(body: string, params: string[]): string {
@@ -78,6 +81,8 @@ export function TemplatePicker({
   open,
   onOpenChange,
   onSelect,
+  wabaId,
+  numberLabel,
 }: TemplatePickerProps) {
   const t = useTranslations("Inbox.templatePicker");
 
@@ -86,6 +91,7 @@ export function TemplatePicker({
   const [selected, setSelected] = useState<MessageTemplate | null>(null);
   const [params, setParams] = useState<string[]>([]);
   const [headerText, setHeaderText] = useState<string>("");
+  const [headerMediaUrl, setHeaderMediaUrl] = useState<string>("");
   const [buttonParams, setButtonParams] = useState<Record<number, string>>({});
 
   useEffect(() => {
@@ -108,21 +114,26 @@ export function TemplatePicker({
       }
 
       // Scope by RLS (message_templates_select → is_account_member), NOT by
-      // user_id. Templates are account-owned, so filtering on the caller's
-      // user_id hid templates that a teammate created — leaving them unable
-      // to send approved templates in a shared account.
-      const { data, error } = await supabase
+      // user_id. Templates are account-owned.
+      let query = supabase
         .from("message_templates")
         .select("*")
         .eq("status", "APPROVED")
         .order("created_at", { ascending: false });
+
+      if (wabaId) {
+        query = query.eq("waba_id", wabaId);
+      }
+
+      const { data, error } = await query;
 
       if (cancelled) return;
       if (error) {
         console.error("Failed to fetch templates:", error);
         setTemplates([]);
       } else {
-        setTemplates((data as MessageTemplate[]) ?? []);
+        const rows = (data as MessageTemplate[]) ?? [];
+        setTemplates(rows);
       }
       setLoading(false);
     })();
@@ -130,12 +141,13 @@ export function TemplatePicker({
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, wabaId]);
 
   function resetSelection() {
     setSelected(null);
     setParams([]);
     setHeaderText("");
+    setHeaderMediaUrl("");
     setButtonParams({});
   }
 
@@ -146,12 +158,25 @@ export function TemplatePicker({
 
   function pickTemplate(template: MessageTemplate) {
     const slots = collectVariableSlots(template);
+    const isMedia = ["image", "document", "video"].includes(template.header_type || "");
+    const defaultMedia =
+      template.header_media_url ||
+      (template.header_handle && /^https?:\/\//i.test(template.header_handle)
+        ? template.header_handle
+        : "");
+    setHeaderMediaUrl(defaultMedia);
+
     const noInputsNeeded =
       slots.bodyVars.length === 0 &&
       slots.headerVarCount === 0 &&
-      slots.urlButtonSlots.length === 0;
+      slots.urlButtonSlots.length === 0 &&
+      (!isMedia || defaultMedia.length > 0);
+
     if (noInputsNeeded) {
-      onSelect(template, { body: [] });
+      onSelect(template, {
+        body: [],
+        ...(defaultMedia ? { headerMediaUrl: defaultMedia } : {}),
+      });
       handleOpenChange(false);
       return;
     }
@@ -165,6 +190,7 @@ export function TemplatePicker({
     if (!selected) return;
     const values: TemplateSendValues = { body: params };
     if (headerText.trim()) values.headerText = headerText.trim();
+    if (headerMediaUrl.trim()) values.headerMediaUrl = headerMediaUrl.trim();
     if (Object.keys(buttonParams).length > 0) {
       values.buttonParams = Object.fromEntries(
         Object.entries(buttonParams).map(([k, v]) => [Number(k), v.trim()]),
@@ -178,11 +204,14 @@ export function TemplatePicker({
     () => (selected ? collectVariableSlots(selected) : null),
     [selected],
   );
+  const isSelectedMedia =
+    !!selected && ["image", "document", "video"].includes(selected.header_type || "");
   const canConfirm =
     !!selected &&
     !!slots &&
     slots.bodyVars.every((_, i) => (params[i] ?? "").trim().length > 0) &&
     (slots.headerVarCount === 0 || headerText.trim().length > 0) &&
+    (!isSelectedMedia || headerMediaUrl.trim().length > 0) &&
     slots.urlButtonSlots.every(
       (s) => (buttonParams[s.index] ?? "").trim().length > 0,
     );
@@ -194,6 +223,11 @@ export function TemplatePicker({
           <DialogTitle className="flex items-center gap-2 text-popover-foreground">
             <LayoutTemplate className="h-4 w-4 text-primary" />
             {selected ? selected.name : t("sendTemplate")}
+            {!selected && numberLabel && (
+              <Badge variant="outline" className="text-xs font-normal">
+                {numberLabel}
+              </Badge>
+            )}
           </DialogTitle>
           <DialogDescription className="text-muted-foreground">
             {selected
@@ -261,6 +295,23 @@ export function TemplatePicker({
                 </p>
               )}
             </div>
+            {isSelectedMedia && (
+              <div className="space-y-1">
+                <Label className="text-xs text-popover-foreground">
+                  {selected?.header_type === "document"
+                    ? "Document URL (PDF link)"
+                    : selected?.header_type === "image"
+                      ? "Image URL"
+                      : "Video URL"}
+                </Label>
+                <Input
+                  value={headerMediaUrl}
+                  onChange={(e) => setHeaderMediaUrl(e.target.value)}
+                  placeholder="https://example.com/file.pdf"
+                  className="border-border bg-muted text-foreground placeholder:text-muted-foreground"
+                />
+              </div>
+            )}
             {slots && slots.headerVarCount > 0 && (
               <div className="space-y-1">
                 <Label className="text-xs text-popover-foreground">
