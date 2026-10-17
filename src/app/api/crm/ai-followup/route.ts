@@ -3,6 +3,9 @@ import { createClient } from '@/lib/supabase/server';
 import { supabaseAdmin } from '@/lib/automations/admin-client';
 import { engineSendText } from '@/lib/flows/meta-send';
 import { generateWithAdminAi } from '@/lib/ai/admin-ai';
+import { buildConversationContext } from '@/lib/ai/context';
+import { detectScript, LANGUAGE_MIRROR_RULE } from '@/lib/ai/language';
+import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account';
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,6 +14,9 @@ export async function POST(req: NextRequest) {
     const isCron = !!(cronSecret && incomingSecret === cronSecret);
 
     let authUser: { id: string } | null = null;
+    // A signed-in member may only follow up on their own account's deals;
+    // the cron sweep (secret) covers every account.
+    let scopeAccountId: string | null = null;
 
     if (!isCron) {
       const supabase = await createClient();
@@ -21,6 +27,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }
       authUser = user;
+      try {
+        scopeAccountId = (await getCurrentAccount()).accountId;
+      } catch (err) {
+        return toErrorResponse(err);
+      }
     }
 
     const body = await req.json().catch(() => ({}));
@@ -46,6 +57,10 @@ export async function POST(req: NextRequest) {
         stage:pipeline_stages(name)
       `)
       .in('status', ['open', 'active']);
+
+    if (scopeAccountId) {
+      query = query.eq('account_id', scopeAccountId);
+    }
 
     if (dealId) {
       query = query.eq('id', dealId);
@@ -76,49 +91,83 @@ export async function POST(req: NextRequest) {
       const instructions = deal.followup_instructions || '';
       const memory = contact.ai_memory || '';
 
+      // The chat to follow up in (the deal's, else the contact's most
+      // recently active one in this account).
+      let convId = deal.conversation_id;
+      if (!convId && contact.id) {
+        const { data: existingConv } = await adminDb
+          .from('conversations')
+          .select('id')
+          .eq('account_id', deal.account_id)
+          .eq('contact_id', contact.id)
+          .order('last_message_at', { ascending: false, nullsFirst: false })
+          .limit(1)
+          .maybeSingle();
+        convId = existingConv?.id;
+      }
+
+      // Recent chat, so the follow-up continues the conversation in the
+      // customer's own language instead of defaulting to English.
+      let recent: { role: string; content: string }[] = [];
+      if (convId) {
+        try {
+          recent = await buildConversationContext(adminDb, convId, 12);
+        } catch (ctxErr) {
+          console.warn('[ai-followup] could not load conversation context:', ctxErr);
+        }
+      }
+      const customerTexts = recent.filter((m) => m.role === 'user').map((m) => m.content);
+      const transcript = recent
+        .map((m) => `${m.role === 'user' ? 'Customer' : 'Business'}: ${m.content.slice(0, 300)}`)
+        .join('\n');
+
       // Personalized AI follow-up message formulation using Admin Master AI key
       let followUpText = '';
       try {
-        const aiPrompt = `Write a polite, engaging, personalized WhatsApp follow-up message in natural Hinglish/English for a business lead.
+        const aiPrompt = `Write a polite, engaging, personalized WhatsApp follow-up message for a business lead.
 Customer Name: ${customerName}
 Lead Title: ${deal.title}
 Context: ${memory || 'General inquiry'}
 Deal Value: ₹${deal.value || 0}
 Special Instruction: ${instructions || 'Follow up politely and ask if they need assistance or want to proceed'}
 
-Keep it concise (2-3 sentences max), warm, professional, with appropriate emojis. Do not include placeholders.`;
+Recent conversation (oldest first):
+${transcript || '(no messages yet)'}
+
+Language: ${LANGUAGE_MIRROR_RULE}
+
+Keep it concise (2-3 sentences max), warm, professional, with appropriate emojis. Do not include placeholders. Reply with the message text only.`;
 
         followUpText = await generateWithAdminAi(aiPrompt, {
-          systemPrompt: 'You are an intelligent business WhatsApp follow-up assistant.',
-          maxTokens: 150,
+          systemPrompt:
+            "You are an intelligent business WhatsApp follow-up assistant. You always write in the customer's own language and script.",
+          maxTokens: 200,
         });
       } catch (aiErr) {
         console.warn('[ai-followup] generateWithAdminAi notice, using smart fallback:', aiErr);
       }
 
       if (!followUpText) {
+        // No AI available: pick the fallback language from the script the
+        // customer writes in (Devanagari → Hindi), else the Hinglish/English set.
+        const hindi = detectScript(customerTexts) === 'devanagari';
         if (instructions) {
-          followUpText = `Namaste ${customerName}! 🙏 Just checking in regarding ${instructions}. Please let us know if you have any questions!`;
+          followUpText = hindi
+            ? `नमस्ते ${customerName}! 🙏 ${instructions} के बारे में जानकारी के लिए संपर्क कर रहे हैं। कोई भी सवाल हो तो बताइए!`
+            : `Namaste ${customerName}! 🙏 Just checking in regarding ${instructions}. Please let us know if you have any questions!`;
         } else if (memory.toLowerCase().includes('fee') || memory.toLowerCase().includes('price') || memory.toLowerCase().includes('cost')) {
-          followUpText = `Hi ${customerName}! 👋 Following up on our previous discussion about pricing. We have an exclusive offer valid this week — would you like to explore?`;
+          followUpText = hindi
+            ? `नमस्ते ${customerName}! 👋 कीमत के बारे में हमारी पिछली बात पर फॉलो-अप कर रहे हैं। इस हफ्ते एक खास ऑफर है — क्या आप जानना चाहेंगे?`
+            : `Hi ${customerName}! 👋 Following up on our previous discussion about pricing. We have an exclusive offer valid this week — would you like to explore?`;
         } else if (memory.toLowerCase().includes('demo') || memory.toLowerCase().includes('trial')) {
-          followUpText = `Namaste ${customerName}! 🙏 Just checking if you would like a quick 5-minute walkthrough of our features today. Let us know what time suits you!`;
+          followUpText = hindi
+            ? `नमस्ते ${customerName}! 🙏 क्या आप आज 5 मिनट का एक छोटा डेमो देखना चाहेंगे? अपना सुविधाजनक समय बताइए!`
+            : `Namaste ${customerName}! 🙏 Just checking if you would like a quick 5-minute walkthrough of our features today. Let us know what time suits you!`;
         } else {
-          followUpText = `Namaste ${customerName}! 🙏 Hope you're having a great day. Just following up regarding your inquiry to see if you have any questions. We're here to help!`;
+          followUpText = hindi
+            ? `नमस्ते ${customerName}! 🙏 आशा है आपका दिन अच्छा जा रहा है। आपकी पूछताछ के बारे में फॉलो-अप कर रहे हैं — कोई सवाल हो तो हम मदद के लिए यहाँ हैं!`
+            : `Namaste ${customerName}! 🙏 Hope you're having a great day. Just following up regarding your inquiry to see if you have any questions. We're here to help!`;
         }
-      }
-
-      // Ensure conversation exists
-      let convId = deal.conversation_id;
-      if (!convId && contact.id) {
-        const { data: existingConv } = await adminDb
-          .from('conversations')
-          .select('id')
-          .eq('contact_id', contact.id)
-          .order('last_message_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        convId = existingConv?.id;
       }
 
       // Send message to WhatsApp via engineSendText or fallback to message row
@@ -139,8 +188,10 @@ Keep it concise (2-3 sentences max), warm, professional, with appropriate emojis
           await adminDb.from('messages').insert({
             conversation_id: convId,
             sender_type: 'bot',
-            content: followUpText,
-            status: 'sent',
+            content_type: 'text',
+            content_text: followUpText,
+            ai_generated: true,
+            status: 'failed',
           });
         }
       }
