@@ -29,6 +29,8 @@ export default function SuperAdminSettingsPage() {
     meta_app_id: '',
     meta_app_secret: '',
     meta_config_id: '',
+    meta_extended_credit_id: '',
+    meta_system_user_token: '',
     razorpay_key_id: '',
     razorpay_key_secret: '',
     razorpay_webhook_secret: '',
@@ -55,6 +57,8 @@ export default function SuperAdminSettingsPage() {
             meta_app_id: data.settings.meta_app_id || '',
             meta_app_secret: data.settings.meta_app_secret || '',
             meta_config_id: data.settings.meta_config_id || '',
+            meta_extended_credit_id: data.settings.meta_extended_credit_id || '',
+            meta_system_user_token: data.settings.meta_system_user_token || '',
             razorpay_key_id: data.settings.razorpay_key_id || '',
             razorpay_key_secret: data.settings.razorpay_key_secret || '',
             razorpay_webhook_secret: data.settings.razorpay_webhook_secret || '',
@@ -165,6 +169,31 @@ export default function SuperAdminSettingsPage() {
               />
               <span className="text-[10px] text-muted-foreground block">
                 WhatsApp Embedded Signup Configuration ID.
+              </span>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-muted-foreground">Meta Extended Credit Line ID (Bina Card Model)</Label>
+              <Input
+                placeholder="e.g. 1234567890123456"
+                value={form.meta_extended_credit_id}
+                onChange={(e) => setForm({ ...form, meta_extended_credit_id: e.target.value })}
+                className="border-border bg-muted"
+              />
+              <span className="text-[10px] text-muted-foreground block">
+                From Business Settings ➔ Payments ➔ Extended Credit. Automatically attaches your credit line to customer WABAs!
+              </span>
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <Label className="text-muted-foreground">Meta System User Access Token (Admin)</Label>
+              <Input
+                type="password"
+                placeholder="EAAL... (Permanent System User Token)"
+                value={form.meta_system_user_token}
+                onChange={(e) => setForm({ ...form, meta_system_user_token: e.target.value })}
+                className="border-border bg-muted"
+              />
+              <span className="text-[10px] text-muted-foreground block">
+                From Business Settings ➔ Users ➔ System Users (Requires business_management &amp; whatsapp_business_messaging).
               </span>
             </div>
           </div>

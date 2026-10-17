@@ -16,6 +16,8 @@ export async function GET() {
       meta_app_id: '',
       meta_app_secret: '',
       meta_config_id: '',
+      meta_extended_credit_id: '',
+      meta_system_user_token: '',
       razorpay_key_id: '',
       razorpay_key_secret: '',
       razorpay_webhook_secret: '',
@@ -91,6 +93,8 @@ export async function POST(req: NextRequest) {
     if ('meta_app_id' in body) payload.meta_app_id = body.meta_app_id?.trim() || null;
     if ('meta_app_secret' in body) payload.meta_app_secret = body.meta_app_secret?.trim() || null;
     if ('meta_config_id' in body) payload.meta_config_id = body.meta_config_id?.trim() || null;
+    if ('meta_extended_credit_id' in body) payload.meta_extended_credit_id = body.meta_extended_credit_id?.trim() || null;
+    if ('meta_system_user_token' in body) payload.meta_system_user_token = body.meta_system_user_token?.trim() || null;
     if ('razorpay_key_id' in body) payload.razorpay_key_id = body.razorpay_key_id?.trim() || null;
     if ('razorpay_key_secret' in body) payload.razorpay_key_secret = body.razorpay_key_secret?.trim() || null;
     if ('razorpay_webhook_secret' in body) payload.razorpay_webhook_secret = body.razorpay_webhook_secret?.trim() || null;

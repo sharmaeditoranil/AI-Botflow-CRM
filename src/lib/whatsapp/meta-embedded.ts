@@ -56,11 +56,13 @@ export async function getMetaAppCredentials(): Promise<{
   appId: string | null;
   appSecret: string | null;
   configId: string | null;
+  creditLineId: string | null;
+  systemUserToken: string | null;
 }> {
   const supabase = getAdminSupabase();
   const { data } = await supabase
     .from('platform_settings')
-    .select('meta_app_id, meta_app_secret, meta_config_id')
+    .select('meta_app_id, meta_app_secret, meta_config_id, meta_extended_credit_id, meta_system_user_token')
     .eq('id', 'default')
     .maybeSingle();
 
@@ -68,6 +70,8 @@ export async function getMetaAppCredentials(): Promise<{
     appId: data?.meta_app_id || process.env.META_APP_ID || null,
     appSecret: data?.meta_app_secret || process.env.META_APP_SECRET || null,
     configId: data?.meta_config_id || process.env.META_CONFIG_ID || null,
+    creditLineId: data?.meta_extended_credit_id || process.env.META_EXTENDED_CREDIT_ID || null,
+    systemUserToken: data?.meta_system_user_token || process.env.META_SYSTEM_USER_TOKEN || null,
   };
 }
 
@@ -177,3 +181,46 @@ export async function getWabaFromToken(
     return null;
   }
 }
+
+/**
+ * Automatically shares and attaches the platform master Extended Credit Line
+ * to a newly connected client WABA so the client never needs to configure
+ * payment methods or currency in Meta Business Manager.
+ */
+export async function attachCreditLineToWaba(
+  wabaId: string,
+  currency: string = 'INR'
+): Promise<{ success: boolean; error?: string }> {
+  const credentials = await getMetaAppCredentials();
+  const creditLineId = credentials.creditLineId;
+  const systemUserToken = credentials.systemUserToken;
+
+  if (!creditLineId || !systemUserToken) {
+    console.log('[Meta Embedded] Extended Credit Line auto-attach skipped (not configured in Super-Admin)');
+    return { success: false, error: 'Credit line not configured' };
+  }
+
+  const url = `${GRAPH_BASE}/${creditLineId}/whatsapp_credit_sharing_and_attach?waba_currency=${encodeURIComponent(currency)}&waba_id=${encodeURIComponent(wabaId)}`;
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${systemUserToken}`,
+      },
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      console.error('[Meta Embedded] Credit sharing and attach failed:', data);
+      return {
+        success: false,
+        error: data.error?.message || 'Failed to attach credit line to WABA',
+      };
+    }
+    console.log(`[Meta Embedded] Successfully attached Extended Credit Line ${creditLineId} to WABA ${wabaId}!`);
+    return { success: true };
+  } catch (err: any) {
+    console.error('[Meta Embedded] Exception attaching credit line to WABA:', err);
+    return { success: false, error: err.message };
+  }
+}
+

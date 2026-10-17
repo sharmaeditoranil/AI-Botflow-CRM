@@ -7,6 +7,7 @@ import {
   subscribeWabaToApp,
   fetchWabaPhoneNumbers,
   getWabaFromToken,
+  attachCreditLineToWaba,
 } from '@/lib/whatsapp/meta-embedded';
 import { encrypt } from '@/lib/whatsapp/encryption';
 import { pickNumberToConnect, saveConnectedNumber } from '@/lib/whatsapp/save-connected-number';
@@ -130,9 +131,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 3. Subscribe WABA to tech provider app
+  // 3. Subscribe WABA to tech provider app & attach master Extended Credit Line
   if (wabaId) {
     await subscribeWabaToApp(wabaId, accessToken);
+    try {
+      await attachCreditLineToWaba(wabaId);
+    } catch (creditErr) {
+      console.warn('[Meta Embedded] Credit line attach warning (non-blocking):', creditErr);
+    }
   }
 
   // 4. Encrypt access token
