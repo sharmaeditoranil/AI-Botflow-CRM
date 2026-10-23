@@ -261,13 +261,38 @@ describe("validateTriggerForActivation", () => {
     ).toEqual([]);
   });
 
-  it("requires schedule on time_based triggers", () => {
+  it("requires a valid schedule on time_based triggers", () => {
     expect(validateTriggerForActivation("time_based", {})).toEqual([
-      { path: "trigger.schedule", message: "schedule is required" },
+      { path: "trigger.schedule", message: "choose when it should run" },
     ]);
+    // Legacy cron still accepted; free text that never fires is not.
     expect(
       validateTriggerForActivation("time_based", { schedule: "0 9 * * *" }),
     ).toEqual([]);
+    expect(
+      validateTriggerForActivation("time_based", { schedule: "every friday" }),
+    ).toEqual([{ path: "trigger.schedule", message: "choose when it should run" }]);
+  });
+
+  it("validates the simple schedule form", () => {
+    expect(
+      validateTriggerForActivation("time_based", {
+        repeat: "weekly",
+        weekdays: [5],
+        time: "05:30",
+        timezone: "Asia/Kolkata",
+      }),
+    ).toEqual([]);
+    expect(
+      validateTriggerForActivation("time_based", { repeat: "weekly", weekdays: [], time: "05:30" }),
+    ).toEqual([{ path: "trigger.schedule", message: "choose at least one day" }]);
+    expect(
+      validateTriggerForActivation("time_based", {
+        repeat: "daily",
+        time: "09:00",
+        audience: "tag",
+      }),
+    ).toEqual([{ path: "trigger.audience_tag_id", message: "choose a tag" }]);
   });
 
   it("requires tag_id on tag_added triggers", () => {

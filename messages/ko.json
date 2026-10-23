@@ -1026,7 +1026,7 @@
         },
         "time_based": {
           "label": "시간 기반",
-          "hint": "반복 일정에 따라"
+          "hint": "On a schedule — once, daily, weekly or monthly"
         },
         "incoming_webhook": {
           "label": "수신 웹훅 (리드 캡처)",
@@ -1144,6 +1144,33 @@
         "matchWordHint": "키워드가 독립된 단어일 때만 일치하므로 \"k\"가 \"thanks\"에서 실행되지 않습니다. 공백으로 단어를 구분하는 언어의 짧은 키워드에 적합하며, 공백 없이 표기하는 언어에는 \"포함\"을 사용하세요.",
         "matchExact": "정확히 일치",
         "closeConversationHint": "대화 상태를 \"닫힘\"으로 설정합니다. 추가 설정이 필요 없습니다."
+      },
+      "schedulePicker": {
+        "howOften": "How often",
+        "once": "Once",
+        "daily": "Every day",
+        "weekly": "Every week",
+        "monthly": "Every month",
+        "onDate": "On date",
+        "onDays": "On these days",
+        "onDates": "On these dates",
+        "lastDay": "Last day of month",
+        "sun": "S",
+        "mon": "M",
+        "tue": "T",
+        "wed": "W",
+        "thu": "T",
+        "fri": "F",
+        "sat": "S",
+        "atTime": "At",
+        "timezone": "Timezone",
+        "sendTo": "Send to",
+        "allContacts": "All contacts",
+        "contactsWithTag": "Contacts with tag",
+        "nextRun": "Next run: {when}",
+        "noNextRun": "This date has passed — choose a future date.",
+        "needs": "To finish: {problem}.",
+        "legacyCron": "This automation uses an advanced schedule ({expr}). Pick an option below to switch to the simple schedule."
       }
     }
   },

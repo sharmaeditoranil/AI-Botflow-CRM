@@ -51,6 +51,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
+import { SchedulePicker, defaultSchedule } from "./schedule-picker"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1399,7 +1400,17 @@ export function AutomationBuilder({ initial }: { initial: BuilderInitial }) {
             <TriggerCard
               type={state.trigger_type}
               config={state.trigger_config}
-              onTypeChange={(tVal) => patchTop("trigger_type", tVal)}
+              onTypeChange={(tVal) => {
+                patchTop("trigger_type", tVal)
+                // Start a new time-based trigger with a valid schedule.
+                if (
+                  tVal === "time_based" &&
+                  !state.trigger_config?.repeat &&
+                  !state.trigger_config?.schedule
+                ) {
+                  patchTop("trigger_config", defaultSchedule())
+                }
+              }}
               onConfigChange={(c) => patchTop("trigger_config", c)}
               t={t}
               automationId={initial?.id}
@@ -1537,22 +1548,13 @@ function TriggerCard({
               </div>
             )}
             {type === "time_based" && (
-              <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">
-                  {t("schedule")}
-                </label>
-                <Input
-                  placeholder={t("schedulePlaceholder")}
-                  value={(config.schedule as string) ?? ""}
-                  onChange={(e) =>
-                    onConfigChange({ ...config, schedule: e.target.value })
-                  }
-                  className="bg-muted text-foreground"
-                />
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  {t("scheduleHint")}
-                </p>
-              </div>
+              <SchedulePicker
+                config={config}
+                onChange={onConfigChange}
+                renderTagSelect={(value, onChange) => (
+                  <TagSelect value={value} onChange={onChange} t={t} />
+                )}
+              />
             )}
             {type === "incoming_webhook" && (
               <IncomingWebhookConfig

@@ -605,9 +605,24 @@ export interface TagTriggerConfig {
 }
 
 export interface TimeBasedTriggerConfig {
-  /** Cron expression or simple HH:mm string; engine can accept either. */
-  schedule: string;
+  /** How often (see lib/automations/schedule). Absent on older rows,
+   *  which carry a cron expression in `schedule` instead. */
+  repeat?: 'once' | 'daily' | 'weekly' | 'monthly';
+  /** 'HH:MM', 24-hour, in `timezone`. */
+  time?: string;
+  /** once: 'YYYY-MM-DD'. */
+  date?: string;
+  /** weekly: 0 = Sunday … 6 = Saturday. */
+  weekdays?: number[];
+  /** monthly: 1–31, -1 = last day of the month. */
+  month_days?: number[];
+  /** IANA zone; defaults to Asia/Kolkata. */
   timezone?: string;
+  /** Who it runs for: every contact, or contacts with a tag. */
+  audience?: 'all' | 'tag';
+  audience_tag_id?: string;
+  /** Legacy: cron expression or 'HH:mm'. */
+  schedule?: string;
 }
 
 export interface InteractiveReplyTriggerConfig {

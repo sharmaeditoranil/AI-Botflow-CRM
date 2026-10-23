@@ -1026,7 +1026,7 @@
         },
         "time_based": {
           "label": "Por horário",
-          "hint": "Em um agendamento recorrente"
+          "hint": "On a schedule — once, daily, weekly or monthly"
         },
         "incoming_webhook": {
           "label": "Webhook de Entrada (Captura de Leads)",
@@ -1144,6 +1144,33 @@
         "matchWordHint": "Corresponde à palavra-chave apenas como palavra isolada, então \"k\" não dispara mais em \"thanks\". Ideal para palavras-chave curtas em idiomas com espaços; use Contém para idiomas escritos sem espaços.",
         "matchExact": "Exata",
         "closeConversationHint": "Define o status da conversa como \"fechada\". Nenhuma configuração necessária."
+      },
+      "schedulePicker": {
+        "howOften": "How often",
+        "once": "Once",
+        "daily": "Every day",
+        "weekly": "Every week",
+        "monthly": "Every month",
+        "onDate": "On date",
+        "onDays": "On these days",
+        "onDates": "On these dates",
+        "lastDay": "Last day of month",
+        "sun": "S",
+        "mon": "M",
+        "tue": "T",
+        "wed": "W",
+        "thu": "T",
+        "fri": "F",
+        "sat": "S",
+        "atTime": "At",
+        "timezone": "Timezone",
+        "sendTo": "Send to",
+        "allContacts": "All contacts",
+        "contactsWithTag": "Contacts with tag",
+        "nextRun": "Next run: {when}",
+        "noNextRun": "This date has passed — choose a future date.",
+        "needs": "To finish: {problem}.",
+        "legacyCron": "This automation uses an advanced schedule ({expr}). Pick an option below to switch to the simple schedule."
       }
     }
   },

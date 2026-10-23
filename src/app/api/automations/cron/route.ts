@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { drainDuePendingExecutions } from '@/lib/automations/engine'
+import { runDueScheduledAutomations } from '@/lib/automations/scheduler'
 
 /**
  * Drain due `automation_pending_executions` rows.
@@ -37,6 +38,9 @@ export async function GET(request: Request) {
   }
 
   const { processed, errors } = await drainDuePendingExecutions()
+
+  // Time-based automations whose schedule is due this minute.
+  const scheduled = await runDueScheduledAutomations()
 
   // Also sweep scheduled CRM AI follow-ups due today
   let crmFollowupsProcessed = 0
@@ -79,6 +83,8 @@ export async function GET(request: Request) {
   return NextResponse.json({
     processed,
     errors,
+    scheduledStarted: scheduled.started,
+    scheduledContacts: scheduled.contacts,
     crmFollowupsProcessed,
     storageCleanupRun,
   })

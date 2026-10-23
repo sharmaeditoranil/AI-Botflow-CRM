@@ -1,5 +1,6 @@
 import type { AutomationTriggerType } from '@/types'
 import { validateInteractivePayload } from '@/lib/whatsapp/interactive'
+import { DEFAULT_TIMEZONE, readSchedule, scheduleProblem, type SimpleSchedule } from './schedule'
 
 // ------------------------------------------------------------
 // Pre-flight config validation for automations about to be activated.
@@ -183,8 +184,21 @@ export function validateTriggerForActivation(
       })
     }
   } else if (triggerType === 'time_based') {
-    if (!nonEmpty(cfg.schedule)) {
-      issues.push({ path: 'trigger.schedule', message: 'schedule is required' })
+    if (typeof cfg.repeat === 'string') {
+      const problem = scheduleProblem({
+        repeat: cfg.repeat as SimpleSchedule['repeat'],
+        time: typeof cfg.time === 'string' ? cfg.time : '',
+        timezone: typeof cfg.timezone === 'string' ? cfg.timezone : DEFAULT_TIMEZONE,
+        date: typeof cfg.date === 'string' ? cfg.date : undefined,
+        weekdays: Array.isArray(cfg.weekdays) ? cfg.weekdays.map(Number) : undefined,
+        month_days: Array.isArray(cfg.month_days) ? cfg.month_days.map(Number) : undefined,
+      })
+      if (problem) issues.push({ path: 'trigger.schedule', message: problem })
+    } else if (!readSchedule(cfg)) {
+      issues.push({ path: 'trigger.schedule', message: 'choose when it should run' })
+    }
+    if (cfg.audience === 'tag' && !nonEmpty(cfg.audience_tag_id)) {
+      issues.push({ path: 'trigger.audience_tag_id', message: 'choose a tag' })
     }
   } else if (triggerType === 'tag_added') {
     if (!nonEmpty(cfg.tag_id)) {
