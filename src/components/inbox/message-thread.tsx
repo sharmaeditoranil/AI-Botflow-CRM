@@ -244,8 +244,17 @@ export function MessageThread({
     };
   }, []);
 
-  // 24-hour session timer
+  // 24-hour session timer (Meta Cloud API only; WhatsApp Web has no 24-hr restriction)
+  const isWahaConversation = useMemo(() => {
+    const num =
+      (conversation?.whatsapp_config_id
+        ? numberById(conversation.whatsapp_config_id)
+        : null) ?? defaultNumber;
+    return num?.waba_id === "waha";
+  }, [conversation?.whatsapp_config_id, numberById, defaultNumber]);
+
   const sessionInfo = useMemo(() => {
+    if (isWahaConversation) return { expired: false, remaining: "" };
     if (!messages.length) return { expired: false, remaining: "" };
 
     // Find last customer message
@@ -269,7 +278,7 @@ export function MessageThread({
         : tTimer("xmRemaining", { minutes: Math.floor(hoursLeft * 60) });
 
     return { expired, remaining };
-  }, [messages, tTimer]);
+  }, [messages, tTimer, isWahaConversation]);
 
   // Store latest callback in a ref so fetchMessages doesn't need to
   // depend on `onMessagesLoaded` — otherwise parent re-renders cause

@@ -205,3 +205,73 @@ export async function sendWahaImage(
   const id = res.data?.id || `waha_${Date.now()}`;
   return { success: true, messageId: id };
 }
+
+/**
+ * Resolves a real E.164 phone number from a WAHA JID or WhatsApp multi-device LID.
+ * WhatsApp multi-device often uses internal LIDs (e.g. "48950279163915@lid").
+ * This function extracts or queries the underlying real phone number (e.g. "+919939967431").
+ */
+export async function resolveWahaPhoneNumber(
+  sessionName: string,
+  jidOrLid: string,
+  payload?: any
+): Promise<{ phone: string; name?: string }> {
+  // 1. Direct check in payload._data.key.remoteJidAlt or payload.remoteJidAlt
+  const alt =
+    payload?._data?.key?.remoteJidAlt ||
+    payload?.remoteJidAlt ||
+    payload?._data?.remoteJidAlt ||
+    payload?._data?.key?.participantAlt;
+
+  if (alt && typeof alt === 'string' && !alt.includes('@lid')) {
+    const cleanAlt = alt.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
+    if (cleanAlt && cleanAlt.length >= 8) {
+      const pushName =
+        payload?._data?.pushName ||
+        payload?._data?.notifyName ||
+        payload?.pushname ||
+        null;
+      return { phone: `+${cleanAlt}`, name: pushName };
+    }
+  }
+
+  // 2. If it is already a regular WhatsApp phone JID (e.g. "919939967431@c.us") and NOT a LID:
+  if (jidOrLid && !jidOrLid.includes('@lid')) {
+    const clean = jidOrLid.replace('@c.us', '').replace('@s.whatsapp.net', '').replace(/\D/g, '');
+    if (clean && clean.length >= 8) {
+      const pushName =
+        payload?._data?.pushName ||
+        payload?._data?.notifyName ||
+        payload?.pushname ||
+        null;
+      return { phone: `+${clean}`, name: pushName };
+    }
+  }
+
+  // 3. It's a LID (e.g. 48950279163915@lid). Query WAHA contacts API:
+  try {
+    const res = await wahaFetch<any>(
+      `/api/contacts?session=${encodeURIComponent(sessionName)}&contactId=${encodeURIComponent(jidOrLid)}`
+    );
+    if (res.ok && res.data) {
+      const pn = res.data.phoneNumber || res.data.id;
+      if (pn && typeof pn === 'string' && !pn.includes('@lid')) {
+        const cleanPn = pn.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/\D/g, '');
+        if (cleanPn && cleanPn.length >= 8) {
+          const name =
+            res.data.verifiedName ||
+            res.data.pushname ||
+            (res.data.name && !res.data.name.includes('∙') ? res.data.name : null);
+          return { phone: `+${cleanPn}`, name };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[resolveWahaPhoneNumber] LID lookup error:', err);
+  }
+
+  // 4. Fallback: clean digits
+  const fallback = jidOrLid.replace(/@.*$/, '').replace(/\D/g, '');
+  return { phone: `+${fallback}` };
+}
+

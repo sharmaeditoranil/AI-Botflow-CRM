@@ -3,6 +3,23 @@ import { supabaseAdmin } from '@/lib/automations/admin-client';
 import { findOrCreateNumberConversation } from '@/lib/conversations/number-conversation';
 import { findExistingContact } from '@/lib/contacts/dedupe';
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply';
+import { resolveWahaPhoneNumber } from '@/lib/waha/client';
+
+// Simple in-memory dedup cache for rapidly repeating webhook delivery
+const seenMessages = new Map<string, number>();
+
+function isDuplicate(id: string): boolean {
+  const now = Date.now();
+  // Clean entries older than 5 minutes
+  if (seenMessages.size > 2000) {
+    for (const [k, v] of seenMessages.entries()) {
+      if (now - v > 300000) seenMessages.delete(k);
+    }
+  }
+  if (seenMessages.has(id)) return true;
+  seenMessages.set(id, now);
+  return false;
+}
 
 /**
  * WAHA Webhook Handler
@@ -55,6 +72,13 @@ export async function POST(request: Request) {
 
     // 2. Handle incoming and outgoing message events
     if (event === 'message' || event === 'message.any') {
+      const messageId = payload?.id || `waha_${Date.now()}`;
+
+      // Avoid double-processing since WAHA sends both 'message' and 'message.any'
+      if (isDuplicate(messageId)) {
+        return NextResponse.json({ status: 'duplicate_skipped' });
+      }
+
       const isFromMe = Boolean(payload?.fromMe);
       const rawFrom = payload?.from || '';
       const rawTo = payload?.to || '';
@@ -75,17 +99,20 @@ export async function POST(request: Request) {
       const accountId = config.account_id;
       const configOwnerUserId = config.user_id;
 
-      // Extract customer phone
+      // Extract and resolve customer phone (handles multi-device LIDs properly)
       const targetJid = isFromMe ? rawTo : rawFrom;
-      const customerPhone = targetJid.replace('@c.us', '').replace('@s.whatsapp.net', '').replace(/\D/g, '');
+      const { phone: formattedPhone, name: resolvedName } = await resolveWahaPhoneNumber(
+        session,
+        targetJid,
+        payload
+      );
 
-      if (!customerPhone || customerPhone.includes('@g.us') || customerPhone.length < 8) {
+      const customerDigits = formattedPhone.replace(/\D/g, '');
+      if (!customerDigits || targetJid.includes('@g.us') || customerDigits.length < 8) {
         // Skip group messages or invalid formats
         return NextResponse.json({ status: 'skipped_group_or_invalid' });
       }
 
-      const formattedPhone = customerPhone.startsWith('+') ? customerPhone : `+${customerPhone}`;
-      const messageId = payload?.id || `waha_${Date.now()}`;
       const contentText = payload?.body || (payload?.hasMedia ? '[Media]' : '');
       const createdAtIso = payload?.timestamp
         ? new Date(payload.timestamp * 1000).toISOString()
@@ -95,8 +122,8 @@ export async function POST(request: Request) {
       let contact = await findExistingContact(db, accountId, formattedPhone);
 
       if (!contact && !isFromMe) {
-        const pushName = payload?._data?.notifyName || payload?.pushname || null;
-        const displayName = pushName || `+${customerPhone}`;
+        const pushName = payload?._data?.notifyName || payload?.pushname || resolvedName || null;
+        const displayName = pushName || formattedPhone;
 
         const { data: newContact, error: contactErr } = await db
           .from('contacts')
@@ -121,6 +148,16 @@ export async function POST(request: Request) {
         return NextResponse.json({ status: 'no_contact' });
       }
 
+      // If contact name was just a raw phone number but we now have a pushName, update it
+      const newNameCandidate = resolvedName || payload?._data?.notifyName || payload?.pushname;
+      if (newNameCandidate && contact.name && (contact.name.startsWith('+') || contact.name.startsWith('91'))) {
+        await db
+          .from('contacts')
+          .update({ name: newNameCandidate })
+          .eq('id', contact.id);
+        contact.name = newNameCandidate;
+      }
+
       // Find or create conversation for this WhatsApp Web number
       const { conversation } = await findOrCreateNumberConversation<{ id: string; unread_count: number }>(
         db,
@@ -140,7 +177,7 @@ export async function POST(request: Request) {
       const mediaUrl = payload?.mediaUrl || null;
       const contentType = payload?.hasMedia ? 'image' : 'text';
 
-      // Insert message into messages table
+      // Insert message into messages table (valid sender_types: 'customer', 'agent', 'bot')
       const { error: msgErr } = await db
         .from('messages')
         .insert({
@@ -155,7 +192,6 @@ export async function POST(request: Request) {
         });
 
       if (msgErr) {
-        // Might be duplicate message insert
         console.warn('[waha-webhook] Message insert notice:', msgErr.message);
       }
 
