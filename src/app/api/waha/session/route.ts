@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account';
 import { supabaseAdmin } from '@/lib/automations/admin-client';
 import { encrypt } from '@/lib/whatsapp/encryption';
 import {
@@ -8,28 +8,9 @@ import {
   logoutWahaSession,
 } from '@/lib/waha/client';
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { data: member } = await supabaseAdmin()
-      .from('account_members')
-      .select('account_id')
-      .eq('user_id', user.id)
-      .limit(1)
-      .maybeSingle();
-
-    const accountId = member?.account_id;
-    if (!accountId) {
-      return NextResponse.json({ error: 'No account found' }, { status: 404 });
-    }
+    const { accountId } = await getCurrentAccount();
 
     const { data: config } = await supabaseAdmin()
       .from('whatsapp_config')
@@ -55,32 +36,13 @@ export async function GET(request: Request) {
       me: wahaSession?.me || null,
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || 'Failed to fetch session' }, { status: 500 });
+    return toErrorResponse(err);
   }
 }
 
-export async function POST(request: Request) {
+export async function POST() {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { data: member } = await supabaseAdmin()
-      .from('account_members')
-      .select('account_id, role')
-      .eq('user_id', user.id)
-      .limit(1)
-      .maybeSingle();
-
-    const accountId = member?.account_id;
-    if (!accountId) {
-      return NextResponse.json({ error: 'No account found' }, { status: 404 });
-    }
+    const { accountId, userId } = await getCurrentAccount();
 
     const sessionName = `web_${accountId.replace(/-/g, '').slice(0, 12)}`;
 
@@ -107,7 +69,7 @@ export async function POST(request: Request) {
     } else {
       await supabaseAdmin().from('whatsapp_config').insert({
         account_id: accountId,
-        user_id: user.id,
+        user_id: userId,
         phone_number_id: sessionName,
         waba_id: 'waha',
         access_token: encrypt(sessionName),
@@ -123,32 +85,13 @@ export async function POST(request: Request) {
       status: session?.status || 'SCAN_QR_CODE',
     });
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || 'Failed to initialize session' }, { status: 500 });
+    return toErrorResponse(err);
   }
 }
 
-export async function DELETE(request: Request) {
+export async function DELETE() {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { data: member } = await supabaseAdmin()
-      .from('account_members')
-      .select('account_id')
-      .eq('user_id', user.id)
-      .limit(1)
-      .maybeSingle();
-
-    const accountId = member?.account_id;
-    if (!accountId) {
-      return NextResponse.json({ error: 'No account found' }, { status: 404 });
-    }
+    const { accountId } = await getCurrentAccount();
 
     const { data: config } = await supabaseAdmin()
       .from('whatsapp_config')
@@ -170,6 +113,6 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (err: any) {
-    return NextResponse.json({ error: err?.message || 'Failed to disconnect session' }, { status: 500 });
+    return toErrorResponse(err);
   }
 }
