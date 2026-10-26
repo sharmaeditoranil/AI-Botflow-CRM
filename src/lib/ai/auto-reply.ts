@@ -454,7 +454,8 @@ async function showTypingIndicator(
       accessToken,
       messageId: inboundMessageId,
     })
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.message?.includes('WAHA_SESSION')) return
     console.warn('[ai auto-reply] typing indicator failed (continuing):', err)
   }
 }

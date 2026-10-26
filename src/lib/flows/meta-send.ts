@@ -15,6 +15,7 @@ import {
 } from '@/lib/whatsapp/phone-utils'
 import { resolveContactSendTarget } from '@/lib/whatsapp/wa-identity'
 import { getWhatsAppNumberForConversation } from '@/lib/whatsapp/numbers'
+import { sendWahaText, sendWahaImage } from '@/lib/waha/client'
 import { supabaseAdmin } from './admin-client'
 
 // ------------------------------------------------------------
@@ -49,10 +50,13 @@ export async function loadAccountMetaCredentials(
     db,
     accountId,
     conversationId,
-    'phone_number_id, access_token',
+    'phone_number_id, access_token, waba_id',
   )
   if (!config) {
     throw new Error('WhatsApp not configured for this account')
+  }
+  if (config.waba_id === 'waha') {
+    throw new Error('WAHA_SESSION: WhatsApp Web does not use Meta credentials')
   }
   return {
     phoneNumberId: config.phone_number_id,
@@ -115,11 +119,54 @@ export async function engineSendText(
   }
   const sanitized = sendTarget.target
 
-  const { phoneNumberId, accessToken } = await loadAccountMetaCredentials(
+  // Check the number configured for this conversation or account default
+  const config = await getWhatsAppNumberForConversation(
     db,
     args.accountId,
     args.conversationId,
+    '*',
   )
+  if (!config) {
+    throw new Error('WhatsApp not configured for this account')
+  }
+
+  // Handle WhatsApp Web (WAHA) connected numbers — no 24-hr restriction!
+  if (config.waba_id === 'waha') {
+    const sessionName = config.phone_number_id
+    const wahaResult = await sendWahaText(sessionName, sanitized, args.text)
+    if (!wahaResult.success) {
+      throw new Error(`WhatsApp Web send failed: ${wahaResult.error}`)
+    }
+
+    const { error: msgErr } = await db.from('messages').insert({
+      conversation_id: args.conversationId,
+      sender_type: 'bot',
+      content_type: 'text',
+      content_text: args.text,
+      message_id: wahaResult.messageId,
+      status: 'sent',
+      ai_generated: args.aiGenerated ?? false,
+    })
+    if (msgErr) {
+      throw new Error(`sent to WhatsApp Web but DB insert failed: ${msgErr.message}`)
+    }
+
+    await db
+      .from('conversations')
+      .update({
+        last_message_text: args.text,
+        last_message_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', args.conversationId)
+
+    return { whatsapp_message_id: wahaResult.messageId || '' }
+  }
+
+  const { phoneNumberId, accessToken } = {
+    phoneNumberId: config.phone_number_id,
+    accessToken: decrypt(config.access_token),
+  }
 
   const attempt = async (phone: string): Promise<string> => {
     const r = await sendTextMessage({
@@ -225,11 +272,59 @@ export async function engineSendMedia(
   }
   const sanitized = sendTarget.target
 
-  const { phoneNumberId, accessToken } = await loadAccountMetaCredentials(
+  const config = await getWhatsAppNumberForConversation(
     db,
     args.accountId,
     args.conversationId,
+    '*',
   )
+  if (!config) {
+    throw new Error('WhatsApp not configured for this account')
+  }
+
+  // Handle WhatsApp Web (WAHA) connected numbers — no 24-hr restriction!
+  if (config.waba_id === 'waha') {
+    const sessionName = config.phone_number_id
+    const wahaResult = await sendWahaImage(
+      sessionName,
+      sanitized,
+      args.link,
+      args.caption || undefined,
+    )
+    if (!wahaResult.success) {
+      throw new Error(`WhatsApp Web media send failed: ${wahaResult.error}`)
+    }
+
+    const { error: msgErr } = await db.from('messages').insert({
+      conversation_id: args.conversationId,
+      sender_type: 'bot',
+      content_type: args.kind,
+      content_text: args.caption || null,
+      media_url: args.link,
+      message_id: wahaResult.messageId,
+      status: 'sent',
+      ai_generated: false,
+    })
+    if (msgErr) {
+      throw new Error(`sent to WhatsApp Web but DB insert failed: ${msgErr.message}`)
+    }
+
+    await db
+      .from('conversations')
+      .update({
+        last_message_text: args.caption || `Sent a ${args.kind}`,
+        last_message_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', args.conversationId)
+
+    return { whatsapp_message_id: wahaResult.messageId || '' }
+  }
+
+  const { phoneNumberId, accessToken } = {
+    phoneNumberId: config.phone_number_id,
+    accessToken: decrypt(config.access_token),
+  }
 
   const attempt = async (phone: string): Promise<string> => {
     const r = await sendMediaMessage({
@@ -377,11 +472,60 @@ async function sendInteractiveViaMeta(
   }
   const sanitized = sendTarget.target
 
-  const { phoneNumberId, accessToken } = await loadAccountMetaCredentials(
+  const config = await getWhatsAppNumberForConversation(
     db,
     input.accountId,
     input.conversationId,
+    '*',
   )
+  if (!config) {
+    throw new Error('WhatsApp not configured for this account')
+  }
+
+  // Handle WhatsApp Web (WAHA) connected numbers — send bodyText + options formatted as text
+  if (config.waba_id === 'waha') {
+    const sessionName = config.phone_number_id
+    let formattedText = input.bodyText
+    if (input.kind === 'buttons' && input.buttons.length > 0) {
+      formattedText += '\n\n' + input.buttons.map((b, i) => `${i + 1}. ${b.title}`).join('\n')
+    } else if (input.kind === 'list' && input.sections.length > 0) {
+      const rows = input.sections.flatMap((s) => s.rows)
+      formattedText += '\n\n' + rows.map((r, i) => `${i + 1}. ${r.title}`).join('\n')
+    }
+
+    const wahaResult = await sendWahaText(sessionName, sanitized, formattedText)
+    if (!wahaResult.success) {
+      throw new Error(`WhatsApp Web interactive send failed: ${wahaResult.error}`)
+    }
+
+    const { error: msgErr } = await db.from('messages').insert({
+      conversation_id: input.conversationId,
+      sender_type: 'bot',
+      content_type: 'text',
+      content_text: formattedText,
+      message_id: wahaResult.messageId,
+      status: 'sent',
+    })
+    if (msgErr) {
+      throw new Error(`sent to WhatsApp Web but DB insert failed: ${msgErr.message}`)
+    }
+
+    await db
+      .from('conversations')
+      .update({
+        last_message_text: formattedText,
+        last_message_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', input.conversationId)
+
+    return { whatsapp_message_id: wahaResult.messageId || '' }
+  }
+
+  const { phoneNumberId, accessToken } = {
+    phoneNumberId: config.phone_number_id,
+    accessToken: decrypt(config.access_token),
+  }
 
   const attempt = async (phone: string): Promise<string> => {
     if (input.kind === 'buttons') {
