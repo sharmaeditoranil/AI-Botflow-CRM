@@ -145,7 +145,7 @@ export async function POST(request: Request) {
         .from('messages')
         .insert({
           conversation_id: conversation.id,
-          sender_type: isFromMe ? 'agent' : 'user',
+          sender_type: isFromMe ? 'agent' : 'customer',
           content_type: contentType,
           content_text: contentText,
           media_url: mediaUrl,

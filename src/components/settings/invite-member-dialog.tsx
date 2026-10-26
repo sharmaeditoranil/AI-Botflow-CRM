@@ -4,19 +4,16 @@
 // InviteMemberDialog
 //
 // Two-step modal:
-//   1. Form  — role + expiry + optional label → POST creates the invite.
-//   2. Result — the share URL, returned ONCE. Copy-to-clipboard, plus a
+//   1. Form  — email (optional) + role + expiry + label → adds teammate
+//              directly if registered or creates a shareable invite link.
+//   2. Result — the share URL. Copy-to-clipboard, plus a
 //              "Send via WhatsApp" deep link that pre-fills wa.me with
 //              a friendly message containing the URL.
-//
-// The plaintext token is server-stored only as a SHA-256 hash, so once
-// the result step is dismissed the link is gone forever — the dialog
-// shouts this in copy.
 // ============================================================
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Copy, Loader2, MessageCircle, Sparkles } from 'lucide-react';
+import { Copy, Loader2, MessageCircle, UserPlus } from 'lucide-react';
 
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -45,7 +42,7 @@ interface InviteMemberDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Called after a successful create so the parent re-fetches the
-   *  pending-invitations list. */
+   *  roster or pending-invitations list. */
   onCreated: () => void;
 }
 
@@ -55,17 +52,12 @@ const EXPIRY_OPTIONS = [
   { value: '30', labelKey: 'days30' },
 ];
 
-// Server caps label at 80 chars (see src/app/api/account/invitations/route.ts).
-// Mirror it on the client so we short-circuit before the round-trip
-// rather than letting the user submit and bounce off a 400.
 const MAX_LABEL_LEN = 80;
 
 interface CreatedInvite {
   url: string;
   role: InviteRole;
   expiresInDays: number;
-  /** Snapshotted at creation time so a later account rename can't
-   *  retroactively change the wa.me message text on the result step. */
   accountName: string;
 }
 
@@ -77,6 +69,7 @@ export function InviteMemberDialog({
   const t = useTranslations('Settings.invite');
   const tRoles = useTranslations('Settings.roles');
   const { account } = useAuth();
+  const [email, setEmail] = useState('');
   const [role, setRole] = useState<InviteRole>('agent');
   const [expiry, setExpiry] = useState<string>('7');
   const [label, setLabel] = useState('');
@@ -84,6 +77,7 @@ export function InviteMemberDialog({
   const [result, setResult] = useState<CreatedInvite | null>(null);
 
   function reset() {
+    setEmail('');
     setRole('agent');
     setExpiry('7');
     setLabel('');
@@ -92,19 +86,57 @@ export function InviteMemberDialog({
   }
 
   async function handleCreate() {
-    // Mirror the server's max-length check so we don't ship an
-    // obviously-too-long label across the wire just to bounce off
-    // a 400. The Input also has a `maxLength={MAX_LABEL_LEN}` cap
-    // but a paste can land an over-limit string into state before
-    // the limit kicks in on the next keystroke — this is the safety
-    // net for that path.
+    const trimmedEmail = email.trim();
     const trimmedLabel = label.trim();
+
     if (trimmedLabel.length > MAX_LABEL_LEN) {
       toast.error(t('labelTooLong', { max: MAX_LABEL_LEN }));
       return;
     }
+
     setSubmitting(true);
     try {
+      if (trimmedEmail) {
+        // Direct addition / email invite path
+        const res = await fetch('/api/account/members', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: trimmedEmail,
+            role,
+          }),
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          toast.error(data.error || 'Failed to add team member');
+          return;
+        }
+
+        if (data.addedDirectly) {
+          toast.success(
+            `${data.member?.full_name || trimmedEmail} has been added directly to your team!`
+          );
+          onCreated();
+          onOpenChange(false);
+          reset();
+          return;
+        }
+
+        // Generated invite link for this email
+        setResult({
+          url: data.url,
+          role,
+          expiresInDays: data.expiresInDays || 7,
+          accountName: account?.name ?? t('fallbackAccountName'),
+        });
+        toast.success('Invite link created! Share it with your teammate.');
+        onCreated();
+        return;
+      }
+
+      // No email specified: create standard invite link
       const res = await fetch('/api/account/invitations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -130,11 +162,6 @@ export function InviteMemberDialog({
         url: data.url,
         role,
         expiresInDays: data.expiresInDays,
-        // Snapshot the account name into the result so the wa.me
-        // share message has team context. Falls back to a generic
-        // string if `account` hasn't loaded yet (shouldn't happen
-        // — the dialog requires admin+ which requires a loaded
-        // profile — but stay safe).
         accountName: account?.name ?? t('fallbackAccountName'),
       });
       onCreated();
@@ -152,47 +179,36 @@ export function InviteMemberDialog({
       await navigator.clipboard.writeText(result.url);
       toast.success(t('copied'));
     } catch {
-      // Most likely "not in a secure context" — happens on http://
-      // local IPs. Surface the link in the toast so the admin can
-      // hand-copy it.
       toast.error(t('clipboardBlocked'));
     }
   }
 
-  function whatsappShareUrl(url: string): string {
-    // Include the account name so the recipient knows which team
-    // they're being invited to before clicking through. This matters
-    // for users in multi-team contexts where "our wacrm account"
-    // wouldn't be enough to disambiguate.
-    const accountName = result?.accountName ?? t('fallbackAccountName');
-    const message = t('whatsappMessage', { accountName, expiresInDays: result?.expiresInDays ?? 0, url });
-    return `https://wa.me/?text=${encodeURIComponent(message)}`;
+  function whatsappShareUrl(inviteLink: string): string {
+    const text = `Join our team on ${result?.accountName || 'wacrm'}: ${inviteLink}`;
+    return `https://wa.me/?text=${encodeURIComponent(text)}`;
   }
 
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        // Reset state when the dialog closes — both for cancel and
-        // for dismissal after a successful create. The plaintext URL
-        // is intentionally NOT preserved across opens.
         if (!next) reset();
         onOpenChange(next);
       }}
     >
-      <DialogContent className="bg-popover border-border sm:max-w-md">
+      <DialogContent className="sm:max-w-md bg-card border-border">
         {result ? (
           <>
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-popover-foreground">
-                <Sparkles className="size-4 text-primary" />
+              <DialogTitle className="text-foreground flex items-center gap-2">
+                <UserPlus className="size-5 text-primary" />
                 {t('inviteCreated')}
               </DialogTitle>
               <DialogDescription className="text-muted-foreground">
                 {t.rich('inviteCreatedDesc', {
                   role: tRoles(result.role),
                   days: result.expiresInDays,
-                  bold: (chunks: React.ReactNode) => <strong>{chunks}</strong>
+                  bold: (chunks: React.ReactNode) => <strong>{chunks}</strong>,
                 })}
               </DialogDescription>
             </DialogHeader>
@@ -216,11 +232,6 @@ export function InviteMemberDialog({
                 </Button>
               </div>
 
-              {/* Higher-contrast amber than the original 10% / amber-200.
-                  Reviewed against slate-900 to meet WCAG AAA for body
-                  text (target ratio 7:1). Border bumped to /50, bg to
-                  /15, foreground promoted to amber-100 for the strong
-                  intro, amber-200 for the body. */}
               <div className="rounded-md border border-amber-500/50 bg-amber-500/15 px-3 py-2 text-xs text-amber-200">
                 <strong className="font-semibold text-amber-100">
                   {t('saveLinkNow')}
@@ -228,11 +239,6 @@ export function InviteMemberDialog({
                 {t('saveLinkHint')}
               </div>
 
-              {/* Anchor styled with `buttonVariants` rather than wrapping
-                  in <Button asChild>. The wacrm Button is the Base UI
-                  ButtonPrimitive — it has no Radix-style asChild slot.
-                  Direct anchor preserves right-click "Open in new tab"
-                  behaviour too. */}
               <a
                 href={whatsappShareUrl(result.url)}
                 target="_blank"
@@ -260,13 +266,34 @@ export function InviteMemberDialog({
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle className="text-popover-foreground">{t('dialogTitle')}</DialogTitle>
+              <DialogTitle className="text-popover-foreground">
+                {t('dialogTitle')}
+              </DialogTitle>
               <DialogDescription className="text-muted-foreground">
                 {t('dialogDesc')}
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label className="text-muted-foreground">
+                  Teammate Email{' '}
+                  <span className="text-xs text-muted-foreground">
+                    ({t('optional')})
+                  </span>
+                </Label>
+                <Input
+                  type="email"
+                  placeholder="e.g. teammate@gmail.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
+                />
+                <p className="text-xs text-muted-foreground">
+                  If already registered, they will be added immediately. Otherwise, an invite link will be created.
+                </p>
+              </div>
+
               <div className="space-y-2">
                 <Label className="text-muted-foreground">{t('roleLabel')}</Label>
                 <Select
@@ -283,12 +310,16 @@ export function InviteMemberDialog({
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  {tRoles(`${role}Hint` as 'adminHint' | 'agentHint' | 'viewerHint')}
+                  {tRoles(
+                    `${role}Hint` as 'adminHint' | 'agentHint' | 'viewerHint'
+                  )}
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label className="text-muted-foreground">{t('validForLabel')}</Label>
+                <Label className="text-muted-foreground">
+                  {t('validForLabel')}
+                </Label>
                 <Select
                   value={expiry}
                   onValueChange={(v) => v && setExpiry(v)}
@@ -309,7 +340,9 @@ export function InviteMemberDialog({
               <div className="space-y-2">
                 <Label className="text-muted-foreground">
                   {t('labelTitle')}{' '}
-                  <span className="text-xs text-muted-foreground">{t('optional')}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {t('optional')}
+                  </span>
                 </Label>
                 <Input
                   placeholder={t('labelPlaceholder')}
@@ -342,6 +375,8 @@ export function InviteMemberDialog({
                     <Loader2 className="size-4 animate-spin" />
                     {t('creating')}
                   </>
+                ) : email.trim() ? (
+                  'Add / Invite Member'
                 ) : (
                   t('generateLink')
                 )}
