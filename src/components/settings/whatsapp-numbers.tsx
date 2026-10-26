@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { cn } from '@/lib/utils';
 import { SettingsPanelHead } from './settings-panel-head';
 import { WhatsAppConfig } from './whatsapp-config';
+import { WhatsAppWebScanner } from './whatsapp-web-scanner';
 import { WhatsAppIcon } from '@/components/icons/social-icons';
 
 /**
@@ -83,6 +84,9 @@ export function WhatsAppNumbers() {
   return (
     <section className="animate-in fade-in-50 duration-200 space-y-6">
       <SettingsPanelHead title={tw('title')} description={tw('description')} />
+
+      {/* WhatsApp Web (QR Scanner) for 24-hr window free AI Follow-ups */}
+      <WhatsAppWebScanner onNumberChanged={refresh} />
 
       {numbers.length > 0 && (
         <Card>

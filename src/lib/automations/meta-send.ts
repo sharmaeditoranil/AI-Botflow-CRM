@@ -15,6 +15,7 @@ import {
   resolveTemplateRow,
   templateContentText,
 } from '@/lib/whatsapp/template-body'
+import { sendWahaText } from '@/lib/waha/client'
 import { supabaseAdmin } from './admin-client'
 
 // ------------------------------------------------------------
@@ -150,6 +151,37 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
   )
   if (!config) {
     throw new Error('WhatsApp not configured for this account')
+  }
+
+  // Handle WhatsApp Web (WAHA) connected numbers — no 24-hr restriction!
+  if (config.waba_id === 'waha') {
+    const sessionName = config.phone_number_id;
+    const textToSend = input.kind === 'text' ? input.text : 'Follow-up message';
+    const wahaResult = await sendWahaText(sessionName, sanitized, textToSend);
+    if (!wahaResult.success) {
+      throw new Error(`WhatsApp Web send failed: ${wahaResult.error}`);
+    }
+
+    await db.from('messages').insert({
+      conversation_id: input.conversationId,
+      sender_type: 'agent',
+      content_type: 'text',
+      content_text: textToSend,
+      message_id: wahaResult.messageId,
+      status: 'sent',
+      ai_generated: true,
+    });
+
+    await db
+      .from('conversations')
+      .update({
+        last_message_text: textToSend,
+        last_message_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', input.conversationId);
+
+    return { whatsapp_message_id: wahaResult.messageId! };
   }
 
   const accessToken = decrypt(config.access_token)

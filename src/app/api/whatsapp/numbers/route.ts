@@ -26,7 +26,7 @@ type PublicNumber = {
 } & Record<string, unknown>
 
 async function fillMissingDisplayNumbers(accountId: string, numbers: PublicNumber[]) {
-  const missing = numbers.filter((n) => !n.display_phone_number)
+  const missing = numbers.filter((n) => !n.display_phone_number && n.waba_id !== 'waha')
   if (missing.length === 0) return
 
   const admin = supabaseAdmin()

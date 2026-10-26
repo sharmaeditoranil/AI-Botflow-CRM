@@ -34,6 +34,7 @@ import {
   interactivePayloadPreviewText,
   type InteractiveMessagePayload,
 } from '@/lib/whatsapp/interactive';
+import { sendWahaText, sendWahaImage } from '@/lib/waha/client';
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import {
@@ -381,6 +382,61 @@ export async function sendMessageToConversation(
       'WhatsApp not configured. Please set up your WhatsApp integration first.',
       400
     );
+  }
+
+  // Handle WhatsApp Web (WAHA) connected numbers — no 24-hr restriction!
+  if (config.waba_id === 'waha') {
+    const sessionName = config.phone_number_id;
+    let wahaResult: { success: boolean; messageId?: string; error?: string };
+    if (isMediaKind && mediaUrl) {
+      wahaResult = await sendWahaImage(sessionName, sendTarget, mediaUrl, contentText || undefined);
+    } else {
+      wahaResult = await sendWahaText(sessionName, sendTarget, contentText || '');
+    }
+
+    if (!wahaResult.success) {
+      throw new SendMessageError(
+        'whatsapp_web_error',
+        wahaResult.error || 'Failed to send WhatsApp Web message',
+        500
+      );
+    }
+
+    const { data: savedMessage, error: insertError } = await db
+      .from('messages')
+      .insert({
+        conversation_id: conversationId,
+        sender_type: 'agent',
+        content_type: messageType,
+        content_text: contentText || (mediaUrl ? `Sent a ${messageType}` : null),
+        media_url: mediaUrl || null,
+        message_id: wahaResult.messageId,
+        status: 'sent',
+      })
+      .select('id')
+      .single();
+
+    if (insertError || !savedMessage) {
+      throw new SendMessageError(
+        'internal_error',
+        'Message delivered but failed to save in database',
+        500
+      );
+    }
+
+    await db
+      .from('conversations')
+      .update({
+        last_message_text: contentText || (mediaUrl ? `Sent a ${messageType}` : ''),
+        last_message_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', conversationId);
+
+    return {
+      messageId: savedMessage.id,
+      whatsappMessageId: wahaResult.messageId!,
+    };
   }
 
   const accessToken = decrypt(config.access_token);
