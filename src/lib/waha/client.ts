@@ -275,3 +275,28 @@ export async function resolveWahaPhoneNumber(
   return { phone: `+${fallback}` };
 }
 
+/**
+ * Fetch profile picture URL for a contact from WhatsApp Web (WAHA).
+ */
+export async function getWahaProfilePicture(
+  sessionName: string,
+  contactPhoneOrJid: string
+): Promise<string | null> {
+  try {
+    let contactId = contactPhoneOrJid;
+    if (!contactId.includes('@')) {
+      const clean = contactId.replace(/\D/g, '');
+      contactId = `${clean}@c.us`;
+    }
+    const res = await wahaFetch<{ profilePictureURL?: string | null }>(
+      `/api/contacts/profile-picture?session=${encodeURIComponent(sessionName)}&contactId=${encodeURIComponent(contactId)}`
+    );
+    if (res.ok && res.data?.profilePictureURL) {
+      return res.data.profilePictureURL;
+    }
+  } catch (err) {
+    console.warn('[getWahaProfilePicture] error:', err);
+  }
+  return null;
+}
+

@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/automations/admin-client';
 import { findOrCreateNumberConversation } from '@/lib/conversations/number-conversation';
 import { findExistingContact } from '@/lib/contacts/dedupe';
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply';
-import { resolveWahaPhoneNumber } from '@/lib/waha/client';
+import { resolveWahaPhoneNumber, getWahaProfilePicture } from '@/lib/waha/client';
 
 // Simple in-memory dedup cache for rapidly repeating webhook delivery
 const seenMessages = new Map<string, number>();
@@ -160,6 +160,12 @@ export async function POST(request: Request) {
       if (!contact && !isFromMe) {
         const pushName = payload?._data?.notifyName || payload?.pushname || resolvedName || null;
         const displayName = pushName || formattedPhone;
+        let avatarUrl: string | null = null;
+        try {
+          avatarUrl = await getWahaProfilePicture(session, targetJid || formattedPhone);
+        } catch {
+          // best-effort
+        }
 
         const { data: newContact, error: contactErr } = await db
           .from('contacts')
@@ -168,6 +174,7 @@ export async function POST(request: Request) {
             user_id: configOwnerUserId,
             phone: formattedPhone,
             name: displayName,
+            avatar_url: avatarUrl,
           })
           .select()
           .maybeSingle();
@@ -182,6 +189,19 @@ export async function POST(request: Request) {
 
       if (!contact) {
         return NextResponse.json({ status: 'no_contact' });
+      }
+
+      // If contact doesn't have an avatar yet or has placeholder, try fetching DP in background
+      if (!contact.avatar_url && !isFromMe) {
+        try {
+          const profilePic = await getWahaProfilePicture(session, targetJid || formattedPhone);
+          if (profilePic) {
+            await db.from('contacts').update({ avatar_url: profilePic }).eq('id', contact.id);
+            contact.avatar_url = profilePic;
+          }
+        } catch {
+          // silent
+        }
       }
 
       // If contact name was just a raw phone number but we now have a pushName, update it

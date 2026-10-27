@@ -980,8 +980,16 @@ export function MessageThread({
             title="View contact details, tags, automations & notes"
             aria-label="View contact details"
           >
-            <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[#128c7e] text-sm font-bold text-white shadow-xs group-hover:ring-2 group-hover:ring-primary/40 transition-all">
-              {displayName.charAt(0).toUpperCase()}
+            <div className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[#128c7e] text-sm font-bold text-white shadow-xs group-hover:ring-2 group-hover:ring-primary/40 transition-all overflow-hidden">
+              {effectiveContact?.avatar_url ? (
+                <img
+                  src={effectiveContact.avatar_url}
+                  alt={displayName}
+                  className="h-10 w-10 rounded-full object-cover"
+                />
+              ) : (
+                displayName.charAt(0).toUpperCase()
+              )}
               <span
                 className={cn(
                   "absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full ring-2 ring-card shadow-xs text-white",
