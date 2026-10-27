@@ -101,6 +101,17 @@ export async function POST(request: Request) {
 
       // Extract and resolve customer phone (handles multi-device LIDs properly)
       const targetJid = isFromMe ? rawTo : rawFrom;
+
+      // Ignore WhatsApp status updates / stories broadcasts
+      if (
+        rawFrom.includes('status@broadcast') ||
+        rawTo.includes('status@broadcast') ||
+        targetJid.includes('status@broadcast') ||
+        targetJid.includes('@broadcast')
+      ) {
+        return NextResponse.json({ status: 'ignored_status_broadcast' });
+      }
+
       const { phone: formattedPhone, name: resolvedName } = await resolveWahaPhoneNumber(
         session,
         targetJid,
@@ -113,7 +124,32 @@ export async function POST(request: Request) {
         return NextResponse.json({ status: 'skipped_group_or_invalid' });
       }
 
-      const contentText = payload?.body || (payload?.hasMedia ? '[Media]' : '');
+      const hasMedia = Boolean(payload?.hasMedia);
+      const rawMediaUrl = payload?.media?.url || payload?.mediaUrl || null;
+      let mediaUrl: string | null = null;
+
+      if (rawMediaUrl) {
+        // Parse filename from URL e.g. http://localhost:3000/api/files/web_a2e4e3a8aec0/filename.jpeg
+        const parts = rawMediaUrl.split('/');
+        const filename = parts[parts.length - 1];
+        if (filename) {
+          mediaUrl = `/api/waha/media/${encodeURIComponent(session)}/${encodeURIComponent(filename)}`;
+        } else {
+          mediaUrl = rawMediaUrl;
+        }
+      }
+
+      // Determine content type
+      let contentType = 'text';
+      const mimetype = payload?.media?.mimetype || '';
+      if (hasMedia) {
+        if (mimetype.startsWith('video/')) contentType = 'video';
+        else if (mimetype.startsWith('audio/')) contentType = 'audio';
+        else if (mimetype.startsWith('application/') || mimetype.startsWith('text/')) contentType = 'document';
+        else contentType = 'image';
+      }
+
+      const contentText = payload?.body || (hasMedia ? (contentType === 'image' ? '[Photo]' : `[${contentType.charAt(0).toUpperCase() + contentType.slice(1)}]`) : '');
       const createdAtIso = payload?.timestamp
         ? new Date(payload.timestamp * 1000).toISOString()
         : new Date().toISOString();
@@ -173,9 +209,6 @@ export async function POST(request: Request) {
       if (!conversation) {
         return NextResponse.json({ status: 'no_conversation' });
       }
-
-      const mediaUrl = payload?.mediaUrl || null;
-      const contentType = payload?.hasMedia ? 'image' : 'text';
 
       // Insert message into messages table (valid sender_types: 'customer', 'agent', 'bot')
       const { error: msgErr } = await db
