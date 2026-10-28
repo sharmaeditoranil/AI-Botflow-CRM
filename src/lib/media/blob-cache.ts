@@ -23,8 +23,13 @@
  * object URL keeps its blob's data alive by itself.
  */
 
-/** Prefix of the auth-gated proxy — these need a credentialed fetch. */
-const PROXY_PREFIX = "/api/whatsapp/media/";
+/** Prefixes of auth/internal proxies — these need a credentialed/local fetch. */
+const PROXY_PREFIXES = ["/api/whatsapp/media/", "/api/waha/media/"];
+
+/** True for inbound media that has to be pulled through our proxy. */
+export function isProxiedMediaUrl(url: string): boolean {
+  return PROXY_PREFIXES.some((prefix) => url.startsWith(prefix));
+}
 
 /**
  * How many blobs to hold. Worst case is a thread that's nothing but
@@ -61,10 +66,6 @@ export class MediaResponseError extends Error {
   }
 }
 
-/** True for inbound media that has to be pulled through our proxy. */
-export function isProxiedMediaUrl(url: string): boolean {
-  return url.startsWith(PROXY_PREFIX);
-}
 
 function remember(url: string, blob: Blob): void {
   cache.set(url, blob);

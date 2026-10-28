@@ -32,6 +32,7 @@ beforeEach(() => {
 describe("isProxiedMediaUrl", () => {
   it("recognises inbound media, not bucket URLs", () => {
     expect(isProxiedMediaUrl(`${PROXY}123`)).toBe(true);
+    expect(isProxiedMediaUrl("/api/waha/media/session123/file.jpeg")).toBe(true);
     expect(isProxiedMediaUrl(BUCKET)).toBe(false);
   });
 });
