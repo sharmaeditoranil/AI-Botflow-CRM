@@ -4,6 +4,7 @@ import { findOrCreateNumberConversation } from '@/lib/conversations/number-conve
 import { findExistingContact } from '@/lib/contacts/dedupe';
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply';
 import { resolveWahaPhoneNumber, getWahaProfilePicture } from '@/lib/waha/client';
+import { mirrorWahaInboundMedia } from '@/lib/waha/mirror-media';
 
 // Simple in-memory dedup cache for rapidly repeating webhook delivery
 const seenMessages = new Map<string, number>();
@@ -133,7 +134,14 @@ export async function POST(request: Request) {
         const parts = rawMediaUrl.split('/');
         const filename = parts[parts.length - 1];
         if (filename) {
-          mediaUrl = `/api/waha/media/${encodeURIComponent(session)}/${encodeURIComponent(filename)}`;
+          const fallbackUrl = `/api/waha/media/${encodeURIComponent(session)}/${encodeURIComponent(filename)}`;
+          const mirroredUrl = await mirrorWahaInboundMedia({
+            accountId,
+            session,
+            filename,
+            mimeType: payload?.media?.mimetype,
+          });
+          mediaUrl = mirroredUrl || fallbackUrl;
         } else {
           mediaUrl = rawMediaUrl;
         }
