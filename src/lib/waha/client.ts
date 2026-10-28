@@ -21,6 +21,164 @@ export function getWahaConfig() {
   return { baseUrl, apiKey };
 }
 
+/**
+ * Returns the public webhook URL for WAHA to deliver message and status updates.
+ */
+export function getWahaWebhookUrl(): string {
+  if (process.env.WAHA_WEBHOOK_URL) {
+    return process.env.WAHA_WEBHOOK_URL;
+  }
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://dash.aibotflow.in';
+  return `${siteUrl.replace(/\/+$/, '')}/api/waha/webhook`;
+}
+
+/**
+ * Safely extracts a clean string message ID from any WAHA message or ack payload.
+ * Supports flat strings, WEBJS { id: { _serialized, id } }, NOWEB / Baileys { key: { id } },
+ * and nested _data structures.
+ */
+export function extractWahaMessageId(data: any): string | null {
+  if (!data) return null;
+  if (typeof data === 'string' && data.trim()) return data.trim();
+
+  // If data itself has _serialized
+  if (typeof data._serialized === 'string' && data._serialized) {
+    return data._serialized;
+  }
+
+  // WEBJS format: { id: { _serialized: "true_..._3EB...", id: "3EB..." } }
+  if (data.id) {
+    if (typeof data.id === 'string' && data.id.trim()) {
+      return data.id.trim();
+    }
+    if (typeof data.id === 'object') {
+      if (typeof data.id._serialized === 'string' && data.id._serialized) {
+        return data.id._serialized;
+      }
+      if (typeof data.id.id === 'string' && data.id.id) {
+        return data.id.id;
+      }
+    }
+  }
+
+  // Baileys / NOWEB key format: { key: { id: "3EB...", remoteJid: "..." } }
+  if (data.key && typeof data.key === 'object') {
+    if (typeof data.key.id === 'string' && data.key.id) {
+      return data.key.id;
+    }
+  }
+
+  // Nested in _data:
+  if (data._data) {
+    if (typeof data._data === 'string' && data._data.trim()) return data._data.trim();
+    if (typeof data._data.id === 'string' && data._data.id) return data._data.id;
+    if (typeof data._data.id?._serialized === 'string') return data._data.id._serialized;
+    if (typeof data._data.id?.id === 'string') return data._data.id.id;
+    if (typeof data._data.key?.id === 'string') return data._data.key.id;
+  }
+
+  return null;
+}
+
+/**
+ * Maps a WAHA / WhatsApp ack code or string to our internal message status.
+ *
+ * WhatsApp ACK codes:
+ *  -1 / ERROR: failed
+ *   0 / PENDING: sending
+ *   1 / SERVER: sent (single check)
+ *   2 / DEVICE: delivered (double check)
+ *   3 / READ: read (blue double check)
+ *   4 / PLAYED: read (blue double check for audio/media)
+ */
+export function mapWahaAckToStatus(
+  ack: number | string | null | undefined,
+  ackName?: string | null
+): 'sending' | 'sent' | 'delivered' | 'read' | 'failed' | null {
+  const name = String(ackName || ack || '').toUpperCase().trim();
+  const num = typeof ack === 'number' ? ack : parseInt(String(ack), 10);
+
+  if (name === 'READ' || name === 'PLAYED' || num === 3 || num === 4) {
+    return 'read';
+  }
+  if (name === 'DEVICE' || num === 2) {
+    return 'delivered';
+  }
+  if (name === 'SERVER' || num === 1) {
+    return 'sent';
+  }
+  if (name === 'ERROR' || name === 'FAILED' || num === -1) {
+    return 'failed';
+  }
+  if (name === 'PENDING' || num === 0) {
+    return 'sending';
+  }
+  return null;
+}
+
+export const WAHA_STATUS_PRIORITY: Record<string, number> = {
+  sending: 0,
+  sent: 1,
+  delivered: 2,
+  read: 3,
+};
+
+/**
+ * Searches the Supabase messages table for a message matching a WAHA ID.
+ * Handles both composite serialized IDs (true_..._3EB...) and short stanza IDs (3EB...).
+ */
+export async function findMessageByWahaId(db: any, rawId: string) {
+  if (!rawId) return null;
+
+  // 1. Exact match
+  const { data: exact } = await db
+    .from('messages')
+    .select('id, status, conversation_id, message_id')
+    .eq('message_id', rawId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (exact) return exact;
+
+  // 2. If rawId is composite (contains '_'), extract stanza ID and try exact match
+  const lastUnderscore = rawId.lastIndexOf('_');
+  if (lastUnderscore !== -1) {
+    const stanzaId = rawId.slice(lastUnderscore + 1);
+    if (stanzaId && stanzaId.length >= 6) {
+      const { data: byStanza } = await db
+        .from('messages')
+        .select('id, status, conversation_id, message_id')
+        .eq('message_id', stanzaId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (byStanza) return byStanza;
+
+      const { data: byEnding } = await db
+        .from('messages')
+        .select('id, status, conversation_id, message_id')
+        .ilike('message_id', `%_${stanzaId}`)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (byEnding) return byEnding;
+    }
+  } else if (rawId.length >= 6) {
+    // 3. rawId is a short stanza ID (e.g. 3EB...), check if stored message_id ends with `_${rawId}`
+    const { data: byEnding } = await db
+      .from('messages')
+      .select('id, status, conversation_id, message_id')
+      .ilike('message_id', `%_${rawId}`)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (byEnding) return byEnding;
+  }
+
+  return null;
+}
+
 async function wahaFetch<T = any>(
   path: string,
   options: RequestInit = {}
@@ -76,6 +234,19 @@ async function wahaFetch<T = any>(
  * Get or create a session for an account.
  */
 export async function getOrCreateWahaSession(sessionName: string): Promise<WahaSession | null> {
+  const webhookUrl = getWahaWebhookUrl();
+  const sessionConfig = {
+    webhooks: [
+      {
+        url: webhookUrl,
+        events: ['message', 'message.any', 'message.ack', 'message.ack.group', 'session.status'],
+      },
+    ],
+    noweb: {
+      store: { enabled: true },
+    },
+  };
+
   const getRes = await wahaFetch<WahaSession>(`/api/sessions/${sessionName}`);
   if (getRes.ok && getRes.data) {
     if (getRes.data.status === 'STOPPED') {
@@ -90,11 +261,7 @@ export async function getOrCreateWahaSession(sessionName: string): Promise<WahaS
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       name: sessionName,
-      config: {
-        noweb: {
-          store: { enabled: true },
-        },
-      },
+      config: sessionConfig,
     }),
   });
 
@@ -109,6 +276,35 @@ export async function getOrCreateWahaSession(sessionName: string): Promise<WahaS
   await wahaFetch(`/api/sessions/${sessionName}/start`, { method: 'POST' });
   const started = await wahaFetch<WahaSession>(`/api/sessions/${sessionName}`);
   return started.data;
+}
+
+/**
+ * Ensures existing WAHA session is subscribed to message & ack webhooks.
+ * Safe non-blocking call.
+ */
+export async function syncWahaSessionWebhooks(sessionName: string): Promise<boolean> {
+  const webhookUrl = getWahaWebhookUrl();
+  try {
+    const res = await wahaFetch(`/api/sessions/${sessionName}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: sessionName,
+        config: {
+          webhooks: [
+            {
+              url: webhookUrl,
+              events: ['message', 'message.any', 'message.ack', 'message.ack.group', 'session.status'],
+            },
+          ],
+        },
+      }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn('[syncWahaSessionWebhooks] notice:', err);
+    return false;
+  }
 }
 
 /**
@@ -172,7 +368,8 @@ export async function sendWahaText(
     return { success: false, error: res.error || 'Failed to send WhatsApp Web message' };
   }
 
-  const id = res.data?.id || `waha_${Date.now()}`;
+  const extractedId = extractWahaMessageId(res.data);
+  const id = extractedId || `waha_${Date.now()}`;
   return { success: true, messageId: id };
 }
 
@@ -202,7 +399,8 @@ export async function sendWahaImage(
     return { success: false, error: res.error || 'Failed to send WhatsApp Web media' };
   }
 
-  const id = res.data?.id || `waha_${Date.now()}`;
+  const extractedId = extractWahaMessageId(res.data);
+  const id = extractedId || `waha_${Date.now()}`;
   return { success: true, messageId: id };
 }
 

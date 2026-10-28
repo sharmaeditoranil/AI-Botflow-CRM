@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/automations/admin-client';
 import { findOrCreateNumberConversation } from '@/lib/conversations/number-conversation';
 import { findExistingContact } from '@/lib/contacts/dedupe';
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply';
-import { resolveWahaPhoneNumber, getWahaProfilePicture } from '@/lib/waha/client';
+import { resolveWahaPhoneNumber, getWahaProfilePicture, extractWahaMessageId, mapWahaAckToStatus, findMessageByWahaId, WAHA_STATUS_PRIORITY } from '@/lib/waha/client';
 import { mirrorWahaInboundMedia } from '@/lib/waha/mirror-media';
 
 // Simple in-memory dedup cache for rapidly repeating webhook delivery
@@ -73,7 +73,8 @@ export async function POST(request: Request) {
 
     // 2. Handle incoming and outgoing message events
     if (event === 'message' || event === 'message.any') {
-      const messageId = payload?.id || `waha_${Date.now()}`;
+      const extractedId = extractWahaMessageId(payload);
+      const messageId = extractedId || payload?.id || `waha_${Date.now()}`;
 
       // Avoid double-processing since WAHA sends both 'message' and 'message.any'
       if (isDuplicate(messageId)) {
@@ -280,6 +281,94 @@ export async function POST(request: Request) {
       }
 
       return NextResponse.json({ status: 'ok', messageId });
+    }
+
+    // 3. Handle message acknowledgment (ack) events: sent (1 check), delivered (2 check), read (blue check)
+    if (event === 'message.ack' || event === 'message.ack.group' || event === 'message.status') {
+      const rawAck = payload?.ack ?? payload?._data?.ack;
+      const rawAckName = payload?.ackName ?? payload?._data?.ackName;
+      const rawId = extractWahaMessageId(payload);
+
+      if (!rawId) {
+        return NextResponse.json({ status: 'ignored_missing_ack_id' });
+      }
+
+      const newStatus = mapWahaAckToStatus(rawAck, rawAckName);
+      if (!newStatus) {
+        return NextResponse.json({
+          status: 'ignored_unknown_ack',
+          ack: rawAck,
+          ackName: rawAckName,
+        });
+      }
+
+      // Find the message in the database using flexible ID matching
+      let messageRow = await findMessageByWahaId(db, rawId);
+      if (!messageRow) {
+        // Brief retry after 500ms in case message insert is finishing in flight
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        messageRow = await findMessageByWahaId(db, rawId);
+      }
+
+      if (!messageRow) {
+        return NextResponse.json({ status: 'message_not_found', rawId });
+      }
+
+      const currentPriority = WAHA_STATUS_PRIORITY[messageRow.status] ?? -1;
+      const newPriority = WAHA_STATUS_PRIORITY[newStatus] ?? -1;
+
+      // Don't downgrade status (e.g. read -> delivered, or delivered -> sent) unless it's a failure
+      if (newStatus !== 'failed' && newPriority <= currentPriority) {
+        return NextResponse.json({
+          status: 'status_already_advanced',
+          current: messageRow.status,
+          attempted: newStatus,
+          messageId: messageRow.id,
+        });
+      }
+
+      const updateData: Record<string, any> = {
+        status: newStatus,
+      };
+
+      if (newStatus === 'failed') {
+        updateData.error_title = 'WhatsApp Web Delivery Failed';
+        updateData.error_details =
+          payload?.error || payload?._data?.error || 'Message delivery failed';
+      }
+
+      const { error: updateErr } = await db
+        .from('messages')
+        .update(updateData)
+        .eq('id', messageRow.id);
+
+      if (updateErr) {
+        console.error('[waha-webhook] Failed to update message status:', updateErr.message);
+        return NextResponse.json({ error: updateErr.message }, { status: 500 });
+      }
+
+      // Also mirror onto broadcast_recipients if this was part of a broadcast
+      if (messageRow.message_id) {
+        const { data: recipient } = await db
+          .from('broadcast_recipients')
+          .select('id, status')
+          .eq('whatsapp_message_id', messageRow.message_id)
+          .maybeSingle();
+
+        if (recipient) {
+          const recUpdate: Record<string, any> = { status: newStatus };
+          if (newStatus === 'delivered') recUpdate.delivered_at = new Date().toISOString();
+          if (newStatus === 'read') recUpdate.read_at = new Date().toISOString();
+          await db.from('broadcast_recipients').update(recUpdate).eq('id', recipient.id);
+        }
+      }
+
+      return NextResponse.json({
+        status: 'ok',
+        event: 'message.ack',
+        messageId: messageRow.id,
+        newStatus,
+      });
     }
 
     return NextResponse.json({ status: 'ignored_unhandled_event' });
