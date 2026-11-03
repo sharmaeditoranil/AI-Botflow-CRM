@@ -13,6 +13,12 @@ import { findAndMergeOrCreateDeal, findExistingDealsForCustomer } from '@/lib/pi
 import { ensureDefaultPipelineForAccount } from '@/lib/pipelines/default-pipeline';
 import { addContactTagAndDispatch } from '@/lib/contacts/tag-events';
 import { isSystemProtectedTag } from '@/lib/tags/system-tags';
+import {
+  acceptFollowupAt,
+  followupDateString,
+  formatFollowupMoment,
+  parseFollowupFromText,
+} from './followup-time';
 
 export interface OptOutCheckResult {
   optedOut: boolean;
@@ -317,6 +323,10 @@ async function ensureTagRemoved(
  * auto-assigns Interested / Not Interested tags, and guarantees exactly 1 Deal
  * per customer in the CRM Pipeline (updates existing deal instead of duplicating).
  */
+function appendLine(existing: string | null | undefined, line: string): string {
+  return existing?.trim() ? `${existing.trim()}\n${line}` : line;
+}
+
 export async function processFollowupIntelligence(args: {
   db: SupabaseClient;
   accountId: string;
@@ -441,6 +451,10 @@ export async function processFollowupIntelligence(args: {
   let tagToApply: string | null = null;
   let tagToRemove: string | null = null;
   let summary = `Inquiry: "${text.slice(0, 100)}"`;
+  // When the customer asked to be contacted ("kal 5 baje", "Monday ko").
+  let followupAt: Date | null = null;
+  let followupReason: string | null = null;
+  const analysisNow = new Date();
 
   try {
     const historySnippet = (recentMsgs || [])
@@ -456,6 +470,7 @@ ${historySnippet || 'None'}
 
 CURRENT INCOMING CUSTOMER MESSAGE: "${text}"
 AVAILABLE TAGS IN CRM: [${tagList}]
+CURRENT DATE & TIME (India, IST): ${formatFollowupMoment(analysisNow)} — ${new Date(analysisNow.getTime() + 330 * 60_000).toISOString().slice(0, 16)}+05:30
 
 ANALYSIS RULES:
 1. "Interested":
@@ -474,13 +489,22 @@ ANALYSIS RULES:
    - Casual greeting without buying intent (e.g. "hi", "hello", "good morning") or random irrelevant questions.
    -> Set: is_interested = false, sentiment = "neutral", tag_to_apply = null, tag_to_remove = null.
 
+4. "Follow-up time":
+   - If the customer says WHEN to contact them or when they will decide/pay/visit/reply (e.g. "kal shaam 5 baje call karna", "Monday ko batata hoon", "10 tarikh ko payment karunga", "2 din baad message karo", "next week", "tomorrow 11 am"), resolve it against CURRENT DATE & TIME and set followup_at to that moment as ISO 8601 with +05:30.
+   - Only a day given -> 10:00 that day. Only a time given -> its next occurrence. "next week" -> next Monday 10:00.
+   - "kal" about the PAST ("kal order kiya tha") is yesterday -> NOT a follow-up time.
+   - No time/date mentioned, or the customer refused -> followup_at = null.
+   - followup_reason: short note of what was promised (e.g. "Customer will confirm payment"), else null.
+
 Return ONLY raw valid JSON:
 {
   "is_interested": boolean,
   "sentiment": "interested" | "not_interested" | "neutral",
   "tag_to_apply": "Interested" | "Not Interested" | null,
   "tag_to_remove": "Interested" | "Not Interested" | null,
-  "summary": "1 sentence explanation in Hinglish/English"
+  "summary": "1 sentence explanation in Hinglish/English",
+  "followup_at": "2026-01-31T17:00:00+05:30" | null,
+  "followup_reason": string | null
 }`;
 
     const rawAi = await generateWithAdminAi(prompt, {
@@ -496,8 +520,13 @@ Return ONLY raw valid JSON:
     if (parsed.tag_to_apply) tagToApply = parsed.tag_to_apply;
     if (parsed.tag_to_remove) tagToRemove = parsed.tag_to_remove;
     if (parsed.summary) summary = parsed.summary;
+    followupAt = acceptFollowupAt(parsed.followup_at, analysisNow);
+    if (followupAt && typeof parsed.followup_reason === 'string' && parsed.followup_reason.trim()) {
+      followupReason = parsed.followup_reason.trim().slice(0, 200);
+    }
   } catch (aiErr) {
     console.warn('[ai-intelligence] Admin AI qualification notice, using rule fallback:', aiErr);
+    followupAt = parseFollowupFromText(text, analysisNow);
     const lastMsgFromBot = recentMsgs && recentMsgs.length > 0 && recentMsgs[0].sender_type === 'bot';
 
     if (AFFIRMATIVE_INTEREST_REGEX.test(text) && lastMsgFromBot) {
@@ -555,9 +584,24 @@ Return ONLY raw valid JSON:
     }
   }
 
+  // A refusal cancels any time the customer mentioned.
+  if (sentiment === 'not_interested') followupAt = null;
+
   // 7. Deal Management (Controlled by dealsEnabled toggle, Guaranteed Single Deal per Customer)
   if (dealsEnabled) {
     const todayStr = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+
+    // The customer named a moment → follow up exactly then (058).
+    const followupNote = followupAt
+      ? `[AI Follow-up ${formatFollowupMoment(followupAt)}]: ${followupReason || `Customer said: "${text.slice(0, 120)}"`}`
+      : null;
+    const followupPatch = followupAt
+      ? {
+          ai_followup_at: followupAt.toISOString(),
+          expected_close_date: followupDateString(followupAt),
+          ai_followup_enabled: true,
+        }
+      : null;
 
     if (existingDeal) {
       // 1-Customer 1-Deal Guarantee: Update existing deal, never create a duplicate!
@@ -568,8 +612,23 @@ Return ONLY raw valid JSON:
         await db
           .from('deals')
           .update({
-            notes: updatedNotes,
+            notes: followupNote ? `${updatedNotes}\n${followupNote}` : updatedNotes,
             conversation_id: conversationId,
+            ...followupPatch,
+            ...(followupNote
+              ? { followup_instructions: appendLine(existingDeal.followup_instructions, followupNote) }
+              : {}),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingDeal.id);
+      } else if (followupPatch && followupNote) {
+        await db
+          .from('deals')
+          .update({
+            notes: appendLine(existingDeal.notes, followupNote),
+            conversation_id: conversationId,
+            ...followupPatch,
+            followup_instructions: appendLine(existingDeal.followup_instructions, followupNote),
             updated_at: new Date().toISOString(),
           })
           .eq('id', existingDeal.id);
@@ -586,8 +645,9 @@ Return ONLY raw valid JSON:
           .eq('id', existingDeal.id);
       }
     } else {
-      // No existing deal exists. ONLY create a deal if customer is genuinely interested!
-      if (isInterested) {
+      // No existing deal exists. ONLY create a deal if customer is genuinely interested
+      // (or asked to be contacted at a set time).
+      if (isInterested || followupAt) {
         const pipeResult = await ensureDefaultPipelineForAccount(db, accountId, configOwnerUserId);
 
         if (pipeResult) {
@@ -607,9 +667,11 @@ Return ONLY raw valid JSON:
             value: 0,
             currency: 'INR',
             status: 'open',
-            expected_close_date: followUpDate.toISOString().split('T')[0],
-            notes: `[AI Qualified Lead]: ${summary}`,
+            expected_close_date: followupPatch?.expected_close_date ?? followUpDate.toISOString().split('T')[0],
+            notes: followupNote ? `[AI Qualified Lead]: ${summary}\n${followupNote}` : `[AI Qualified Lead]: ${summary}`,
             ai_followup_enabled: true,
+            ai_followup_at: followupPatch?.ai_followup_at ?? null,
+            followup_instructions: followupNote,
           });
         }
       }

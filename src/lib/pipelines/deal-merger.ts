@@ -16,6 +16,8 @@ export interface MergeDealInput {
   conversation_id?: string | null;
   ai_followup_enabled?: boolean;
   followup_instructions?: string | null;
+  /** Exact follow-up moment the customer asked for (migration 058). */
+  ai_followup_at?: string | null;
   status?: DealStatus;
 }
 
@@ -242,6 +244,9 @@ export async function findAndMergeOrCreateDeal(
     if (mergedInstructions) {
       updatedPayload.followup_instructions = mergedInstructions;
     }
+    if (input.ai_followup_at) {
+      updatedPayload.ai_followup_at = input.ai_followup_at;
+    }
 
     const { data: updatedDeal, error: updateErr } = await db
       .from("deals")
@@ -263,7 +268,7 @@ export async function findAndMergeOrCreateDeal(
   }
 
   // No existing deal exists for this contact/phone -> insert brand new deal
-  const insertPayload = {
+  const insertPayload: Record<string, unknown> = {
     account_id: input.account_id,
     user_id: input.user_id,
     pipeline_id: input.pipeline_id,
@@ -282,6 +287,7 @@ export async function findAndMergeOrCreateDeal(
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
+  if (input.ai_followup_at) insertPayload.ai_followup_at = input.ai_followup_at;
 
   const { data: newDeal, error: insertErr } = await db
     .from("deals")

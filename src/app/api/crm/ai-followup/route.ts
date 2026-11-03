@@ -6,6 +6,7 @@ import { generateWithAdminAi } from '@/lib/ai/admin-ai';
 import { buildConversationContext } from '@/lib/ai/context';
 import { detectScript, LANGUAGE_MIRROR_RULE } from '@/lib/ai/language';
 import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account';
+import { followupDateString, formatFollowupMoment } from '@/lib/ai/followup-time';
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,7 +39,9 @@ export async function POST(req: NextRequest) {
     const { dealId } = body;
 
     const adminDb = supabaseAdmin();
-    const todayStr = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    // Deal dates are IST calendar days, not UTC ones.
+    const todayStr = followupDateString(now);
 
     let query = adminDb
       .from('deals')
@@ -50,6 +53,7 @@ export async function POST(req: NextRequest) {
         value,
         notes,
         expected_close_date,
+        ai_followup_at,
         ai_followup_enabled,
         followup_instructions,
         conversation_id,
@@ -65,10 +69,14 @@ export async function POST(req: NextRequest) {
     if (dealId) {
       query = query.eq('id', dealId);
     } else {
-      // Automatic runner: deals with AI follow-up enabled, scheduled for today or overdue
+      // Automatic runner: deals with AI follow-up enabled that are due — at
+      // the exact moment the customer asked for (ai_followup_at, 058), else
+      // on/after their follow-up day.
       query = query
         .eq('ai_followup_enabled', true)
-        .lte('expected_close_date', todayStr);
+        .or(
+          `ai_followup_at.lte."${now.toISOString()}",and(ai_followup_at.is.null,expected_close_date.lte.${todayStr})`,
+        );
     }
 
     const { data: deals, error } = await query.limit(25);
@@ -130,7 +138,7 @@ Lead Title: ${deal.title}
 Context: ${memory || 'General inquiry'}
 Deal Value: ₹${deal.value || 0}
 Special Instruction: ${instructions || 'Follow up politely and ask if they need assistance or want to proceed'}
-
+${deal.ai_followup_at ? `Timing: the customer asked to be contacted at ${formatFollowupMoment(new Date(deal.ai_followup_at))} (now). Refer naturally to what they said they would do then.\n` : ''}
 Recent conversation (oldest first):
 ${transcript || '(no messages yet)'}
 
@@ -197,9 +205,7 @@ Keep it concise (2-3 sentences max), warm, professional, with appropriate emojis
       }
 
       // Roll next follow-up date by 3 days so agent / AI doesn't spam customer
-      const nextDate = new Date();
-      nextDate.setDate(nextDate.getDate() + 3);
-      const nextDateStr = nextDate.toISOString().split('T')[0];
+      const nextDateStr = followupDateString(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000));
 
       const noteEntry = `\n[🤖 AI Follow-up sent on ${new Date().toLocaleDateString('en-IN')}]: "${followUpText}"`;
       const updatedNotes = (deal.notes || '') + noteEntry;
@@ -209,6 +215,8 @@ Keep it concise (2-3 sentences max), warm, professional, with appropriate emojis
         .update({
           notes: updatedNotes,
           expected_close_date: nextDateStr,
+          // The customer's requested moment has been honoured.
+          ai_followup_at: null,
         })
         .eq('id', deal.id);
 
