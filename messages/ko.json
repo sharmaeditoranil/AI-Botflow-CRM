@@ -690,7 +690,7 @@
       "received": "받은 금액",
       "due": "미수금",
       "progress": "{percent}% 결제됨",
-      "setValueHint": "위에서 딜 금액을 입력하면 남은 금액을 확인할 수 있습니다.",
+      "setValueHint": "총액(고객이 내야 할 금액)을 설정하면 미수금이 자동으로 계산됩니다.",
       "extraHint": "딜 금액보다 {amount} 더 받았습니다.",
       "amount": "금액",
       "date": "결제일",
@@ -708,7 +708,7 @@
       "saved": "{amount} 결제가 기록되었습니다",
       "cardDue": "미수 {amount}",
       "status": {
-        "none": "금액 없음",
+        "none": "총액 없음",
         "unpaid": "미결제",
         "partial": "부분 결제",
         "paid": "결제 완료",
@@ -721,7 +721,11 @@
         "card": "카드",
         "cheque": "수표",
         "other": "기타"
-      }
+      },
+      "setTotal": "총액 설정",
+      "editTotal": "총액 수정",
+      "totalSaved": "총액이 {amount}(으)로 설정되었습니다",
+      "totalSaveFailed": "총액을 저장하지 못했습니다"
     }
   },
   "Broadcasts": {

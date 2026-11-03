@@ -665,7 +665,7 @@
       "received": "Received",
       "due": "Due",
       "progress": "{percent}% paid",
-      "setValueHint": "Set the deal value above to track how much is still due.",
+      "setValueHint": "Set the total (how much the customer has to pay) — Due is worked out automatically.",
       "extraHint": "{amount} received beyond the deal value.",
       "amount": "Amount",
       "date": "Payment date",
@@ -683,7 +683,7 @@
       "saved": "Payment of {amount} recorded",
       "cardDue": "Due {amount}",
       "status": {
-        "none": "No value",
+        "none": "Total not set",
         "unpaid": "Unpaid",
         "partial": "Partly paid",
         "paid": "Paid",
@@ -696,7 +696,11 @@
         "card": "Card",
         "cheque": "Cheque",
         "other": "Other"
-      }
+      },
+      "setTotal": "Set total",
+      "editTotal": "Edit total amount",
+      "totalSaved": "Total set to {amount}",
+      "totalSaveFailed": "Could not save the total"
     }
   },
   "Broadcasts": {

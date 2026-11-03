@@ -35,7 +35,8 @@ export function summarizePayments(dealValue: number | null | undefined, received
   const due = Math.max(0, total - paid);
   const extra = Math.max(0, paid - total);
   let status: PaymentStatus;
-  if (total === 0) status = paid > 0 ? "overpaid" : "none";
+  // No total yet: nothing to compare against.
+  if (total === 0) status = "none";
   else if (paid === 0) status = "unpaid";
   else if (paid < total) status = "partial";
   else if (paid === total) status = "paid";

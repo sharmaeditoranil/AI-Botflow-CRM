@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { IndianRupee, Loader2, Plus, Trash2, Wallet, X } from "lucide-react";
+import { Check, IndianRupee, Loader2, Pencil, Plus, Trash2, Wallet, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/currency";
 import {
@@ -26,6 +26,8 @@ interface DealPaymentsProps {
   canEdit: boolean;
   /** Fired with the new received total after a payment is added/removed. */
   onChanged?: (received: number) => void;
+  /** The total (deal value) was set here — keeps the form's Value field in step. */
+  onTotalChange?: (total: number) => void;
 }
 
 const STATUS_STYLES = {
@@ -45,7 +47,7 @@ function localToday(): string {
  * Deal → Payments (migration 059): received vs due, a progress bar, the
  * payment history, and a one-line form to record a payment.
  */
-export function DealPayments({ dealId, dealValue, currency, canEdit, onChanged }: DealPaymentsProps) {
+export function DealPayments({ dealId, dealValue, currency, canEdit, onChanged, onTotalChange }: DealPaymentsProps) {
   const t = useTranslations("Pipelines.payments");
   const [payments, setPayments] = useState<DealPayment[]>([]);
   const [loading, setLoading] = useState(!!dealId);
@@ -57,6 +59,10 @@ export function DealPayments({ dealId, dealValue, currency, canEdit, onChanged }
   const [paidOn, setPaidOn] = useState(localToday);
   const [method, setMethod] = useState<PaymentMethod>("upi");
   const [note, setNote] = useState("");
+
+  const [editingTotal, setEditingTotal] = useState(false);
+  const [totalInput, setTotalInput] = useState("");
+  const [savingTotal, setSavingTotal] = useState(false);
 
   // Mounted per deal (keyed by id), so this loads once.
   useEffect(() => {
@@ -128,6 +134,32 @@ export function DealPayments({ dealId, dealValue, currency, canEdit, onChanged }
     resetForm();
   }
 
+  function startTotalEdit() {
+    setTotalInput(dealValue > 0 ? String(dealValue) : "");
+    setEditingTotal(true);
+  }
+
+  // Total = the deal's value; saved straight away so Due is right everywhere.
+  async function saveTotal() {
+    if (!dealId) return;
+    const value = totalInput.trim() === "" ? 0 : parseAmount(totalInput);
+    if (value === null) {
+      toast.error(t("invalidAmount"));
+      return;
+    }
+    setSavingTotal(true);
+    const { error } = await createClient().from("deals").update({ value }).eq("id", dealId);
+    setSavingTotal(false);
+    if (error) {
+      toast.error(t("totalSaveFailed"));
+      return;
+    }
+    onTotalChange?.(value);
+    onChanged?.(received);
+    setEditingTotal(false);
+    toast.success(t("totalSaved", { amount: money(value) }));
+  }
+
   async function removePayment(p: DealPayment) {
     if (!confirm(t("removeConfirm", { amount: money(p.amount) }))) return;
     setDeletingId(p.id);
@@ -170,9 +202,63 @@ export function DealPayments({ dealId, dealValue, currency, canEdit, onChanged }
         <>
           {/* Total / Received / Due */}
           <div className="grid grid-cols-3 gap-2">
-            <div className="rounded-lg bg-muted/50 p-2">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{t("total")}</p>
-              <p className="truncate text-sm font-bold text-foreground">{summary.total > 0 ? money(summary.total) : "—"}</p>
+            <div className={cn("rounded-lg p-2", editingTotal ? "bg-primary/10 ring-1 ring-primary/40" : "bg-muted/50")}>
+              <div className="flex items-center justify-between gap-1">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{t("total")}</p>
+                {canEdit && !editingTotal && (
+                  <button
+                    type="button"
+                    onClick={startTotalEdit}
+                    title={t("editTotal")}
+                    aria-label={t("editTotal")}
+                    className="text-muted-foreground transition-colors hover:text-primary cursor-pointer"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+              {editingTotal ? (
+                <div className="mt-0.5 flex items-center gap-1">
+                  <Input
+                    inputMode="decimal"
+                    autoFocus
+                    value={totalInput}
+                    onChange={(e) => setTotalInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void saveTotal();
+                      } else if (e.key === "Escape") {
+                        setEditingTotal(false);
+                      }
+                    }}
+                    placeholder="0"
+                    aria-label={t("total")}
+                    className="h-6 min-w-0 border-border bg-background px-1.5 text-xs text-foreground"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void saveTotal()}
+                    disabled={savingTotal}
+                    aria-label={t("save")}
+                    className="shrink-0 text-primary cursor-pointer"
+                  >
+                    {savingTotal ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+              ) : summary.total > 0 ? (
+                <p className="truncate text-sm font-bold text-foreground">{money(summary.total)}</p>
+              ) : canEdit ? (
+                <button
+                  type="button"
+                  onClick={startTotalEdit}
+                  className="text-xs font-semibold text-primary hover:underline cursor-pointer"
+                >
+                  + {t("setTotal")}
+                </button>
+              ) : (
+                <p className="text-sm font-bold text-foreground">—</p>
+              )}
             </div>
             <div className="rounded-lg bg-emerald-500/10 p-2">
               <p className="text-[10px] font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-400">

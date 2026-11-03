@@ -690,7 +690,7 @@
       "received": "Recibido",
       "due": "Pendiente",
       "progress": "{percent}% pagado",
-      "setValueHint": "Indica el valor del trato arriba para ver cuánto queda pendiente.",
+      "setValueHint": "Fija el total (lo que el cliente debe pagar) y el pendiente se calcula solo.",
       "extraHint": "{amount} recibido por encima del valor del trato.",
       "amount": "Importe",
       "date": "Fecha de pago",
@@ -708,7 +708,7 @@
       "saved": "Pago de {amount} registrado",
       "cardDue": "Pendiente {amount}",
       "status": {
-        "none": "Sin valor",
+        "none": "Sin total",
         "unpaid": "Sin pagar",
         "partial": "Pago parcial",
         "paid": "Pagado",
@@ -721,7 +721,11 @@
         "card": "Tarjeta",
         "cheque": "Cheque",
         "other": "Otro"
-      }
+      },
+      "setTotal": "Fijar total",
+      "editTotal": "Editar importe total",
+      "totalSaved": "Total fijado en {amount}",
+      "totalSaveFailed": "No se pudo guardar el total"
     }
   },
   "Broadcasts": {

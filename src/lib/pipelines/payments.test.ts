@@ -11,7 +11,7 @@ describe("summarizePayments", () => {
 
   it("deal without a value", () => {
     expect(summarizePayments(0, 0).status).toBe("none");
-    expect(summarizePayments(null, 500)).toMatchObject({ status: "overpaid", extra: 500 });
+    expect(summarizePayments(null, 500)).toMatchObject({ status: "none", received: 500 });
   });
 });
 

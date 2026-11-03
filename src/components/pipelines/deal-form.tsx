@@ -775,6 +775,7 @@ export function DealForm({
               currency={currency}
               canEdit={canSendMessages}
               onChanged={onSaved}
+              onTotalChange={(total) => setValue(total > 0 ? String(total) : "")}
             />
 
             {/* Structured Follow-ups & Notes History Timeline */}
