@@ -6,6 +6,7 @@ import {
   resolveTemplateRow,
   templateBodyParams,
   templateContentText,
+  templateAsPlainMessage,
 } from './template-body';
 import type { MessageTemplate } from '@/types';
 
@@ -202,5 +203,61 @@ describe('templateContentText', () => {
 
   it('is null when there is no local row to render from', () => {
     expect(templateContentText(null, ['A123'])).toBeNull();
+  });
+});
+
+describe('templateAsPlainMessage (WhatsApp Web sends)', () => {
+  const base = {
+    id: 't',
+    user_id: 'u',
+    name: 'live_reminder',
+    category: 'Utility',
+    status: 'Approved',
+    created_at: '',
+    updated_at: '',
+  } as unknown as MessageTemplate;
+
+  it('renders header, body with variables and footer', () => {
+    const row = {
+      ...base,
+      header_type: 'text',
+      header_content: 'Webinar Reminder',
+      body_text: 'Namaste {{1}}, class {{2}} baje shuru hogi.',
+      footer_text: 'Team Quick Art',
+    } as MessageTemplate;
+    expect(templateAsPlainMessage(row, ['Anil', '7'])).toEqual({
+      text: '*Webinar Reminder*\n\nNamaste Anil, class 7 baje shuru hogi.\n\n_Team Quick Art_',
+      imageUrl: null,
+    });
+  });
+
+  it('returns an image header separately so it can be sent with a caption', () => {
+    const row = {
+      ...base,
+      header_type: 'image',
+      header_media_url: 'https://cdn/template.jpg',
+      body_text: 'Live in 5 minutes!',
+    } as MessageTemplate;
+    expect(templateAsPlainMessage(row, [])).toEqual({
+      text: 'Live in 5 minutes!',
+      imageUrl: 'https://cdn/template.jpg',
+    });
+    // The step's own media URL wins over the template's stored one.
+    expect(templateAsPlainMessage(row, [], 'https://cdn/step.jpg').imageUrl).toBe('https://cdn/step.jpg');
+  });
+
+  it('lists URL and phone buttons as plain lines', () => {
+    const row = {
+      ...base,
+      body_text: 'Join now',
+      buttons: [
+        { type: 'URL', text: 'Join class', url: 'https://meet.example/x' },
+        { type: 'QUICK_REPLY', text: 'OK' },
+        { type: 'PHONE_NUMBER', text: 'Call us', phone_number: '+919999999999' },
+      ],
+    } as MessageTemplate;
+    expect(templateAsPlainMessage(row, []).text).toBe(
+      'Join now\n\n🔗 Join class: https://meet.example/x\n📞 Call us: +919999999999',
+    );
   });
 });

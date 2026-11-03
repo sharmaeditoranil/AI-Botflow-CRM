@@ -182,3 +182,37 @@ export function templateContentText(
   if (!row?.body_text) return null;
   return renderTemplateBody(row.body_text, params);
 }
+
+/**
+ * A Meta template rendered as an ordinary WhatsApp message, for numbers
+ * connected through WhatsApp Web (WAHA), which cannot send Meta template
+ * objects. Header → *bold* line, body with its variables filled in,
+ * footer → _italic_ line, URL / phone buttons as plain lines. An image
+ * header is returned separately so it can go out as an image with the
+ * text as its caption.
+ */
+export function templateAsPlainMessage(
+  row: MessageTemplate,
+  params: string[],
+  headerMediaUrl?: string | null
+): { text: string; imageUrl: string | null } {
+  const parts: string[] = [];
+  if (row.header_type === 'text' && row.header_content?.trim()) {
+    parts.push(`*${row.header_content.trim()}*`);
+  }
+  if (row.body_text) parts.push(renderTemplateBody(row.body_text, params));
+  if (row.footer_text?.trim()) parts.push(`_${row.footer_text.trim()}_`);
+  const lines = (row.buttons ?? [])
+    .map((b) =>
+      b.type === 'URL'
+        ? `🔗 ${b.text}: ${b.url}`
+        : b.type === 'PHONE_NUMBER'
+          ? `📞 ${b.text}: ${b.phone_number}`
+          : null
+    )
+    .filter((l): l is string => Boolean(l));
+  if (lines.length) parts.push(lines.join('\n'));
+  const imageUrl =
+    row.header_type === 'image' ? headerMediaUrl || row.header_media_url || null : null;
+  return { text: parts.join('\n\n').trim(), imageUrl };
+}

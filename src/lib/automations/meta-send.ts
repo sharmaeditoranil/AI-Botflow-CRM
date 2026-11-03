@@ -13,9 +13,10 @@ import { resolveContactSendTarget } from '@/lib/whatsapp/wa-identity'
 import { getWhatsAppNumberForConversation } from '@/lib/whatsapp/numbers'
 import {
   resolveTemplateRow,
+  templateAsPlainMessage,
   templateContentText,
 } from '@/lib/whatsapp/template-body'
-import { sendWahaText } from '@/lib/waha/client'
+import { sendWahaImage, sendWahaText } from '@/lib/waha/client'
 import { supabaseAdmin } from './admin-client'
 
 // ------------------------------------------------------------
@@ -156,8 +157,39 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
   // Handle WhatsApp Web (WAHA) connected numbers — no 24-hr restriction!
   if (config.waba_id === 'waha') {
     const sessionName = config.phone_number_id;
-    const textToSend = input.kind === 'text' ? input.text : 'Follow-up message';
-    const wahaResult = await sendWahaText(sessionName, sanitized, textToSend);
+
+    // WhatsApp Web can't send Meta template objects: send the template's
+    // own content (text with variables filled, image header as an image).
+    // Never fall back to placeholder text — a missing template fails the
+    // step so it shows in the automation log instead of reaching customers.
+    let textToSend: string;
+    let imageUrl: string | null = null;
+    if (input.kind === 'text') {
+      textToSend = input.text;
+    } else {
+      const { row } = await resolveTemplateRow(
+        db,
+        input.accountId,
+        input.templateName,
+        input.language,
+        config.waba_id,
+      );
+      if (!row) {
+        throw new Error(
+          `template "${input.templateName}" not found — sync templates before sending it over WhatsApp Web`,
+        );
+      }
+      const rendered = templateAsPlainMessage(row, input.params ?? [], input.headerMediaUrl);
+      if (!rendered.text && !rendered.imageUrl) {
+        throw new Error(`template "${input.templateName}" has no content to send`);
+      }
+      textToSend = rendered.text;
+      imageUrl = rendered.imageUrl;
+    }
+
+    const wahaResult = imageUrl
+      ? await sendWahaImage(sessionName, sanitized, imageUrl, textToSend || undefined)
+      : await sendWahaText(sessionName, sanitized, textToSend);
     if (!wahaResult.success) {
       throw new Error(`WhatsApp Web send failed: ${wahaResult.error}`);
     }
@@ -165,17 +197,20 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
     await db.from('messages').insert({
       conversation_id: input.conversationId,
       sender_type: 'agent',
-      content_type: 'text',
-      content_text: textToSend,
+      content_type: imageUrl ? 'image' : 'text',
+      content_text: textToSend || null,
+      media_url: imageUrl,
+      template_name: input.kind === 'template' ? input.templateName : null,
       message_id: wahaResult.messageId,
       status: 'sent',
-      ai_generated: true,
+      // Automation sends are scripted, not AI-written.
+      ai_generated: false,
     });
 
     await db
       .from('conversations')
       .update({
-        last_message_text: textToSend,
+        last_message_text: textToSend || (imageUrl ? 'Sent an image' : ''),
         last_message_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
