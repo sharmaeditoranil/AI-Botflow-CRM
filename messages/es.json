@@ -681,6 +681,47 @@
       "lostThisMonth": "Perdidos este mes",
       "lostThisMonthTooltip": "Negocios marcados como perdidos desde el primer día del mes actual.",
       "howCalculated": "Cómo se calcula {label}"
+    },
+    "payments": {
+      "title": "Pagos",
+      "add": "Añadir pago",
+      "saveFirst": "Guarda el trato primero y luego registra aquí los pagos recibidos.",
+      "total": "Total",
+      "received": "Recibido",
+      "due": "Pendiente",
+      "progress": "{percent}% pagado",
+      "setValueHint": "Indica el valor del trato arriba para ver cuánto queda pendiente.",
+      "extraHint": "{amount} recibido por encima del valor del trato.",
+      "amount": "Importe",
+      "date": "Fecha de pago",
+      "notePlaceholder": "Nota (opcional) — p. ej. referencia, anticipo",
+      "fillDue": "Todo lo pendiente: {amount}",
+      "cancel": "Cancelar",
+      "save": "Guardar pago",
+      "remove": "Eliminar pago",
+      "removeConfirm": "¿Eliminar este pago de {amount}?",
+      "empty": "Aún no hay pagos registrados.",
+      "invalidAmount": "Introduce un importe válido",
+      "saveFailed": "No se pudo guardar el pago",
+      "removeFailed": "No se pudo eliminar el pago",
+      "loadFailed": "No se pudieron cargar los pagos",
+      "saved": "Pago de {amount} registrado",
+      "cardDue": "Pendiente {amount}",
+      "status": {
+        "none": "Sin valor",
+        "unpaid": "Sin pagar",
+        "partial": "Pago parcial",
+        "paid": "Pagado",
+        "overpaid": "Pagado de más"
+      },
+      "method": {
+        "upi": "UPI",
+        "cash": "Efectivo",
+        "bank": "Banco",
+        "card": "Tarjeta",
+        "cheque": "Cheque",
+        "other": "Otro"
+      }
     }
   },
   "Broadcasts": {

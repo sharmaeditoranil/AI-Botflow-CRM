@@ -681,6 +681,47 @@
       "lostThisMonth": "이번 달 실패",
       "lostThisMonthTooltip": "이번 달 1일 이후 실패로 표시된 딜입니다.",
       "howCalculated": "{label} 계산 방법"
+    },
+    "payments": {
+      "title": "결제",
+      "add": "결제 추가",
+      "saveFirst": "먼저 딜을 저장한 뒤 받은 결제를 여기에 기록하세요.",
+      "total": "총액",
+      "received": "받은 금액",
+      "due": "미수금",
+      "progress": "{percent}% 결제됨",
+      "setValueHint": "위에서 딜 금액을 입력하면 남은 금액을 확인할 수 있습니다.",
+      "extraHint": "딜 금액보다 {amount} 더 받았습니다.",
+      "amount": "금액",
+      "date": "결제일",
+      "notePlaceholder": "메모 (선택) — 예: 거래 번호, 선금",
+      "fillDue": "전체 미수금: {amount}",
+      "cancel": "취소",
+      "save": "결제 저장",
+      "remove": "결제 삭제",
+      "removeConfirm": "{amount} 결제를 삭제할까요?",
+      "empty": "아직 기록된 결제가 없습니다.",
+      "invalidAmount": "올바른 금액을 입력하세요",
+      "saveFailed": "결제를 저장하지 못했습니다",
+      "removeFailed": "결제를 삭제하지 못했습니다",
+      "loadFailed": "결제를 불러오지 못했습니다",
+      "saved": "{amount} 결제가 기록되었습니다",
+      "cardDue": "미수 {amount}",
+      "status": {
+        "none": "금액 없음",
+        "unpaid": "미결제",
+        "partial": "부분 결제",
+        "paid": "결제 완료",
+        "overpaid": "초과 결제"
+      },
+      "method": {
+        "upi": "UPI",
+        "cash": "현금",
+        "bank": "계좌이체",
+        "card": "카드",
+        "cheque": "수표",
+        "other": "기타"
+      }
     }
   },
   "Broadcasts": {

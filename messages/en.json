@@ -656,6 +656,47 @@
       "lostThisMonth": "Lost This Month",
       "lostThisMonthTooltip": "Deals marked as Lost since the first day of the current month.",
       "howCalculated": "How {label} is calculated"
+    },
+    "payments": {
+      "title": "Payments",
+      "add": "Add payment",
+      "saveFirst": "Save the deal first, then record payments received here.",
+      "total": "Total",
+      "received": "Received",
+      "due": "Due",
+      "progress": "{percent}% paid",
+      "setValueHint": "Set the deal value above to track how much is still due.",
+      "extraHint": "{amount} received beyond the deal value.",
+      "amount": "Amount",
+      "date": "Payment date",
+      "notePlaceholder": "Note (optional) — e.g. UPI ref, advance",
+      "fillDue": "Full due: {amount}",
+      "cancel": "Cancel",
+      "save": "Save payment",
+      "remove": "Remove payment",
+      "removeConfirm": "Remove this payment of {amount}?",
+      "empty": "No payments recorded yet.",
+      "invalidAmount": "Enter a valid amount",
+      "saveFailed": "Could not save the payment",
+      "removeFailed": "Could not remove the payment",
+      "loadFailed": "Could not load payments",
+      "saved": "Payment of {amount} recorded",
+      "cardDue": "Due {amount}",
+      "status": {
+        "none": "No value",
+        "unpaid": "Unpaid",
+        "partial": "Partly paid",
+        "paid": "Paid",
+        "overpaid": "Paid extra"
+      },
+      "method": {
+        "upi": "UPI",
+        "cash": "Cash",
+        "bank": "Bank",
+        "card": "Card",
+        "cheque": "Cheque",
+        "other": "Other"
+      }
     }
   },
   "Broadcasts": {

@@ -57,6 +57,7 @@ import { toast } from "sonner";
 import { useTranslations } from "next-intl";
 import { AssignAutomationWidget } from "@/components/automations/assign-automation-widget";
 import { ContactTagBar } from "@/components/inbox/contact-tag-bar";
+import { DealPayments } from "./deal-payments";
 
 interface NoteEntry {
   id: string;
@@ -145,7 +146,7 @@ export function DealForm({
 }: DealFormProps) {
   const t = useTranslations("Pipelines.form");
   const supabase = createClient();
-  const { accountId, defaultCurrency } = useAuth();
+  const { accountId, defaultCurrency, canSendMessages } = useAuth();
 
   const [title, setTitle] = useState("");
   const [service, setService] = useState("");
@@ -765,6 +766,16 @@ export function DealForm({
                 ))}
               </select>
             </div>
+
+            {/* Payments received & due (059) */}
+            <DealPayments
+              key={deal?.id ?? "new"}
+              dealId={deal?.id ?? null}
+              dealValue={parseFloat(value) || 0}
+              currency={currency}
+              canEdit={canSendMessages}
+              onChanged={onSaved}
+            />
 
             {/* Structured Follow-ups & Notes History Timeline */}
             <div className="space-y-3 rounded-xl border border-border/80 bg-card/60 p-3.5 shadow-xs">

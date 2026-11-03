@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { Deal, PipelineStage } from "@/types";
 import { Calendar, Check, X, MessageSquare, Bot, Clock, Phone } from "lucide-react";
 import { formatCurrency } from "@/lib/currency";
+import { summarizePayments } from "@/lib/pipelines/payments";
 import {
   parseDealLeadDetails,
   formatCaptureDate,
@@ -35,6 +36,8 @@ function initials(name?: string, fallback?: string) {
 
 export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
   const t = useTranslations("Pipelines.card");
+  const tp = useTranslations("Pipelines.payments");
+  const payment = summarizePayments(deal.value, Number(deal.amount_paid) || 0);
   const leadDetails = parseDealLeadDetails(deal.title, deal.notes);
   const contactLabel = deal.contact?.name || deal.contact?.phone || t("noContact");
   const assigneeLabel = deal.assignee?.full_name || null;
@@ -217,8 +220,20 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
       {/* Value & Due Date status */}
       <div className="mt-2 flex items-center justify-between gap-1">
         {typeof deal.value === "number" && deal.value > 0 ? (
-          <span className="text-sm font-bold text-primary">
-            {formatCurrency(deal.value, deal.currency)}
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="text-sm font-bold text-primary">
+              {formatCurrency(deal.value, deal.currency)}
+            </span>
+            {payment.status === "partial" && (
+              <span className="truncate rounded-full bg-red-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-red-600 dark:text-red-400">
+                {tp("cardDue", { amount: formatCurrency(payment.due, deal.currency) })}
+              </span>
+            )}
+            {(payment.status === "paid" || payment.status === "overpaid") && (
+              <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                ✓ {tp("status.paid")}
+              </span>
+            )}
           </span>
         ) : (
           <span className="text-[11px] text-muted-foreground/80 italic font-normal">
