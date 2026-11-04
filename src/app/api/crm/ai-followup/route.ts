@@ -7,6 +7,8 @@ import { buildConversationContext } from '@/lib/ai/context';
 import { detectScript, LANGUAGE_MIRROR_RULE } from '@/lib/ai/language';
 import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account';
 import { followupDateString, formatFollowupMoment } from '@/lib/ai/followup-time';
+import { followupBlock } from '@/lib/ai/followup-guard';
+import { getWhatsAppNumberForConversation } from '@/lib/whatsapp/numbers';
 
 export async function POST(req: NextRequest) {
   try {
@@ -57,7 +59,7 @@ export async function POST(req: NextRequest) {
         ai_followup_enabled,
         followup_instructions,
         conversation_id,
-        contact:contacts(id, name, phone, wa_user_id, ai_memory, lead_status),
+        contact:contacts(id, name, phone, wa_user_id, ai_memory, lead_status, is_opted_out, contact_tags(tags(name))),
         stage:pipeline_stages(name)
       `)
       .in('status', ['open', 'active']);
@@ -90,6 +92,7 @@ export async function POST(req: NextRequest) {
     }
 
     const processedDeals = [];
+    const skippedDeals: { dealId: string; reason: string }[] = [];
 
     for (const deal of deals) {
       const contact = deal.contact as any;
@@ -112,6 +115,63 @@ export async function POST(req: NextRequest) {
           .limit(1)
           .maybeSingle();
         convId = existingConv?.id;
+      }
+
+      // Unsubscribed, or a closed 24h window on a Meta number → don't send
+      // (and don't spend an AI call on a message that can't go out).
+      const number = convId
+        ? await getWhatsAppNumberForConversation<{ id: string; waba_id: string | null }>(
+            adminDb,
+            deal.account_id,
+            convId,
+            'id, waba_id',
+          )
+        : null;
+      let lastCustomerMessageAt: string | null = null;
+      if (convId && number?.waba_id !== 'waha') {
+        const { data: lastIn } = await adminDb
+          .from('messages')
+          .select('created_at')
+          .eq('conversation_id', convId)
+          .eq('sender_type', 'customer')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        lastCustomerMessageAt = lastIn?.created_at ?? null;
+      }
+      const block = followupBlock({
+        isOptedOut: contact.is_opted_out,
+        tagNames: ((contact.contact_tags ?? []) as { tags: { name?: string } | null }[])
+          .map((ct) => ct.tags?.name ?? '')
+          .filter(Boolean),
+        wabaId: number?.waba_id,
+        lastCustomerMessageAt,
+      });
+      if (block?.kind === 'opted_out') {
+        // Stop for good — the customer asked not to be messaged.
+        await adminDb
+          .from('deals')
+          .update({
+            ai_followup_enabled: false,
+            ai_followup_at: null,
+            notes: `${deal.notes || ''}\n[🤖 AI Follow-up stopped on ${new Date().toLocaleDateString('en-IN')}]: Customer unsubscribed`,
+          })
+          .eq('id', deal.id);
+        skippedDeals.push({ dealId: deal.id, reason: 'unsubscribed' });
+        continue;
+      }
+      if (block?.kind === 'window_closed') {
+        // Meta would reject free text. Check again in 3 days — a reply from
+        // the customer reopens the window (and the AI re-plans follow-ups).
+        await adminDb
+          .from('deals')
+          .update({
+            expected_close_date: followupDateString(new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)),
+            ai_followup_at: null,
+          })
+          .eq('id', deal.id);
+        skippedDeals.push({ dealId: deal.id, reason: 'window_closed' });
+        continue;
       }
 
       // Recent chat, so the follow-up continues the conversation in the
@@ -244,6 +304,7 @@ Keep it concise (2-3 sentences max), warm, professional, with appropriate emojis
       success: true,
       processed: processedDeals.length,
       deals: processedDeals,
+      skipped: skippedDeals,
     });
   } catch (err: any) {
     console.error('AI Followup error:', err);

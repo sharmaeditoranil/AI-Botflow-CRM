@@ -13,6 +13,7 @@ import {
 } from "@/lib/pipelines/deal-merger";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
+import { followupSkipMessage } from "@/lib/ai/followup-guard";
 
 interface DealCardProps {
   deal: Deal;
@@ -296,7 +297,7 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
               if (res.ok && data.processed > 0) {
                 toast.success("AI Follow-up message sent on WhatsApp!");
               } else {
-                toast.info("Follow-up checked.");
+                toast.info(followupSkipMessage(data.skipped));
               }
             } catch (err: any) {
               toast.error("Failed to send AI follow-up");

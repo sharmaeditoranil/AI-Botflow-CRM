@@ -54,6 +54,7 @@ import {
   MapPin,
 } from "lucide-react";
 import { toast } from "sonner";
+import { followupSkipMessage } from "@/lib/ai/followup-guard";
 import { useTranslations } from "next-intl";
 import { AssignAutomationWidget } from "@/components/automations/assign-automation-widget";
 import { ContactTagBar } from "@/components/inbox/contact-tag-bar";
@@ -962,7 +963,7 @@ export function DealForm({
                           toast.success("AI Follow-up message sent on WhatsApp!");
                           onSaved();
                         } else {
-                          toast.info("Follow-up checked.");
+                          toast.info(followupSkipMessage(data.skipped));
                         }
                       } catch (err: any) {
                         toast.error(err.message || "Failed to send follow-up");

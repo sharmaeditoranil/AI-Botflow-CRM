@@ -46,6 +46,7 @@ import { contactHandle } from "@/lib/whatsapp/wa-identity";
 import { ContactTagBar } from "./contact-tag-bar";
 import { AssignAutomationWidget } from "@/components/automations/assign-automation-widget";
 import { toast } from "sonner";
+import { followupSkipMessage } from "@/lib/ai/followup-guard";
 
 interface ContactSidebarProps {
   contact: Contact | null;
@@ -349,7 +350,7 @@ export function ContactSidebar({
         toast.success("AI Follow-up message sent on WhatsApp!");
         fetchContactData();
       } else {
-        toast.info("Follow-up checked.");
+        toast.info(followupSkipMessage(data.skipped));
       }
     } catch (e: any) {
       toast.error(e.message || "Error triggering AI follow-up");
