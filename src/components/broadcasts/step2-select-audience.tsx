@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { fetchAllRows } from '@/lib/supabase/fetch-all';
 import { createClient } from '@/lib/supabase/client';
 import { parseBroadcastCsv } from '@/lib/broadcast-csv';
 import { CustomField, Tag } from '@/types';
@@ -155,26 +156,33 @@ export function Step2SelectAudience({
         audience.tagIds &&
         audience.tagIds.length > 0
       ) {
-        const { data } = await supabase
-          .from('contact_tags')
-          .select('contact_id')
-          .in('tag_id', audience.tagIds);
-        baseIds = new Set((data ?? []).map((r) => r.contact_id));
+        const tagIds = audience.tagIds;
+        const data = await fetchAllRows<{ contact_id: string }>((from, to) =>
+          supabase
+            .from('contact_tags')
+            .select('contact_id')
+            .in('tag_id', tagIds)
+            .order('id')
+            .range(from, to),
+        );
+        baseIds = new Set(data.map((r) => r.contact_id));
       } else if (
         audience.type === 'custom_field' &&
         audience.customField?.fieldId &&
         audience.customField.value
       ) {
         const { fieldId, operator, value } = audience.customField;
-        let q = supabase
-          .from('contact_custom_values')
-          .select('contact_id')
-          .eq('custom_field_id', fieldId);
-        if (operator === 'is') q = q.eq('value', value);
-        else if (operator === 'is_not') q = q.neq('value', value);
-        else q = q.ilike('value', `%${value}%`);
-        const { data } = await q;
-        baseIds = new Set((data ?? []).map((r) => r.contact_id));
+        const data = await fetchAllRows<{ contact_id: string }>((from, to) => {
+          let q = supabase
+            .from('contact_custom_values')
+            .select('contact_id')
+            .eq('custom_field_id', fieldId);
+          if (operator === 'is') q = q.eq('value', value);
+          else if (operator === 'is_not') q = q.neq('value', value);
+          else q = q.ilike('value', `%${value}%`);
+          return q.order('id').range(from, to);
+        });
+        baseIds = new Set(data.map((r) => r.contact_id));
       } else if (
         audience.type === 'csv' &&
         audience.csvContacts &&
@@ -191,19 +199,28 @@ export function Step2SelectAudience({
       // Apply exclude tags & opted-out contacts
       const excludeSet = new Set<string>();
       if (audience.excludeTagIds && audience.excludeTagIds.length > 0) {
-        const { data: excludeRows } = await supabase
-          .from('contact_tags')
-          .select('contact_id')
-          .in('tag_id', audience.excludeTagIds);
-        (excludeRows ?? []).forEach((r) => excludeSet.add(r.contact_id));
+        const excludeTagIds = audience.excludeTagIds;
+        const excludeRows = await fetchAllRows<{ contact_id: string }>((from, to) =>
+          supabase
+            .from('contact_tags')
+            .select('contact_id')
+            .in('tag_id', excludeTagIds)
+            .order('id')
+            .range(from, to),
+        );
+        excludeRows.forEach((r) => excludeSet.add(r.contact_id));
       }
 
       // Fetch opted-out contacts to automatically exclude from audience
-      const { data: optedOutRows } = await supabase
-        .from('contacts')
-        .select('id')
-        .eq('is_opted_out', true);
-      (optedOutRows ?? []).forEach((r) => excludeSet.add(r.id));
+      const optedOutRows = await fetchAllRows<{ id: string }>((from, to) =>
+        supabase
+          .from('contacts')
+          .select('id')
+          .eq('is_opted_out', true)
+          .order('id')
+          .range(from, to),
+      );
+      optedOutRows.forEach((r) => excludeSet.add(r.id));
 
       if (baseIds) {
         const effective = [...baseIds].filter(
@@ -211,13 +228,11 @@ export function Step2SelectAudience({
         );
         setEstimatedCount(effective.length);
       } else {
-        // "All" — fetch non-opted-out contacts count
-        const { count } = await supabase
-          .from('contacts')
-          .select('*', { count: 'exact', head: true })
-          .neq('is_opted_out', true);
-        const total = count ?? 0;
-        setEstimatedCount(excludeSet.size > 0 ? Math.max(0, total - excludeSet.size) : total);
+        // "All" — every contact minus opted-out and excluded ones.
+        const allRows = await fetchAllRows<{ id: string }>((from, to) =>
+          supabase.from('contacts').select('id').order('id').range(from, to),
+        );
+        setEstimatedCount(allRows.filter((r) => !excludeSet.has(r.id)).length);
       }
     } finally {
       setLoadingCount(false);
