@@ -21,6 +21,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Vendored minified opus-recorder encoder worker (served statically).
     "public/opus/**",
+    // Electron desktop app (CommonJS main process, its own package).
+    "desktop-app/**",
   ]),
 ]);
 

@@ -27,6 +27,7 @@ import {
   UsersRound,
   Workflow,
   Smartphone,
+  Monitor,
   X,
   Zap,
   Store,
@@ -388,6 +389,28 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               APK ↓
             </span>
           </a>
+
+          {/* Desktop apps (Mac / Windows) */}
+          <div className="grid grid-cols-2 gap-1.5">
+            <a
+              href="/downloads/desktop/AI-Botflow-CRM-Mac.dmg"
+              download
+              className="flex items-center justify-center gap-1.5 rounded-xl border border-border/60 bg-card/60 px-2 py-1.5 text-[11px] font-semibold text-foreground/80 transition-colors hover:bg-muted"
+              title="Download the Mac app"
+            >
+              <Monitor className="size-3.5 shrink-0 text-primary" />
+              Mac App
+            </a>
+            <a
+              href="/downloads/desktop/AI-Botflow-CRM-Setup.exe"
+              download
+              className="flex items-center justify-center gap-1.5 rounded-xl border border-border/60 bg-card/60 px-2 py-1.5 text-[11px] font-semibold text-foreground/80 transition-colors hover:bg-muted"
+              title="Download the Windows app"
+            >
+              <Monitor className="size-3.5 shrink-0 text-primary" />
+              Windows App
+            </a>
+          </div>
 
           {/* User Profile Dropdown Card */}
           <DropdownMenu>

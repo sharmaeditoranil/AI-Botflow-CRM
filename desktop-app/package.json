@@ -1,0 +1,71 @@
+{
+  "name": "aibotflow-desktop",
+  "productName": "AI Botflow CRM",
+  "version": "1.0.0",
+  "description": "AI Botflow CRM for Mac and Windows",
+  "author": "AI Botflow",
+  "homepage": "https://dash.aibotflow.in",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:mac": "electron-builder --mac --universal",
+    "dist:win": "electron-builder --win --x64",
+    "dist": "electron-builder --mac --universal --win --x64"
+  },
+  "devDependencies": {
+    "electron": "44.9.2",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "in.aibotflow.crm.desktop",
+    "productName": "AI Botflow CRM",
+    "copyright": "© AI Botflow",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "updater.js",
+      "preload.js",
+      "offline.html",
+      "build/icon.png"
+    ],
+    "mac": {
+      "category": "public.app-category.business",
+      "icon": "build/icon-mac.png",
+      "target": [
+        "dmg"
+      ],
+      "identity": null
+    },
+    "dmg": {
+      "artifactName": "AI-Botflow-CRM-Mac.dmg"
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "artifactName": "AI-Botflow-CRM-Setup.exe",
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "AI Botflow CRM"
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://dash.aibotflow.in/downloads/desktop"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "6.8.10"
+  }
+}

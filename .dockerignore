@@ -16,3 +16,4 @@ docker-compose*.yml
 .idea
 coverage
 android-app
+desktop-app
