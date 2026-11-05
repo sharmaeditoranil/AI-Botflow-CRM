@@ -39,6 +39,7 @@ import {
   MEDIA_HEADER_SPECS,
   type MediaHeaderKind,
 } from '@/lib/whatsapp/media-header-types';
+import { isCustomBroadcastTemplate } from '@/lib/whatsapp/custom-broadcast';
 
 type VariableType = 'static' | 'field' | 'custom_field' | 'date';
 
@@ -615,21 +616,23 @@ export function Step3Personalize({
                 Template Variables ({placeholders.length})
               </h3>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={handleSaveAsDefault}
-              disabled={savingAsDefault}
-              className="text-xs h-7 border-border hover:bg-muted"
-            >
-              {savingAsDefault ? (
-                <Loader2 className="size-3 animate-spin mr-1" />
-              ) : (
-                <BookmarkCheck className="size-3 mr-1 text-primary" />
-              )}
-              {t('personalize.saveAsTemplateDefault')}
-            </Button>
+            {!isCustomBroadcastTemplate(template.name) && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleSaveAsDefault}
+                disabled={savingAsDefault}
+                className="text-xs h-7 border-border hover:bg-muted"
+              >
+                {savingAsDefault ? (
+                  <Loader2 className="size-3 animate-spin mr-1" />
+                ) : (
+                  <BookmarkCheck className="size-3 mr-1 text-primary" />
+                )}
+                {t('personalize.saveAsTemplateDefault')}
+              </Button>
+            )}
           </div>
 
           {placeholders.map((placeholder) => {

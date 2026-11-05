@@ -10,6 +10,11 @@ import {
 import { normalizeKey } from '@/lib/contacts/dedupe';
 import { fetchAllRows, fetchInChunks } from '@/lib/supabase/fetch-all';
 import { BroadcastRecipient, Contact, MessageTemplate } from '@/types';
+import {
+  isCustomBroadcastTemplate,
+  customBroadcastConfigFromTemplate,
+  fetchActive24hContactIds,
+} from '@/lib/whatsapp/custom-broadcast';
 
 type RecipientWithContact = BroadcastRecipient & {
   template_params?: unknown;
@@ -25,7 +30,7 @@ export interface CustomFieldFilter {
 }
 
 export interface AudienceConfig {
-  type: 'all' | 'tags' | 'custom_field' | 'csv';
+  type: 'all' | 'active_24h' | 'tags' | 'custom_field' | 'csv';
   tagIds?: string[];
   customField?: CustomFieldFilter;
   csvContacts?: { phone: string; name?: string }[];
@@ -205,6 +210,15 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       ).catch((err) => {
         throw new Error(`Failed to fetch contacts: ${err.message}`);
       });
+    } else if (audience.type === 'active_24h') {
+      const activeIds = await fetchActive24hContactIds(supabase, accountId);
+      if (activeIds.length > 0) {
+        contacts = await fetchInChunks<string, Contact>(activeIds, (ids) =>
+          supabase.from('contacts').select('*').in('id', ids),
+        ).catch((err) => {
+          throw new Error(`Failed to fetch 24h active contacts: ${err.message}`);
+        });
+      }
     } else if (
       audience.type === 'tags' &&
       audience.tagIds &&
@@ -437,6 +451,11 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         throw new Error('No contacts found for this audience.');
       }
 
+      const isCustomMessage = isCustomBroadcastTemplate(payload.template.name);
+      const customMessageConfig = isCustomMessage
+        ? customBroadcastConfigFromTemplate(payload.template, payload.headerMediaUrl)
+        : undefined;
+
       // ── Step 2: Create broadcast row ──────────────────────────────
       setProgress(10);
       const { data: broadcast, error: broadcastError } = await supabase
@@ -457,6 +476,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
             ...(payload.headerMediaUrl?.trim()
               ? { headerMediaUrl: payload.headerMediaUrl.trim() }
               : {}),
+            ...(customMessageConfig ? { customMessage: customMessageConfig } : {}),
           },
           status: 'sending',
           total_recipients: contacts.length,
@@ -588,6 +608,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
                 template_name: payload.template.name,
                 template_language: payload.template.language ?? 'en_US',
                 whatsapp_config_id: payload.whatsappConfigId || null,
+                ...(customMessageConfig ? { custom_message: customMessageConfig } : {}),
               }),
             });
 
@@ -717,6 +738,11 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         throw new Error('No contacts found for this audience.');
       }
 
+      const isCustomMessage = isCustomBroadcastTemplate(payload.template.name);
+      const customMessageConfig = isCustomMessage
+        ? customBroadcastConfigFromTemplate(payload.template, payload.headerMediaUrl)
+        : undefined;
+
       setProgress(30);
       const { data: broadcast, error: broadcastError } = await supabase
         .from('broadcasts')
@@ -736,6 +762,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
             ...(payload.headerMediaUrl?.trim()
               ? { headerMediaUrl: payload.headerMediaUrl.trim() }
               : {}),
+            ...(customMessageConfig ? { customMessage: customMessageConfig } : {}),
           },
           scheduled_at: scheduledAt.toISOString(),
           status: 'scheduled',

@@ -405,6 +405,58 @@ export async function sendWahaImage(
 }
 
 /**
+ * Send video or file media through WhatsApp Web (WAHA).
+ * Tries /api/sendVideo for videos first, falling back to /api/sendFile.
+ */
+export async function sendWahaMedia(
+  sessionName: string,
+  toPhone: string,
+  mediaUrl: string,
+  kind: 'image' | 'video' | 'document' | 'audio' | string,
+  caption?: string
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  if (kind === 'image') {
+    return sendWahaImage(sessionName, toPhone, mediaUrl, caption);
+  }
+
+  const chatId = formatToWahaChatId(toPhone);
+  const endpoint = kind === 'video' ? '/api/sendVideo' : '/api/sendFile';
+
+  let res = await wahaFetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      session: sessionName,
+      chatId,
+      file: { url: mediaUrl },
+      caption: caption || '',
+    }),
+  });
+
+  // Fallback to /api/sendFile if /api/sendVideo is unsupported on the WAHA engine
+  if (!res.ok && endpoint !== '/api/sendFile') {
+    res = await wahaFetch('/api/sendFile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session: sessionName,
+        chatId,
+        file: { url: mediaUrl },
+        caption: caption || '',
+      }),
+    });
+  }
+
+  if (!res.ok) {
+    return { success: false, error: res.error || `Failed to send WhatsApp Web ${kind}` };
+  }
+
+  const extractedId = extractWahaMessageId(res.data);
+  const id = extractedId || `waha_${Date.now()}`;
+  return { success: true, messageId: id };
+}
+
+/**
  * Resolves a real E.164 phone number from a WAHA JID or WhatsApp multi-device LID.
  * WhatsApp multi-device often uses internal LIDs (e.g. "48950279163915@lid").
  * This function extracts or queries the underlying real phone number (e.g. "+919939967431").

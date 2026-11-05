@@ -23,6 +23,12 @@ import { decrypt } from '@/lib/whatsapp/encryption';
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body';
 import { resolveWhatsAppNumber } from '@/lib/whatsapp/numbers';
 import { sanitizePhoneForMeta, isValidE164 } from '@/lib/whatsapp/phone-utils';
+import {
+  isCustomBroadcastTemplate,
+  templateFromCustomBroadcastConfig,
+  type CustomBroadcastConfig,
+} from '@/lib/whatsapp/custom-broadcast';
+import type { MessageTemplate } from '@/types';
 
 /** Which recipients a resume pass picks up. */
 export type ResumeScope = 'pending' | 'failed' | 'all';
@@ -224,34 +230,55 @@ export async function planBroadcastResume(
     );
   }
 
-  const resolvedTemplate = await resolveTemplateRow(
-    db,
-    accountId,
-    broadcast.template_name,
-    broadcast.template_language,
-    config.waba_id
-  );
-  if (resolvedTemplate.malformed) {
-    throw new BroadcastError(
-      'template_malformed',
-      'Template row is malformed locally — run "Sync from Meta" in Settings to repair it before resuming.',
-      500
+  const audienceFilterObj = (broadcast as {
+    audience_filter?: {
+      headerMediaUrl?: unknown;
+      customMessage?: CustomBroadcastConfig;
+    };
+  }).audience_filter;
+
+  let templateRow: MessageTemplate | null = null;
+  let templateLanguage = broadcast.template_language || 'en_US';
+
+  if (isCustomBroadcastTemplate(broadcast.template_name)) {
+    const customCfg: CustomBroadcastConfig = audienceFilterObj?.customMessage ?? {
+      bodyText: '',
+      mediaType: 'none',
+    };
+    templateRow = templateFromCustomBroadcastConfig(customCfg);
+  } else {
+    const resolvedTemplate = await resolveTemplateRow(
+      db,
+      accountId,
+      broadcast.template_name,
+      broadcast.template_language,
+      config.waba_id
     );
+    if (resolvedTemplate.malformed) {
+      throw new BroadcastError(
+        'template_malformed',
+        'Template row is malformed locally — run "Sync from Meta" in Settings to repair it before resuming.',
+        500
+      );
+    }
+    templateRow = resolvedTemplate.row;
+    templateLanguage = resolvedTemplate.language;
   }
 
   const storedHeaderMediaUrl =
-    typeof (broadcast as { audience_filter?: { headerMediaUrl?: unknown } }).audience_filter?.headerMediaUrl === 'string'
-      ? ((broadcast as { audience_filter: { headerMediaUrl: string } }).audience_filter.headerMediaUrl.trim() || undefined)
+    typeof audienceFilterObj?.headerMediaUrl === 'string'
+      ? audienceFilterObj.headerMediaUrl.trim() || undefined
       : undefined;
 
   const plan: BroadcastPlan = {
     broadcastId,
     accountId,
     templateName: broadcast.template_name,
-    templateLanguage: resolvedTemplate.language,
+    templateLanguage,
     phoneNumberId: config.phone_number_id,
-    accessToken: decrypt(config.access_token),
-    templateRow: resolvedTemplate.row,
+    wabaId: config.waba_id,
+    accessToken: config.waba_id === 'waha' ? '' : decrypt(config.access_token),
+    templateRow,
     ...(storedHeaderMediaUrl ? { messageParams: { headerMediaUrl: storedHeaderMediaUrl } } : {}),
     ...(options?.checkPendingBeforeSend ? { checkPendingBeforeSend: true } : {}),
     planned: slice.map((row) => ({

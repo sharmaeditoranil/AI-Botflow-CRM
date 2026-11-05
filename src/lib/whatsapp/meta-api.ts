@@ -917,6 +917,11 @@ export interface SendInteractiveButtonsArgs {
   bodyText: string
   /** Optional plain-text header (≤ 60 chars). */
   headerText?: string
+  /** Optional media header (image, video, or document) via public URL. */
+  headerMedia?: {
+    type: 'image' | 'video' | 'document'
+    link: string
+  }
   /** Optional grey footer line under the buttons (≤ 60 chars). */
   footerText?: string
   /** 1–3 buttons. Validated against Meta's limits before sending. */
@@ -938,10 +943,10 @@ export async function sendInteractiveButtons(
 ): Promise<MetaSendResult> {
   const {
     phoneNumberId, accessToken, to,
-    bodyText, headerText, footerText, buttons, contextMessageId,
+    bodyText, headerText, headerMedia, footerText, buttons, contextMessageId,
   } = args
   validateInteractiveBody(bodyText)
-  validateInteractiveHeaderFooter(headerText, footerText)
+  validateInteractiveHeaderFooter(headerMedia ? undefined : headerText, footerText)
   if (buttons.length < 1 || buttons.length > INTERACTIVE_LIMITS.maxButtons) {
     throw new Error(
       `Interactive button message requires 1-${INTERACTIVE_LIMITS.maxButtons} buttons (got ${buttons.length}).`
@@ -975,7 +980,14 @@ export async function sendInteractiveButtons(
       })),
     },
   }
-  if (headerText) interactive.header = { type: 'text', text: headerText }
+  if (headerMedia?.link) {
+    interactive.header = {
+      type: headerMedia.type,
+      [headerMedia.type]: { link: headerMedia.link },
+    }
+  } else if (headerText) {
+    interactive.header = { type: 'text', text: headerText }
+  }
   if (footerText) interactive.footer = { text: footerText }
 
   const body: Record<string, unknown> = {
@@ -988,6 +1000,81 @@ export async function sendInteractiveButtons(
 
   const url = `${META_API_BASE}/${phoneNumberId}/messages`
   const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(body),
+  })
+  if (!response.ok) {
+    await throwMetaError(response, `Meta API error: ${response.status}`)
+  }
+  const data = await response.json()
+  return { messageId: data.messages[0].id }
+}
+
+export interface SendInteractiveCtaUrlArgs {
+  phoneNumberId: string
+  accessToken: string
+  to: string
+  bodyText: string
+  displayText: string
+  url: string
+  headerText?: string
+  headerMedia?: {
+    type: 'image' | 'video' | 'document'
+    link: string
+  }
+  footerText?: string
+  contextMessageId?: string
+}
+
+/**
+ * Send a 24-hour window interactive CTA URL button message on Meta Cloud API.
+ */
+export async function sendInteractiveCtaUrl(
+  args: SendInteractiveCtaUrlArgs
+): Promise<MetaSendResult> {
+  const {
+    phoneNumberId, accessToken, to,
+    bodyText, displayText, url: targetUrl,
+    headerText, headerMedia, footerText, contextMessageId,
+  } = args
+  validateInteractiveBody(bodyText)
+  validateInteractiveHeaderFooter(headerMedia ? undefined : headerText, footerText)
+
+  const interactive: Record<string, unknown> = {
+    type: 'cta_url',
+    body: { text: bodyText },
+    action: {
+      name: 'cta_url',
+      parameters: {
+        display_text: displayText.slice(0, 20),
+        url: targetUrl,
+      },
+    },
+  }
+  if (headerMedia?.link) {
+    interactive.header = {
+      type: headerMedia.type,
+      [headerMedia.type]: { link: headerMedia.link },
+    }
+  } else if (headerText) {
+    interactive.header = { type: 'text', text: headerText }
+  }
+  if (footerText) interactive.footer = { text: footerText }
+
+  const body: Record<string, unknown> = {
+    messaging_product: 'whatsapp',
+    ...recipientFields(to),
+    type: 'interactive',
+    interactive,
+  }
+  if (contextMessageId) body.context = { message_id: contextMessageId }
+
+  const endpoint = `${META_API_BASE}/${phoneNumberId}/messages`
+  const response = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

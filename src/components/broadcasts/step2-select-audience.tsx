@@ -17,10 +17,12 @@ import {
   ArrowRight,
   ArrowLeft,
   X,
+  Clock,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { fetchActive24hContactIds } from '@/lib/whatsapp/custom-broadcast';
 
-type AudienceType = 'all' | 'tags' | 'custom_field' | 'csv';
+type AudienceType = 'all' | 'active_24h' | 'tags' | 'custom_field' | 'csv';
 type CustomFieldOperator = 'is' | 'is_not' | 'contains';
 
 interface CustomFieldFilter {
@@ -64,6 +66,12 @@ export function Step2SelectAudience({
     description: string;
     icon: typeof Users;
   }[]>(() => [
+    {
+      type: 'active_24h',
+      label: '24-Hour Active Window',
+      description: 'Contacts who messaged you in the last 24 hours (No template needed)',
+      icon: Clock,
+    },
     {
       type: 'all',
       label: t('selectAudience.method.all'),
@@ -151,6 +159,9 @@ export function Step2SelectAudience({
 
       if (audience.type === 'all') {
         // Handled below — full-table count adjusted by excludes.
+      } else if (audience.type === 'active_24h') {
+        const activeIds = await fetchActive24hContactIds(supabase);
+        baseIds = new Set(activeIds);
       } else if (
         audience.type === 'tags' &&
         audience.tagIds &&
@@ -300,6 +311,7 @@ export function Step2SelectAudience({
 
   const isValid =
     audience.type === 'all' ||
+    audience.type === 'active_24h' ||
     (audience.type === 'tags' && audience.tagIds && audience.tagIds.length > 0) ||
     (audience.type === 'custom_field' &&
       !!audience.customField?.fieldId &&

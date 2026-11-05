@@ -34,7 +34,7 @@ import {
   interactivePayloadPreviewText,
   type InteractiveMessagePayload,
 } from '@/lib/whatsapp/interactive';
-import { sendWahaText, sendWahaImage } from '@/lib/waha/client';
+import { sendWahaText, sendWahaMedia } from '@/lib/waha/client';
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import {
@@ -389,7 +389,17 @@ export async function sendMessageToConversation(
     const sessionName = config.phone_number_id;
     let wahaResult: { success: boolean; messageId?: string; error?: string };
     if (isMediaKind && mediaUrl) {
-      wahaResult = await sendWahaImage(sessionName, sendTarget, mediaUrl, contentText || undefined);
+      wahaResult = await sendWahaMedia(sessionName, sendTarget, mediaUrl, messageType, contentText || undefined);
+    } else if (messageType === 'interactive' && interactivePayload) {
+      const p = interactivePayload;
+      let formatted = p.header ? `*${p.header}*\n\n${p.body}` : p.body;
+      if (p.kind === 'buttons' && p.buttons.length > 0) {
+        formatted += '\n\n' + p.buttons.map((b, idx) => `${idx + 1}. *${b.title}*`).join('\n');
+      }
+      if (p.footer) {
+        formatted += `\n\n_${p.footer}_`;
+      }
+      wahaResult = await sendWahaText(sessionName, sendTarget, formatted);
     } else {
       wahaResult = await sendWahaText(sessionName, sendTarget, contentText || '');
     }

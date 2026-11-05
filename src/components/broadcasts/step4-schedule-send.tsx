@@ -32,6 +32,10 @@ import {
   Tag,
 } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import {
+  fetchActive24hContactIds,
+  formatBroadcastTemplateDisplayName,
+} from '@/lib/whatsapp/custom-broadcast';
 
 interface AudienceConfig {
   type: string;
@@ -96,6 +100,9 @@ export function Step4ScheduleSend({
             .from('contacts')
             .select('*', { count: 'exact', head: true });
           setEstimatedReach(count ?? 0);
+        } else if (audience.type === 'active_24h') {
+          const activeIds = await fetchActive24hContactIds(supabase);
+          setEstimatedReach(activeIds.length);
         } else if (audience.type === 'tags' && audience.tagIds && audience.tagIds.length > 0) {
           const tagIds = audience.tagIds;
           const contactTags = await fetchAllRows<{ contact_id: string }>((from, to) =>
@@ -125,11 +132,13 @@ export function Step4ScheduleSend({
   const audienceLabel =
     audience.type === 'all'
       ? t('scheduleSend.audienceAll')
-      : audience.type === 'tags'
-        ? t('scheduleSend.audienceTags')
-        : audience.type === 'csv'
-          ? t('scheduleSend.audienceCsv')
-          : t('scheduleSend.audienceField');
+      : audience.type === 'active_24h'
+        ? '24-Hour Active Window Contacts'
+        : audience.type === 'tags'
+          ? t('scheduleSend.audienceTags')
+          : audience.type === 'csv'
+            ? t('scheduleSend.audienceCsv')
+            : t('scheduleSend.audienceField');
 
   // Extract variable keys in template
   const varMatches = template.body_text?.match(/\{\{(\d+)\}\}/g) || [];
@@ -192,8 +201,10 @@ export function Step4ScheduleSend({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 text-sm">
           <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
             <p className="text-xs text-muted-foreground mb-1">{t('scheduleSend.template')}</p>
-            <p className="font-medium text-foreground truncate">{template.name}</p>
-            <p className="text-[11px] text-muted-foreground capitalize mt-0.5">{template.category.toLowerCase()}</p>
+            <p className="font-medium text-foreground truncate">
+              {formatBroadcastTemplateDisplayName(template.name)}
+            </p>
+            <p className="text-[11px] text-muted-foreground capitalize mt-0.5">{template.category.toLowerCase().replace('_', ' ')}</p>
           </div>
 
           <div className="p-3 rounded-lg bg-muted/30 border border-border/50">

@@ -18,6 +18,7 @@ import {
 } from '@/hooks/use-broadcast-sending';
 import { fetchAllRows, fetchInChunks } from '@/lib/supabase/fetch-all';
 import { normalizeKey } from '@/lib/contacts/dedupe';
+import { fetchActive24hContactIds } from '@/lib/whatsapp/custom-broadcast';
 import type { Contact } from '@/types';
 
 export const maxDuration = 300;
@@ -96,6 +97,17 @@ async function ensureBroadcastRecipients(
         .order('id')
         .range(from, to)
     );
+  } else if (audience.type === 'active_24h') {
+    const activeIds = await fetchActive24hContactIds(adminDb, accountId);
+    if (activeIds.length > 0) {
+      contacts = await fetchInChunks<string, Contact>(activeIds, (ids) =>
+        adminDb
+          .from('contacts')
+          .select('*')
+          .eq('account_id', accountId)
+          .in('id', ids)
+      );
+    }
   } else if (audience.type === 'tags' && Array.isArray(audience.tagIds) && audience.tagIds.length > 0) {
     const tagIds = audience.tagIds;
     const contactTags = await fetchAllRows<{ contact_id: string }>((from, to) =>

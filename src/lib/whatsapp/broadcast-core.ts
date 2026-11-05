@@ -18,7 +18,18 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { sendTemplateMessage } from '@/lib/whatsapp/meta-api';
+import {
+  sendTemplateMessage,
+  sendTextMessage,
+  sendMediaMessage,
+  sendInteractiveButtons,
+  sendInteractiveCtaUrl,
+} from '@/lib/whatsapp/meta-api';
+import { sendWahaText, sendWahaMedia } from '@/lib/waha/client';
+import {
+  isCustomBroadcastTemplate,
+  formatBroadcastTemplateDisplayName,
+} from '@/lib/whatsapp/custom-broadcast';
 import type { SendTimeParams } from '@/lib/whatsapp/template-send-builder';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import {
@@ -83,6 +94,7 @@ export interface BroadcastPlan {
   templateName: string;
   templateLanguage: string;
   phoneNumberId: string;
+  wabaId?: string | null;
   accessToken: string;
   templateRow: MessageTemplate | null;
   messageParams?: SendTimeParams;
@@ -298,6 +310,233 @@ export async function createBroadcast(
  * here — only the terminal `status` — otherwise a manual value would
  * race and clobber the trigger-maintained counts.
  */
+export interface SendBroadcastRecipientArgs {
+  wabaId?: string | null;
+  phoneNumberId: string;
+  accessToken: string;
+  toPhone: string;
+  templateName: string;
+  templateLanguage: string;
+  templateRow: MessageTemplate | null;
+  params?: string[];
+  messageParams?: SendTimeParams;
+}
+
+/**
+ * Unified sender for a single broadcast recipient:
+ * 1. WhatsApp Web (WAHA: `wabaId === 'waha'`) — sends custom or template messages via WAHA with image/video/document + text + formatted buttons.
+ * 2. Custom 24-Hour Window Message (`isCustomBroadcastTemplate(templateName)`) on Official Cloud API — sends free-form text, media (image/video), or interactive buttons (with media header + body + reply/CTA buttons).
+ * 3. Approved Meta Template on Official Cloud API — sends `sendTemplateMessage`.
+ */
+export async function sendBroadcastMessageToRecipient(
+  args: SendBroadcastRecipientArgs
+): Promise<{ messageId: string }> {
+  const {
+    wabaId,
+    phoneNumberId,
+    accessToken,
+    toPhone,
+    templateName,
+    templateLanguage,
+    templateRow,
+    params = [],
+    messageParams,
+  } = args;
+
+  const isCustom = isCustomBroadcastTemplate(templateName);
+  const bodyParams = templateBodyParams(params, messageParams);
+  const resolvedBody =
+    templateContentText(templateRow, bodyParams, templateRow?.body_text ?? '') ||
+    templateRow?.body_text ||
+    '';
+
+  const mediaUrl =
+    messageParams?.headerMediaUrl ||
+    templateRow?.header_media_url ||
+    (templateRow?.header_handle &&
+    /^https?:\/\//i.test(templateRow.header_handle)
+      ? templateRow.header_handle
+      : null);
+
+  const mediaKind =
+    templateRow?.header_type === 'image' ||
+    templateRow?.header_type === 'video' ||
+    templateRow?.header_type === 'document'
+      ? templateRow.header_type
+      : null;
+
+  const buttons = Array.isArray(templateRow?.buttons) ? templateRow!.buttons : [];
+  const footerText = templateRow?.footer_text?.trim() || undefined;
+
+  // ── 1. WhatsApp Web (WAHA) ─────────────────────────────────────
+  if (wabaId === 'waha') {
+    let fullText = resolvedBody;
+    if (templateRow?.header_type === 'text' && templateRow.header_content) {
+      fullText = `*${templateRow.header_content}*\n\n${fullText}`;
+    }
+
+    if (buttons.length > 0) {
+      const btnLines: string[] = [];
+      for (const btn of buttons) {
+        if (btn.type === 'URL' && btn.url) {
+          btnLines.push(`🔗 *${btn.text}:* ${btn.url}`);
+        } else if (btn.type === 'PHONE_NUMBER' && btn.phone_number) {
+          btnLines.push(`📞 *${btn.text}:* ${btn.phone_number}`);
+        } else if (btn.type === 'QUICK_REPLY' && btn.text) {
+          btnLines.push(`👉 Reply *"${btn.text}"*`);
+        }
+      }
+      if (btnLines.length > 0) {
+        fullText = `${fullText}\n\n${btnLines.join('\n')}`;
+      }
+    }
+
+    if (footerText) {
+      fullText = `${fullText}\n\n_${footerText}_`;
+    }
+
+    if (mediaUrl && mediaKind) {
+      const res = await sendWahaMedia(
+        phoneNumberId,
+        toPhone,
+        mediaUrl,
+        mediaKind,
+        fullText.trim()
+      );
+      if (!res.success || !res.messageId) {
+        throw new Error(res.error || 'Failed to send WhatsApp Web media message');
+      }
+      return { messageId: res.messageId };
+    }
+
+    const res = await sendWahaText(
+      phoneNumberId,
+      toPhone,
+      fullText.trim() || `[${formatBroadcastTemplateDisplayName(templateName)}]`
+    );
+    if (!res.success || !res.messageId) {
+      throw new Error(res.error || 'Failed to send WhatsApp Web text message');
+    }
+    return { messageId: res.messageId };
+  }
+
+  // ── 2. Custom 24-Hour Window Message on Official Meta Cloud API ─
+  if (isCustom) {
+    const replyButtons = buttons.filter(
+      (b): b is { type: 'QUICK_REPLY'; text: string } =>
+        b.type === 'QUICK_REPLY' && Boolean(b.text?.trim())
+    );
+    const urlButtons = buttons.filter(
+      (b): b is { type: 'URL'; text: string; url: string } =>
+        b.type === 'URL' && Boolean(b.text?.trim()) && Boolean(b.url?.trim())
+    );
+    const phoneButtons = buttons.filter(
+      (b): b is { type: 'PHONE_NUMBER'; text: string; phone_number: string } =>
+        b.type === 'PHONE_NUMBER' &&
+        Boolean(b.text?.trim()) &&
+        Boolean(b.phone_number?.trim())
+    );
+
+    const extraLinks: string[] = [];
+    for (const ub of urlButtons) {
+      extraLinks.push(`🔗 ${ub.text.trim()}: ${ub.url.trim()}`);
+    }
+    for (const pb of phoneButtons) {
+      extraLinks.push(`📞 ${pb.text.trim()}: ${pb.phone_number.trim()}`);
+    }
+
+    // 2a. Interactive Reply Buttons (1–3 buttons, with optional image/video header)
+    if (replyButtons.length > 0) {
+      const bodyWithLinks =
+        extraLinks.length > 0
+          ? `${resolvedBody}\n\n${extraLinks.join('\n')}`
+          : resolvedBody;
+
+      return sendInteractiveButtons({
+        phoneNumberId,
+        accessToken,
+        to: toPhone,
+        bodyText: (bodyWithLinks || ' ').slice(0, 1024),
+        headerMedia:
+          mediaUrl && mediaKind
+            ? { type: mediaKind, link: mediaUrl }
+            : undefined,
+        footerText: footerText ? footerText.slice(0, 60) : undefined,
+        buttons: replyButtons.slice(0, 3).map((b, idx) => ({
+          id: `custom_btn_${idx + 1}_${b.text
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '_')
+            .slice(0, 20)}`,
+          title: b.text.trim().slice(0, 20),
+        })),
+      });
+    }
+
+    // 2b. Single Interactive CTA URL Button (with optional image/video header)
+    if (urlButtons.length === 1 && phoneButtons.length === 0) {
+      try {
+        return await sendInteractiveCtaUrl({
+          phoneNumberId,
+          accessToken,
+          to: toPhone,
+          bodyText: (resolvedBody || ' ').slice(0, 1024),
+          displayText: urlButtons[0].text.trim().slice(0, 20),
+          url: urlButtons[0].url.trim(),
+          headerMedia:
+            mediaUrl && mediaKind
+              ? { type: mediaKind, link: mediaUrl }
+              : undefined,
+          footerText: footerText ? footerText.slice(0, 60) : undefined,
+        });
+      } catch (ctaErr) {
+        const msg = ctaErr instanceof Error ? ctaErr.message : '';
+        if (isRecipientNotAllowedError(msg)) throw ctaErr;
+        // Fallback to standard media/text with link in body
+      }
+    }
+
+    // 2c. Media (Image / Video) or Plain Text message
+    let fullBody =
+      extraLinks.length > 0
+        ? `${resolvedBody}\n\n${extraLinks.join('\n')}`
+        : resolvedBody;
+    if (footerText) {
+      fullBody = `${fullBody}\n\n_${footerText}_`;
+    }
+
+    if (mediaUrl && mediaKind) {
+      return sendMediaMessage({
+        phoneNumberId,
+        accessToken,
+        to: toPhone,
+        kind: mediaKind,
+        link: mediaUrl,
+        caption: fullBody.trim().slice(0, 1024) || undefined,
+      });
+    }
+
+    return sendTextMessage({
+      phoneNumberId,
+      accessToken,
+      to: toPhone,
+      text: fullBody.trim() || ' ',
+    });
+  }
+
+  // ── 3. Approved Meta Template on Official Cloud API ────────────
+  return sendTemplateMessage({
+    phoneNumberId,
+    accessToken,
+    to: toPhone,
+    templateName,
+    language: templateLanguage,
+    template: templateRow ?? undefined,
+    ...(messageParams ? { messageParams } : {}),
+    params,
+  });
+}
+
 export async function deliverBroadcast(
   db: SupabaseClient,
   plan: BroadcastPlan
@@ -328,21 +567,25 @@ export async function deliverBroadcast(
         }
       }
 
-      const variants = phoneVariants(recipient.phone);
+      const variants =
+        plan.wabaId === 'waha'
+          ? [recipient.phone]
+          : phoneVariants(recipient.phone);
       let sentMessageId: string | null = null;
       let lastError: string | null = null;
 
       for (const variant of variants) {
         try {
-          const result = await sendTemplateMessage({
+          const result = await sendBroadcastMessageToRecipient({
+            wabaId: plan.wabaId,
             phoneNumberId: plan.phoneNumberId,
             accessToken: plan.accessToken,
-            to: variant,
+            toPhone: variant,
             templateName: plan.templateName,
-            language: plan.templateLanguage,
-            template: plan.templateRow ?? undefined,
-            ...(plan.messageParams ? { messageParams: plan.messageParams } : {}),
+            templateLanguage: plan.templateLanguage,
+            templateRow: plan.templateRow,
             params: recipient.params,
+            messageParams: plan.messageParams,
           });
           sentMessageId = result.messageId;
           lastError = null;
@@ -544,11 +787,32 @@ export async function recordBroadcastMessageInInbox(
     });
 
     const bodyParams = templateBodyParams(input.params, input.messageParams);
-    const persistedText = templateContentText(
-      input.templateRow,
-      bodyParams,
-      null
-    );
+    let persistedText =
+      templateContentText(
+        input.templateRow,
+        bodyParams,
+        input.templateRow?.body_text ?? null
+      ) || '';
+
+    const isCustom = isCustomBroadcastTemplate(input.templateName);
+    const buttons = Array.isArray(input.templateRow?.buttons)
+      ? input.templateRow!.buttons
+      : [];
+
+    if (isCustom && buttons.length > 0) {
+      const btnSummary = buttons
+        .map((b) => {
+          if (b.type === 'URL' && b.url) return `🔗 ${b.text}: ${b.url}`;
+          if (b.type === 'PHONE_NUMBER' && b.phone_number)
+            return `📞 ${b.text}: ${b.phone_number}`;
+          return `[${b.text}]`;
+        })
+        .join('  ');
+      persistedText = persistedText
+        ? `${persistedText}\n\n${btnSummary}`
+        : btnSummary;
+    }
+
     const mediaUrl =
       input.messageParams?.headerMediaUrl ||
       input.templateRow?.header_media_url ||
@@ -558,14 +822,24 @@ export async function recordBroadcastMessageInInbox(
         : null);
 
     const nowIso = input.sentAt || new Date().toISOString();
+    const contentType = isCustom
+      ? mediaUrl
+        ? input.templateRow?.header_type === 'video'
+          ? 'video'
+          : 'image'
+        : 'text'
+      : 'template';
+    const fallbackLabel = isCustom
+      ? '[Custom Broadcast]'
+      : `[Template: ${input.templateName}]`;
 
     await db.from('messages').insert({
       conversation_id: conversation.id,
       sender_type: 'agent',
-      content_type: 'template',
-      content_text: persistedText || `[Template: ${input.templateName}]`,
+      content_type: contentType,
+      content_text: persistedText || fallbackLabel,
       media_url: mediaUrl || null,
-      template_name: input.templateName,
+      template_name: isCustom ? null : input.templateName,
       message_id: input.whatsappMessageId,
       status: 'sent',
       created_at: nowIso,
@@ -574,7 +848,7 @@ export async function recordBroadcastMessageInInbox(
     await db
       .from('conversations')
       .update({
-        last_message_text: persistedText || `[Template: ${input.templateName}]`,
+        last_message_text: persistedText || fallbackLabel,
         last_message_at: nowIso,
         updated_at: nowIso,
       })

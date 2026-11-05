@@ -17,6 +17,7 @@ import { Radio, Plus, Loader2 } from 'lucide-react';
 import { useCan } from '@/hooks/use-can';
 import { GatedButton } from '@/components/ui/gated-button';
 import { getBroadcastStatus } from '@/lib/broadcast-status';
+import { formatBroadcastTemplateDisplayName } from '@/lib/whatsapp/custom-broadcast';
 import { useTranslations } from 'next-intl';
 
 /**
@@ -245,7 +246,7 @@ export default function BroadcastsPage() {
                       {broadcast.name}
                     </TableCell>
                     <TableCell className="hidden text-muted-foreground md:table-cell">
-                      {broadcast.template_name}
+                      {formatBroadcastTemplateDisplayName(broadcast.template_name)}
                     </TableCell>
                     <TableCell className="hidden text-right text-muted-foreground tabular-nums sm:table-cell">
                       {broadcast.total_recipients}

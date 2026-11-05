@@ -13,6 +13,7 @@ import { Step4ScheduleSend } from '@/components/broadcasts/step4-schedule-send';
 import { useBroadcastSending } from '@/hooks/use-broadcast-sending';
 import { Check } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { isCustomBroadcastTemplate } from '@/lib/whatsapp/custom-broadcast';
 
 const steps = [
   { label: 'template', key: 'template' },
@@ -30,7 +31,7 @@ export default function NewBroadcastPage() {
   const [currentStep, setCurrentStep] = useState(0);
   const [template, setTemplate] = useState<MessageTemplate | null>(null);
   const [audience, setAudience] = useState<{
-    type: 'all' | 'tags' | 'custom_field' | 'csv';
+    type: 'all' | 'active_24h' | 'tags' | 'custom_field' | 'csv';
     tagIds?: string[];
     customField?: {
       fieldId: string;
@@ -167,7 +168,7 @@ export default function NewBroadcastPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <div className="mx-auto max-w-4xl space-y-8">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground">{t('title')}</h1>
@@ -225,12 +226,32 @@ export default function NewBroadcastPage() {
         {currentStep === 0 && (
           <Step1ChooseTemplate
             selectedTemplate={template}
-            onSelect={setTemplate}
+            onSelect={(nextTpl) => {
+              setTemplate(nextTpl);
+              if (isCustomBroadcastTemplate(nextTpl.name)) {
+                setHeaderMediaUrl(nextTpl.header_media_url ?? '');
+                if (nextTpl.body_text.includes('{{1}}') && !variables['1']?.value) {
+                  setVariables((prev) => ({
+                    ...prev,
+                    '1': { type: 'field', value: 'name', fallback: 'Friend' },
+                  }));
+                }
+              } else if (template?.id !== nextTpl.id) {
+                setHeaderMediaUrl(nextTpl.header_media_url ?? '');
+              }
+            }}
             numberId={whatsappConfigId}
             onNumberChange={(id, wabaId) => {
               setWhatsappConfigId(id);
               // A template from another WABA can't be sent from this number.
-              if (template?.waba_id && wabaId && template.waba_id !== wabaId) {
+              if (
+                template &&
+                !isCustomBroadcastTemplate(template.name) &&
+                template.waba_id &&
+                wabaId &&
+                wabaId !== 'waha' &&
+                template.waba_id !== wabaId
+              ) {
                 setTemplate(null);
               }
             }}

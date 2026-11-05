@@ -1,11 +1,19 @@
 import { NextResponse } from 'next/server'
 import { requireRole, toErrorResponse } from '@/lib/auth/account'
-import { sendTemplateMessage } from '@/lib/whatsapp/meta-api'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import type { SendTimeParams } from '@/lib/whatsapp/template-send-builder'
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body'
 import { resolveWhatsAppNumber } from '@/lib/whatsapp/numbers'
-import { recordBroadcastMessageInInbox } from '@/lib/whatsapp/broadcast-core'
+import {
+  recordBroadcastMessageInInbox,
+  sendBroadcastMessageToRecipient,
+} from '@/lib/whatsapp/broadcast-core'
+import {
+  isCustomBroadcastTemplate,
+  templateFromCustomBroadcastConfig,
+  type CustomBroadcastConfig,
+} from '@/lib/whatsapp/custom-broadcast'
+import type { MessageTemplate } from '@/types'
 import {
   sanitizePhoneForMeta,
   isValidE164,
@@ -161,30 +169,60 @@ export async function POST(request: Request) {
       )
     }
 
-    const accessToken = decrypt(config.access_token)
+    const accessToken =
+      config.waba_id === 'waha' ? '' : decrypt(config.access_token)
 
-    // Load the template row once so sendTemplateMessage can build
-    // header + button components on each iteration. Loading inside
-    // the loop would N+1 against Supabase for every recipient.
-    // Guard against a malformed local row crashing every send in
-    // the loop with the same opaque TypeError — fail loudly once.
-    const resolvedTemplate = await resolveTemplateRow(
-      supabase,
-      accountId,
-      template_name,
-      template_language,
-      config.waba_id,
-    )
-    if (resolvedTemplate.malformed) {
-      return NextResponse.json(
-        {
-          error:
-            'Template row is malformed locally — run "Sync from Meta" in Settings to repair it before broadcasting.',
-        },
-        { status: 500 },
+    let templateRow: MessageTemplate | null = null
+    let sendLanguage = template_language || 'en_US'
+
+    if (isCustomBroadcastTemplate(template_name)) {
+      let customCfg: CustomBroadcastConfig | null =
+        body.custom_message && typeof body.custom_message === 'object'
+          ? (body.custom_message as CustomBroadcastConfig)
+          : null
+
+      if (!customCfg && typeof body.broadcast_id === 'string' && body.broadcast_id) {
+        const { data: bcRow } = await supabase
+          .from('broadcasts')
+          .select('audience_filter')
+          .eq('id', body.broadcast_id)
+          .maybeSingle()
+        const af = bcRow?.audience_filter as {
+          customMessage?: CustomBroadcastConfig
+        } | null
+        if (af?.customMessage) {
+          customCfg = af.customMessage
+        }
+      }
+
+      templateRow = templateFromCustomBroadcastConfig(
+        customCfg ?? { bodyText: '', mediaType: 'none' }
       )
+    } else {
+      // Load the template row once so sendTemplateMessage can build
+      // header + button components on each iteration. Loading inside
+      // the loop would N+1 against Supabase for every recipient.
+      // Guard against a malformed local row crashing every send in
+      // the loop with the same opaque TypeError — fail loudly once.
+      const resolvedTemplate = await resolveTemplateRow(
+        supabase,
+        accountId,
+        template_name,
+        template_language,
+        config.waba_id,
+      )
+      if (resolvedTemplate.malformed) {
+        return NextResponse.json(
+          {
+            error:
+              'Template row is malformed locally — run "Sync from Meta" in Settings to repair it before broadcasting.',
+          },
+          { status: 500 },
+        )
+      }
+      templateRow = resolvedTemplate.row
+      sendLanguage = resolvedTemplate.language
     }
-    const templateRow = resolvedTemplate.row
 
     // Verify wallet balance for the planned broadcast
     const rates = await getWalletRates()
@@ -312,19 +350,21 @@ export async function POST(request: Request) {
 
         // Retry with phone variants on "not in allowed list" so numbers
         // that differ only in a trunk-prefix 0 still reach recipients.
-        const variants = phoneVariants(sanitized)
+        const variants =
+          config.waba_id === 'waha' ? [sanitized] : phoneVariants(sanitized)
         let sentMessageId: string | null = null
         let lastError: string | null = null
 
         for (const variant of variants) {
           try {
-            const result = await sendTemplateMessage({
+            const result = await sendBroadcastMessageToRecipient({
+              wabaId: config.waba_id,
               phoneNumberId: config.phone_number_id,
               accessToken,
-              to: variant,
+              toPhone: variant,
               templateName: template_name,
-              language: resolvedTemplate.language,
-              template: templateRow ?? undefined,
+              templateLanguage: sendLanguage,
+              templateRow,
               messageParams: recipient.messageParams,
               params: recipient.params ?? [],
             })
