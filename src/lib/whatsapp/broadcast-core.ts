@@ -27,8 +27,13 @@ import {
   phoneVariants,
   isRecipientNotAllowedError,
 } from '@/lib/whatsapp/phone-utils';
-import { resolveTemplateRow } from '@/lib/whatsapp/template-body';
+import {
+  resolveTemplateRow,
+  templateBodyParams,
+  templateContentText,
+} from '@/lib/whatsapp/template-body';
 import { resolveWhatsAppNumber } from '@/lib/whatsapp/numbers';
+import { findOrCreateNumberConversation } from '@/lib/conversations/number-conversation';
 import type { MessageTemplate } from '@/types';
 import { findOrCreateContact } from '@/lib/api/v1/contacts';
 import {
@@ -352,15 +357,30 @@ export async function deliverBroadcast(
 
       if (sentMessageId) {
         sentSuccessCount++;
+        const sentAt = new Date().toISOString();
         await db
           .from('broadcast_recipients')
           .update({
             status: 'sent',
-            sent_at: new Date().toISOString(),
+            sent_at: sentAt,
             whatsapp_message_id: sentMessageId,
             error_message: null,
           })
           .eq('id', recipient.recipientRowId);
+
+        if (plan.accountId) {
+          await recordBroadcastMessageInInbox(db, {
+            accountId: plan.accountId,
+            recipientRowId: recipient.recipientRowId,
+            phone: recipient.phone,
+            templateName: plan.templateName,
+            templateRow: plan.templateRow,
+            params: recipient.params,
+            messageParams: plan.messageParams,
+            whatsappMessageId: sentMessageId,
+            sentAt,
+          }).catch(() => {});
+        }
       } else {
         await db
           .from('broadcast_recipients')
@@ -443,4 +463,123 @@ export async function finalizeBroadcastStatus(
       updated_at: new Date().toISOString(),
     })
     .eq('id', broadcastId);
+}
+
+/**
+ * Best-effort helper to mirror a sent broadcast message into the Inbox
+ * (`conversations` + `messages`) so agents can see the full broadcast
+ * template inside each customer's chat thread.
+ */
+export async function recordBroadcastMessageInInbox(
+  db: SupabaseClient,
+  input: {
+    accountId: string;
+    userId?: string | null;
+    whatsappConfigId?: string | null;
+    contactId?: string | null;
+    recipientRowId?: string | null;
+    phone: string;
+    templateName: string;
+    templateRow: MessageTemplate | null;
+    params?: string[];
+    messageParams?: SendTimeParams;
+    whatsappMessageId: string;
+    sentAt?: string;
+  }
+): Promise<void> {
+  try {
+    let contactId = input.contactId ?? null;
+    let userId = input.userId ?? null;
+    let whatsappConfigId = input.whatsappConfigId ?? null;
+
+    if (!contactId && input.recipientRowId) {
+      const { data: rec } = await db
+        .from('broadcast_recipients')
+        .select('contact_id, broadcast_id')
+        .eq('id', input.recipientRowId)
+        .maybeSingle();
+      contactId = rec?.contact_id ?? null;
+      if (rec?.broadcast_id && (!userId || !whatsappConfigId)) {
+        const { data: bc } = await db
+          .from('broadcasts')
+          .select('user_id, whatsapp_config_id')
+          .eq('id', rec.broadcast_id)
+          .maybeSingle();
+        userId = userId || bc?.user_id || null;
+        whatsappConfigId = whatsappConfigId || bc?.whatsapp_config_id || null;
+      }
+    }
+
+    if (!contactId) {
+      const sanitized = sanitizePhoneForMeta(input.phone);
+      const { data: contact } = await db
+        .from('contacts')
+        .select('id, user_id')
+        .eq('account_id', input.accountId)
+        .or(`phone.eq.${input.phone},phone.eq.+${sanitized},phone.eq.${sanitized}`)
+        .limit(1)
+        .maybeSingle();
+      contactId = contact?.id ?? null;
+      userId = userId || contact?.user_id || null;
+    }
+
+    if (!contactId) return;
+
+    const config = await resolveWhatsAppNumber(
+      db,
+      input.accountId,
+      whatsappConfigId,
+      'id, user_id'
+    );
+    if (!config) return;
+
+    const ownerUserId = userId || (config as { user_id?: string }).user_id;
+    if (!ownerUserId) return;
+
+    const { conversation } = await findOrCreateNumberConversation(db, {
+      accountId: input.accountId,
+      contactId,
+      numberId: config.id,
+      userId: ownerUserId,
+    });
+
+    const bodyParams = templateBodyParams(input.params, input.messageParams);
+    const persistedText = templateContentText(
+      input.templateRow,
+      bodyParams,
+      null
+    );
+    const mediaUrl =
+      input.messageParams?.headerMediaUrl ||
+      input.templateRow?.header_media_url ||
+      (input.templateRow?.header_handle &&
+      /^https?:\/\//i.test(input.templateRow.header_handle)
+        ? input.templateRow.header_handle
+        : null);
+
+    const nowIso = input.sentAt || new Date().toISOString();
+
+    await db.from('messages').insert({
+      conversation_id: conversation.id,
+      sender_type: 'agent',
+      content_type: 'template',
+      content_text: persistedText || `[Template: ${input.templateName}]`,
+      media_url: mediaUrl || null,
+      template_name: input.templateName,
+      message_id: input.whatsappMessageId,
+      status: 'sent',
+      created_at: nowIso,
+    });
+
+    await db
+      .from('conversations')
+      .update({
+        last_message_text: persistedText || `[Template: ${input.templateName}]`,
+        last_message_at: nowIso,
+        updated_at: nowIso,
+      })
+      .eq('id', conversation.id);
+  } catch (err) {
+    console.warn('[broadcast-inbox] non-blocking sync warning:', err);
+  }
 }

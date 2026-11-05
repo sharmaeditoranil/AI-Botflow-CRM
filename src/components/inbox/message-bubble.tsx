@@ -174,6 +174,19 @@ function MessageContent({
             <LayoutTemplate className="h-3 w-3" />
             {t("template")}
           </span>
+          {message.media_url && (
+            <div className="my-1.5">
+              {/\.(mp4|3gp|mov)(\?|$)/i.test(message.media_url) ? (
+                <MediaVideoBubble message={message} onOpen={openMedia} t={t} />
+              ) : /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt)(\?|$)/i.test(
+                  message.media_url,
+                ) ? (
+                <MediaDocumentBubble message={message} t={t} />
+              ) : (
+                <MediaImageBubble message={message} onOpen={openMedia} t={t} />
+              )}
+            </div>
+          )}
           {message.content_text ? (
             <p className="mt-1 whitespace-pre-wrap break-words [word-break:break-word] text-sm leading-relaxed">
               {message.content_text}

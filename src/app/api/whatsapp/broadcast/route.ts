@@ -5,6 +5,7 @@ import { decrypt } from '@/lib/whatsapp/encryption'
 import type { SendTimeParams } from '@/lib/whatsapp/template-send-builder'
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body'
 import { resolveWhatsAppNumber } from '@/lib/whatsapp/numbers'
+import { recordBroadcastMessageInInbox } from '@/lib/whatsapp/broadcast-core'
 import {
   sanitizePhoneForMeta,
   isValidE164,
@@ -350,6 +351,18 @@ export async function POST(request: Request) {
           }
           sentCount++
           newlySentCount++
+
+          await recordBroadcastMessageInInbox(supabase, {
+            accountId,
+            userId,
+            whatsappConfigId: config.id,
+            phone: recipient.phone,
+            templateName: template_name,
+            templateRow,
+            params: recipient.params ?? [],
+            messageParams: recipient.messageParams,
+            whatsappMessageId: sentMessageId,
+          }).catch(() => {})
         } else {
           console.error(
             `Failed to send broadcast to ${recipient.phone}:`,

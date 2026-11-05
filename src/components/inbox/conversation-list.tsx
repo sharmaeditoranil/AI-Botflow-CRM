@@ -8,6 +8,7 @@ import {
   matchesContactFilters,
   normalizeConversations,
 } from "@/lib/inbox/conversations";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { useAuth } from "@/hooks/use-auth";
 import { useWhatsAppNumbers, numberName } from "@/hooks/use-whatsapp-numbers";
 import { cn } from "@/lib/utils";
@@ -91,6 +92,7 @@ export function ConversationList({
   ], [t]);
 
   const [search, setSearch] = useState("");
+  const [visibleLimit, setVisibleLimit] = useState(100);
   const [tabFilter, setTabFilter] = useState<TabFilter>("all");
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>("all");
@@ -148,24 +150,28 @@ export function ConversationList({
     let cancelled = false;
 
     (async () => {
-      const { data, error } = await supabase
-        .from("conversations")
-        .select(CONVERSATION_SELECT)
-        .order("last_message_at", { ascending: false });
+      try {
+        const data = await fetchAllRows<Parameters<typeof normalizeConversations>[0][number]>((from, to) =>
+          supabase
+            .from("conversations")
+            .select(CONVERSATION_SELECT)
+            .order("last_message_at", { ascending: false })
+            .order("id", { ascending: false })
+            .range(from, to)
+        );
 
-      if (cancelled) return;
-
-      if (error) {
+        if (cancelled) return;
+        onConversationsLoadedRef.current(normalizeConversations(data ?? []));
+      } catch (error: unknown) {
+        if (cancelled) return;
+        const errObj = error as { message?: string; details?: string; hint?: string; code?: string };
         console.error("Failed to fetch conversations:", {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code,
+          message: errObj?.message,
+          details: errObj?.details,
+          hint: errObj?.hint,
+          code: errObj?.code,
         });
-        return;
       }
-
-      onConversationsLoadedRef.current(normalizeConversations(data ?? []));
     })();
 
     return () => {
@@ -691,7 +697,18 @@ export function ConversationList({
       )}
 
       {/* Conversation Items List with native touch scrolling */}
-      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full [-webkit-overflow-scrolling:touch] overscroll-y-contain [touch-action:pan-y] pb-24">
+      <div
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          if (
+            visibleLimit < filtered.length &&
+            el.scrollTop + el.clientHeight >= el.scrollHeight - 400
+          ) {
+            setVisibleLimit((prev) => Math.min(prev + 100, filtered.length));
+          }
+        }}
+        className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full [-webkit-overflow-scrolling:touch] overscroll-y-contain [touch-action:pan-y] pb-24"
+      >
         {filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center px-6">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.05] border border-white/10 mb-3">
@@ -714,7 +731,7 @@ export function ConversationList({
             )}
           </div>
         ) : (
-          filtered.map((conv) => (
+          filtered.slice(0, visibleLimit).map((conv) => (
             <ConversationItem
               key={conv.id}
               conversation={conv}
