@@ -8,7 +8,6 @@ import {
   matchesContactFilters,
   normalizeConversations,
 } from "@/lib/inbox/conversations";
-import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { useAuth } from "@/hooks/use-auth";
 import { useWhatsAppNumbers, numberName } from "@/hooks/use-whatsapp-numbers";
 import { cn } from "@/lib/utils";
@@ -59,6 +58,12 @@ function getAvatarColor(name: string) {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
+const FAST_INITIAL_BATCH = 40;
+const BG_BATCH_SIZE = 400;
+let cachedUserId: string | null = null;
+let cachedConversations: Conversation[] = [];
+let backgroundFullLoadDone = false;
+
 function formatWhatsAppTime(dateStr?: string) {
   if (!dateStr) return "";
   const date = new Date(dateStr);
@@ -92,7 +97,10 @@ export function ConversationList({
   ], [t]);
 
   const [search, setSearch] = useState("");
-  const [visibleLimit, setVisibleLimit] = useState(100);
+  const [visibleLimit, setVisibleLimit] = useState(80);
+  const [initialLoading, setInitialLoading] = useState(
+    () => conversations.length === 0 && cachedConversations.length === 0
+  );
   const [tabFilter, setTabFilter] = useState<TabFilter>("all");
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [platformFilter, setPlatformFilter] = useState<PlatformFilter>("all");
@@ -145,25 +153,117 @@ export function ConversationList({
     onConversationsLoadedRef.current = onConversationsLoaded;
   });
 
+  // Keep in-memory cache synced with latest conversations state
+  useEffect(() => {
+    if (conversations.length > 0 && userId) {
+      cachedUserId = userId;
+      cachedConversations = conversations;
+    }
+  }, [conversations, userId]);
+
   useEffect(() => {
     const supabase = createClient();
     let cancelled = false;
 
+    const currentUserKey = userId || "default";
+    const storageKey = `wacrm:inbox:top-convs-v1:${currentUserKey}`;
+
+    // 0. Instant 0ms hydration from memory cache or localStorage snapshot
+    if (userId && cachedUserId === userId && cachedConversations.length > 0) {
+      onConversationsLoadedRef.current(cachedConversations);
+      setInitialLoading(false);
+    } else {
+      try {
+        const raw = localStorage.getItem(storageKey);
+        if (raw) {
+          const parsed = JSON.parse(raw) as Conversation[];
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            onConversationsLoadedRef.current(parsed);
+            setInitialLoading(false);
+          }
+        }
+      } catch {
+        // Ignore storage read errors
+      }
+    }
+
     (async () => {
       try {
-        const data = await fetchAllRows<Parameters<typeof normalizeConversations>[0][number]>((from, to) =>
-          supabase
+        // 1. Stage 1: Fetch top 40 most recent conversations FIRST for instant display
+        const { data: firstRows, error: firstErr } = await supabase
+          .from("conversations")
+          .select(CONVERSATION_SELECT)
+          .order("last_message_at", { ascending: false })
+          .order("id", { ascending: false })
+          .range(0, FAST_INITIAL_BATCH - 1);
+
+        if (cancelled) return;
+        if (firstErr) throw firstErr;
+
+        const firstBatch = normalizeConversations(
+          (firstRows ?? []) as Parameters<typeof normalizeConversations>[0]
+        );
+        onConversationsLoadedRef.current(firstBatch);
+        setInitialLoading(false);
+
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(firstBatch.slice(0, FAST_INITIAL_BATCH)));
+        } catch {
+          // Ignore storage quota errors
+        }
+
+        // If fewer than FAST_INITIAL_BATCH rows exist, or if we already finished the full
+        // background load in this session (and this is just a tab-focus resync), we're done!
+        if (
+          firstBatch.length < FAST_INITIAL_BATCH ||
+          (resyncToken > 0 && backgroundFullLoadDone && cachedUserId === userId)
+        ) {
+          backgroundFullLoadDone = true;
+          return;
+        }
+
+        // 2. Stage 2: Slowly & silently load older conversations in background batches
+        const accumulated: Conversation[] = [...firstBatch];
+        let offset = FAST_INITIAL_BATCH;
+
+        while (!cancelled) {
+          // Yield to browser main thread so scrolling/clicking is 100% smooth
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          if (cancelled) return;
+
+          const { data: batchRows, error: batchErr } = await supabase
             .from("conversations")
             .select(CONVERSATION_SELECT)
             .order("last_message_at", { ascending: false })
             .order("id", { ascending: false })
-            .range(from, to)
-        );
+            .range(offset, offset + BG_BATCH_SIZE - 1);
 
-        if (cancelled) return;
-        onConversationsLoadedRef.current(normalizeConversations(data ?? []));
+          if (cancelled) return;
+          if (batchErr) {
+            console.error("Background conversations batch error:", batchErr.message);
+            break;
+          }
+
+          const rows = (batchRows ?? []) as Parameters<typeof normalizeConversations>[0];
+          if (rows.length === 0) {
+            backgroundFullLoadDone = true;
+            break;
+          }
+
+          const normalizedBatch = normalizeConversations(rows);
+          accumulated.push(...normalizedBatch);
+          onConversationsLoadedRef.current([...accumulated]);
+
+          if (rows.length < BG_BATCH_SIZE) {
+            backgroundFullLoadDone = true;
+            break;
+          }
+
+          offset += rows.length;
+        }
       } catch (error: unknown) {
         if (cancelled) return;
+        setInitialLoading(false);
         const errObj = error as { message?: string; details?: string; hint?: string; code?: string };
         console.error("Failed to fetch conversations:", {
           message: errObj?.message,
@@ -177,7 +277,7 @@ export function ConversationList({
     return () => {
       cancelled = true;
     };
-  }, [resyncToken]);
+  }, [resyncToken, userId]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -451,7 +551,7 @@ export function ConversationList({
 
       {/* Filter Pills Row */}
       <div className="flex items-center gap-2 overflow-x-auto overflow-y-hidden px-4 py-1.5 no-scrollbar shrink-0 bg-[#111b21] w-full max-w-full">
-        {/* All · 24 */}
+        {/* All */}
         <button
           type="button"
           onClick={() => {
@@ -466,8 +566,6 @@ export function ConversationList({
           )}
         >
           <span>All</span>
-          <span className="mx-1 opacity-70">·</span>
-          <span>{conversations.length}</span>
         </button>
 
         {/* Multi-Channel Dots Dropdown: 🟢🔴🔵 ▾ */}
@@ -513,7 +611,6 @@ export function ConversationList({
               )}
             >
               <span>All Channels</span>
-              <span className="text-xs text-muted-foreground">({conversations.length})</span>
             </DropdownMenuItem>
             <DropdownMenuItem
               onClick={() => setPlatformFilter("whatsapp")}
@@ -709,16 +806,36 @@ export function ConversationList({
         }}
         className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden w-full max-w-full [-webkit-overflow-scrolling:touch] overscroll-y-contain [touch-action:pan-y] pb-24"
       >
-        {filtered.length === 0 ? (
+        {initialLoading && conversations.length === 0 ? (
+          <div className="divide-y divide-[#222d34]/40 lg:divide-border/30">
+            {Array.from({ length: 8 }).map((_, idx) => (
+              <div
+                key={idx}
+                className="flex items-center gap-3.5 px-4 py-3 animate-pulse"
+              >
+                <div className="h-12 w-12 shrink-0 rounded-full bg-[#202c33] lg:bg-muted" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="h-3.5 w-32 rounded bg-[#202c33] lg:bg-muted" />
+                    <div className="h-2.5 w-10 rounded bg-[#202c33] lg:bg-muted" />
+                  </div>
+                  <div className="h-3 w-48 rounded bg-[#202c33]/80 lg:bg-muted/70" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center px-6">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.05] border border-white/10 mb-3">
               <Search className="h-6 w-6 text-neutral-500" />
             </div>
             <p className="text-sm font-semibold text-neutral-300">
-              {search ? t("noMatchingConversations") : t("noConversations")}
+              {t("noConversations")}
             </p>
             <p className="mt-1 text-xs text-neutral-500 max-w-xs">
-              {search ? t("tryDifferentSearch") : t("conversationsWillAppear")}
+              {search
+                ? "Try searching with a different name or phone number."
+                : "New customer chats and broadcast messages will appear here."}
             </p>
             {search && (
               <button

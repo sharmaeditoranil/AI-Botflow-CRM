@@ -454,7 +454,64 @@ function InboxPageInner() {
 
   const handleConversationsLoaded = useCallback(
     (loaded: Conversation[]) => {
-      setConversations(loaded);
+      setConversations((prev) => {
+        if (prev.length === 0) {
+          return activeConversation
+            ? loaded.map((c) =>
+                c.id === activeConversation.id ? { ...c, unread_count: 0 } : c
+              )
+            : loaded;
+        }
+
+        const prevMap = new Map(prev.map((c) => [c.id, c]));
+        const loadedIds = new Set(loaded.map((c) => c.id));
+        const seen = new Set<string>();
+        const merged: Conversation[] = [];
+
+        // Keep any brand-new realtime conversations that arrived since the fetch started
+        const topLoadedTime = loaded[0]?.last_message_at;
+        for (const p of prev) {
+          if (!loadedIds.has(p.id)) {
+            if (!topLoadedTime || (p.last_message_at && p.last_message_at >= topLoadedTime)) {
+              seen.add(p.id);
+              merged.push(p);
+            }
+          }
+        }
+
+        for (const item of loaded) {
+          if (seen.has(item.id)) continue;
+          seen.add(item.id);
+          const existing = prevMap.get(item.id);
+          if (existing) {
+            const isFresherInPrev =
+              existing.last_message_at &&
+              item.last_message_at &&
+              new Date(existing.last_message_at).getTime() >
+                new Date(item.last_message_at).getTime();
+            const base = isFresherInPrev
+              ? { ...item, ...existing, contact: existing.contact ?? item.contact }
+              : item;
+            merged.push(
+              activeConversation?.id === item.id ? { ...base, unread_count: 0 } : base
+            );
+          } else {
+            merged.push(
+              activeConversation?.id === item.id ? { ...item, unread_count: 0 } : item
+            );
+          }
+        }
+
+        // Preserve older already-loaded conversations when a quick resync only refreshes top rows
+        for (const p of prev) {
+          if (!seen.has(p.id)) {
+            seen.add(p.id);
+            merged.push(p);
+          }
+        }
+
+        return merged;
+      });
 
       const isDesktop = typeof window !== "undefined" && window.innerWidth >= 1024;
 
