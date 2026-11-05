@@ -739,6 +739,7 @@
         "name": "Nome",
         "template": "Modelo",
         "recipients": "Destinatários",
+        "sent": "Enviadas",
         "delivery": "Entrega",
         "read": "Lidas",
         "status": "Status",

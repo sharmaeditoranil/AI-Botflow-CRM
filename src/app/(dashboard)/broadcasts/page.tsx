@@ -225,6 +225,7 @@ export default function BroadcastsPage() {
                 <TableHead className="hidden text-right text-muted-foreground sm:table-cell">
                   {t('table.recipients')}
                 </TableHead>
+                <TableHead className="hidden text-muted-foreground md:table-cell">{t('table.sent')}</TableHead>
                 <TableHead className="hidden text-muted-foreground lg:table-cell">{t('table.delivery')}</TableHead>
                 <TableHead className="hidden text-muted-foreground lg:table-cell">{t('table.read')}</TableHead>
                 <TableHead className="text-muted-foreground">{t('table.status')}</TableHead>
@@ -248,6 +249,13 @@ export default function BroadcastsPage() {
                     </TableCell>
                     <TableCell className="hidden text-right text-muted-foreground tabular-nums sm:table-cell">
                       {broadcast.total_recipients}
+                    </TableCell>
+                    <TableCell className="hidden md:table-cell">
+                      <RateCell
+                        value={broadcast.sent_count}
+                        total={broadcast.total_recipients}
+                        color="bg-emerald-500"
+                      />
                     </TableCell>
                     <TableCell className="hidden lg:table-cell">
                       <RateCell

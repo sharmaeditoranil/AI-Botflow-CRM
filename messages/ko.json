@@ -739,6 +739,7 @@
         "name": "이름",
         "template": "템플릿",
         "recipients": "수신자",
+        "sent": "발송",
         "delivery": "전달",
         "read": "읽음",
         "status": "상태",

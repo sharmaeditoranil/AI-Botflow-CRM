@@ -739,6 +739,7 @@
         "name": "Nombre",
         "template": "Plantilla",
         "recipients": "Destinatarios",
+        "sent": "Enviados",
         "delivery": "Entrega",
         "read": "Leídos",
         "status": "Estado",

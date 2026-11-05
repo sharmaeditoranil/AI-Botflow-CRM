@@ -28,6 +28,9 @@ import {
   Workflow,
   Smartphone,
   Monitor,
+  Laptop,
+  Download,
+  ChevronUp,
   X,
   Zap,
   Store,
@@ -374,43 +377,122 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             </Link>
           )}
 
-          {/* Android App Link */}
-          <a
-            href="/downloads/ai-botflow-crm.apk?v=6"
-            download="ai-botflow-crm.apk"
-            className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1.5 text-xs text-emerald-400 transition-colors hover:bg-emerald-500/20"
-            title="Download Android App APK"
-          >
-            <div className="flex items-center gap-1.5 min-w-0">
-              <Smartphone className="size-3.5 shrink-0 text-emerald-400" />
-              <span className="font-semibold text-[11px] truncate">Android App</span>
-            </div>
-            <span className="rounded-md bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">
-              APK ↓
-            </span>
-          </a>
-
-          {/* Desktop apps (Mac / Windows) */}
-          <div className="grid grid-cols-2 gap-1.5">
-            <a
-              href="/downloads/desktop/AI-Botflow-CRM-Mac.dmg"
-              download
-              className="flex items-center justify-center gap-1.5 rounded-xl border border-border/60 bg-card/60 px-2 py-1.5 text-[11px] font-semibold text-foreground/80 transition-colors hover:bg-muted"
-              title="Download the Mac app"
+          {/* Download AI Botflow App Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger className="group flex w-full items-center justify-between rounded-xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/15 via-emerald-500/5 to-transparent px-2.5 py-2 text-left transition-all hover:border-emerald-500/50 hover:from-emerald-500/20 focus:outline-none data-popup-open:border-emerald-500/50 data-popup-open:from-emerald-500/20">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="flex size-6 shrink-0 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-500 dark:text-emerald-400">
+                  <Download className="size-3.5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-[11px] font-semibold text-foreground">
+                    Download - AI Botflow App
+                  </p>
+                  <p className="truncate text-[9px] text-muted-foreground">
+                    Mobile • Windows • Mac
+                  </p>
+                </div>
+              </div>
+              <ChevronUp className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-popup-open:rotate-180" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              side="top"
+              sideOffset={8}
+              className="min-w-60 rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-xl"
             >
-              <Monitor className="size-3.5 shrink-0 text-primary" />
-              Mac App
-            </a>
-            <a
-              href="/downloads/desktop/AI-Botflow-CRM-Setup.exe"
-              download
-              className="flex items-center justify-center gap-1.5 rounded-xl border border-border/60 bg-card/60 px-2 py-1.5 text-[11px] font-semibold text-foreground/80 transition-colors hover:bg-muted"
-              title="Download the Windows app"
-            >
-              <Monitor className="size-3.5 shrink-0 text-primary" />
-              Windows App
-            </a>
-          </div>
+              <div className="px-2.5 py-1.5">
+                <p className="text-[11px] font-semibold text-foreground">
+                  Download AI Botflow App
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  Choose your device to start download
+                </p>
+              </div>
+              <DropdownMenuSeparator className="my-1 bg-border/60" />
+              <DropdownMenuItem
+                render={
+                  <a
+                    href="/downloads/ai-botflow-crm.apk?v=6"
+                    download="ai-botflow-crm.apk"
+                    onClick={onClose}
+                    className="flex items-center justify-between gap-2.5 rounded-lg px-2.5 py-2 text-popover-foreground focus:bg-accent focus:text-accent-foreground cursor-pointer"
+                  />
+                }
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-500">
+                    <Smartphone className="size-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-foreground">
+                      Mobile App (Android)
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Direct APK installer
+                    </p>
+                  </div>
+                </div>
+                <span className="rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold text-emerald-500">
+                  APK ↓
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                render={
+                  <a
+                    href="/downloads/desktop/AI-Botflow-CRM-Setup.exe"
+                    download
+                    onClick={onClose}
+                    className="flex items-center justify-between gap-2.5 rounded-lg px-2.5 py-2 text-popover-foreground focus:bg-accent focus:text-accent-foreground cursor-pointer"
+                  />
+                }
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-blue-500/15 text-blue-500">
+                    <Monitor className="size-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-foreground">
+                      Windows App
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Windows 10 / 11 (.exe)
+                    </p>
+                  </div>
+                </div>
+                <span className="rounded-md bg-blue-500/15 px-1.5 py-0.5 text-[9px] font-bold text-blue-500">
+                  EXE ↓
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                render={
+                  <a
+                    href="/downloads/desktop/AI-Botflow-CRM-Mac.dmg"
+                    download
+                    onClick={onClose}
+                    className="flex items-center justify-between gap-2.5 rounded-lg px-2.5 py-2 text-popover-foreground focus:bg-accent focus:text-accent-foreground cursor-pointer"
+                  />
+                }
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-purple-500/15 text-purple-500">
+                    <Laptop className="size-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-foreground">
+                      Mac App
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      macOS Apple Silicon / Intel (.dmg)
+                    </p>
+                  </div>
+                </div>
+                <span className="rounded-md bg-purple-500/15 px-1.5 py-0.5 text-[9px] font-bold text-purple-500">
+                  DMG ↓
+                </span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* User Profile Dropdown Card */}
           <DropdownMenu>
