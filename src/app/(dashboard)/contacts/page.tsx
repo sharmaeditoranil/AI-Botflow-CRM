@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import type { Contact, Tag, ContactTag } from '@/types';
@@ -49,12 +50,18 @@ import {
   SlidersHorizontal,
   Filter,
   X,
+  Sparkles,
+  CheckCircle2,
+  AlertTriangle,
+  Crown,
+  ArrowUpRight,
 } from 'lucide-react';
 import { ContactForm } from '@/components/contacts/contact-form';
 import { ContactDetailView } from '@/components/contacts/contact-detail-view';
 import { ImportModal } from '@/components/contacts/import-modal';
 import { CustomFieldsManager } from '@/components/contacts/custom-fields-manager';
 import { useCan } from '@/hooks/use-can';
+import { useAccountUsage, notifyAccountUsageUpdated } from '@/hooks/use-account-usage';
 import { GatedButton } from '@/components/ui/gated-button';
 import { useTranslations } from 'next-intl';
 
@@ -69,6 +76,13 @@ export default function ContactsPage() {
   const supabase = createClient();
   const canEdit = useCan('send-messages');
   const canEditSettings = useCan('edit-settings');
+  const {
+    planName,
+    maxContacts,
+    usedContacts,
+    isUnlimited,
+    loading: usageLoading,
+  } = useAccountUsage();
 
   const [contacts, setContacts] = useState<ContactWithTags[]>([]);
   const [loading, setLoading] = useState(true);
@@ -263,6 +277,7 @@ export default function ContactsPage() {
     } else {
       toast.success(t('toastDeleted'));
       fetchContacts();
+      notifyAccountUsageUpdated();
     }
 
     setDeleting(false);
@@ -308,6 +323,7 @@ export default function ContactsPage() {
       toast.success(t('toastBulkDeleted', { count: ids.length }));
       setSelected(new Set());
       fetchContacts();
+      notifyAccountUsageUpdated();
     }
 
     setDeleting(false);
@@ -324,6 +340,19 @@ export default function ContactsPage() {
     a.name.localeCompare(b.name)
   );
   const hasActiveFilters = search.trim().length > 0 || selectedTagIds.length > 0;
+
+  // Use the live totalCount when no filters are active so it matches the table immediately
+  const activeUsedContacts = !hasActiveFilters && !loading ? totalCount : usedContacts;
+  const activeRemainingContacts = Math.max(0, maxContacts - activeUsedContacts);
+  const rawContactPercent = maxContacts > 0 ? (activeUsedContacts / maxContacts) * 100 : 0;
+  const activeUsedPercent = Math.min(
+    100,
+    rawContactPercent > 0 && rawContactPercent < 1
+      ? Number(rawContactPercent.toFixed(1))
+      : Math.round(rawContactPercent)
+  );
+  const isAtOrOverContactLimit = !isUnlimited && activeUsedContacts >= maxContacts;
+  const isNearContactLimit = !isUnlimited && activeUsedPercent >= 80 && !isAtOrOverContactLimit;
 
   function toggleTagFilter(tagId: string) {
     setSelectedTagIds((prev) =>
@@ -381,6 +410,165 @@ export default function ContactsPage() {
           </GatedButton>
         </div>
       </div>
+
+      {/* Active Contacts Plan Quota & Usage Card */}
+      {!usageLoading && (
+        <div
+          className={`rounded-2xl border p-4 sm:p-5 shadow-xs transition-all ${
+            isAtOrOverContactLimit
+              ? 'border-rose-500/40 bg-gradient-to-r from-rose-500/10 via-card to-card'
+              : isNearContactLimit
+              ? 'border-amber-500/40 bg-gradient-to-r from-amber-500/10 via-card to-card'
+              : 'border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-card to-card'
+          }`}
+        >
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            {/* Left: Plan Identity & Summary */}
+            <div className="flex items-start sm:items-center gap-3.5">
+              <div
+                className={`flex size-11 shrink-0 items-center justify-center rounded-xl border ${
+                  isAtOrOverContactLimit
+                    ? 'border-rose-500/30 bg-rose-500/15 text-rose-500'
+                    : isNearContactLimit
+                    ? 'border-amber-500/30 bg-amber-500/15 text-amber-500'
+                    : 'border-emerald-500/30 bg-emerald-500/15 text-emerald-500'
+                }`}
+              >
+                {isUnlimited ? (
+                  <Crown className="size-5" />
+                ) : isAtOrOverContactLimit || isNearContactLimit ? (
+                  <AlertTriangle className="size-5" />
+                ) : (
+                  <Users className="size-5" />
+                )}
+              </div>
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-bold text-foreground">
+                    Active Contacts Plan Usage
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
+                    <Sparkles className="size-3" />
+                    {planName} Plan
+                  </span>
+                  {isAtOrOverContactLimit ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-rose-500/40 bg-rose-500/15 px-2 py-0.5 text-[10px] font-bold text-rose-500">
+                      Limit Reached
+                    </span>
+                  ) : isNearContactLimit ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold text-amber-500">
+                      Almost Full ({activeUsedPercent}%)
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-500">
+                      <CheckCircle2 className="size-3" /> Active Quota
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  You have used{' '}
+                  <strong className="text-foreground font-semibold">
+                    {activeUsedContacts.toLocaleString('en-IN')}
+                  </strong>{' '}
+                  out of{' '}
+                  <strong className="text-foreground font-semibold">
+                    {maxContacts.toLocaleString('en-IN')}
+                  </strong>{' '}
+                  contacts in your active plan •{' '}
+                  <strong
+                    className={
+                      isAtOrOverContactLimit
+                        ? 'text-rose-500 font-semibold'
+                        : 'text-emerald-500 font-semibold'
+                    }
+                  >
+                    {activeRemainingContacts.toLocaleString('en-IN')} contacts remaining
+                  </strong>
+                </p>
+              </div>
+            </div>
+
+            {/* Right: 3 Clear Stat Boxes (Plan Limit | Used | Remaining) + Upgrade Link */}
+            <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+              {/* Total Plan Limit */}
+              <div className="flex-1 sm:flex-initial min-w-[110px] rounded-xl border border-border/80 bg-background/70 px-3.5 py-2">
+                <span className="block text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Plan Limit
+                </span>
+                <span className="mt-0.5 block text-base font-extrabold tabular-nums text-foreground">
+                  {maxContacts.toLocaleString('en-IN')}
+                </span>
+              </div>
+
+              {/* Used Contacts */}
+              <div className="flex-1 sm:flex-initial min-w-[110px] rounded-xl border border-primary/25 bg-primary/5 px-3.5 py-2">
+                <span className="block text-[10px] font-semibold uppercase tracking-wider text-primary">
+                  Used ({activeUsedPercent}%)
+                </span>
+                <span className="mt-0.5 block text-base font-extrabold tabular-nums text-foreground">
+                  {activeUsedContacts.toLocaleString('en-IN')}
+                </span>
+              </div>
+
+              {/* Remaining Contacts */}
+              <div
+                className={`flex-1 sm:flex-initial min-w-[120px] rounded-xl border px-3.5 py-2 ${
+                  isAtOrOverContactLimit
+                    ? 'border-rose-500/35 bg-rose-500/10'
+                    : 'border-emerald-500/30 bg-emerald-500/10'
+                }`}
+              >
+                <span
+                  className={`block text-[10px] font-semibold uppercase tracking-wider ${
+                    isAtOrOverContactLimit ? 'text-rose-500' : 'text-emerald-500'
+                  }`}
+                >
+                  Remaining Left
+                </span>
+                <span
+                  className={`mt-0.5 block text-base font-extrabold tabular-nums ${
+                    isAtOrOverContactLimit ? 'text-rose-500' : 'text-emerald-500'
+                  }`}
+                >
+                  {activeRemainingContacts.toLocaleString('en-IN')}
+                </span>
+              </div>
+
+              <Link
+                href="/billing"
+                className="inline-flex h-10 items-center justify-center gap-1.5 rounded-xl border border-primary/30 bg-primary/10 px-3.5 text-xs font-semibold text-primary transition-colors hover:bg-primary hover:text-primary-foreground"
+              >
+                <span>{isUnlimited ? 'View Plan' : 'Upgrade Plan'}</span>
+                <ArrowUpRight className="size-3.5" />
+              </Link>
+            </div>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="mt-3.5 space-y-1.5">
+            <div className="h-2 w-full overflow-hidden rounded-full bg-muted/80">
+              <div
+                className={`h-full rounded-full transition-all duration-500 ${
+                  isAtOrOverContactLimit
+                    ? 'bg-rose-500'
+                    : isNearContactLimit
+                    ? 'bg-amber-500'
+                    : 'bg-emerald-500'
+                }`}
+                style={{ width: `${Math.max(activeUsedContacts > 0 ? 2 : 0, activeUsedPercent)}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+              <span>
+                Used: <strong className="text-foreground">{activeUsedContacts.toLocaleString('en-IN')}</strong> ({activeUsedPercent}%)
+              </span>
+              <span>
+                Remaining: <strong className="text-emerald-500">{activeRemainingContacts.toLocaleString('en-IN')}</strong> / {maxContacts.toLocaleString('en-IN')}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Search + tag filter */}
       <div className="space-y-2">
@@ -767,6 +955,7 @@ export default function ContactsPage() {
         onSaved={() => {
           fetchContacts();
           fetchTags();
+          notifyAccountUsageUpdated();
         }}
         onViewExisting={(id) => {
           setFormOpen(false);
@@ -783,14 +972,20 @@ export default function ContactsPage() {
         open={detailOpen}
         onOpenChange={setDetailOpen}
         contactId={detailContactId}
-        onUpdated={fetchContacts}
+        onUpdated={() => {
+          fetchContacts();
+          notifyAccountUsageUpdated();
+        }}
       />
 
       {/* Import Modal */}
       <ImportModal
         open={importOpen}
         onOpenChange={setImportOpen}
-        onImported={fetchContacts}
+        onImported={() => {
+          fetchContacts();
+          notifyAccountUsageUpdated();
+        }}
       />
 
       {/* Custom Fields Manager (admin+) */}

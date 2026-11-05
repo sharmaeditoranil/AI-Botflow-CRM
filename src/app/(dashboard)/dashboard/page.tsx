@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/hooks/use-auth'
+import { useAccountUsage } from '@/hooks/use-account-usage'
 import { formatCurrency } from '@/lib/currency'
 import Link from 'next/link'
 import {
@@ -12,6 +13,8 @@ import {
   Send,
   ArrowRight,
   Store,
+  Users,
+  Sparkles,
 } from 'lucide-react'
 import { BrandLogo } from '@/components/brand/brand-logo'
 
@@ -46,6 +49,16 @@ type RangeDays = 7 | 30 | 90
 export default function DashboardPage() {
   const t = useTranslations('Dashboard.page')
   const { defaultCurrency, account } = useAuth()
+  const {
+    planName,
+    maxContacts,
+    usedContacts,
+    remainingContacts,
+    usedPercent,
+    isNearLimit,
+    isAtOrOverLimit,
+    loading: usageLoading,
+  } = useAccountUsage()
   const [metrics, setMetrics] = useState<MetricsBundle | null>(null)
   const [metricsLoading, setMetricsLoading] = useState(true)
   const [daysRemaining, setDaysRemaining] = useState<number | null>(null)
@@ -175,6 +188,76 @@ export default function DashboardPage() {
 
       {/* Onboarding Checklist for new users */}
       <OnboardingChecklist />
+
+      {/* Active Contacts Plan Usage Quick Strip */}
+      {!usageLoading && (
+        <div className="rounded-2xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-card to-card p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 shrink-0">
+              <Users className="size-5" />
+            </div>
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-semibold text-xs sm:text-sm text-foreground">
+                  Active Contacts Plan Quota
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 border border-primary/30 px-2 py-0.5 text-[10px] font-semibold text-primary">
+                  <Sparkles className="size-3" /> {planName} Plan
+                </span>
+              </div>
+              <p className="text-[11px] sm:text-xs text-muted-foreground">
+                Used:{' '}
+                <strong className="text-foreground font-semibold">
+                  {usedContacts.toLocaleString('en-IN')}
+                </strong>{' '}
+                ({usedPercent}%) • Remaining:{' '}
+                <strong
+                  className={
+                    isAtOrOverLimit
+                      ? 'text-rose-500 font-semibold'
+                      : 'text-emerald-500 font-semibold'
+                  }
+                >
+                  {remainingContacts.toLocaleString('en-IN')} left
+                </strong>{' '}
+                • Plan Limit:{' '}
+                <strong className="text-foreground font-semibold">
+                  {maxContacts.toLocaleString('en-IN')}
+                </strong>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="w-full sm:w-44 space-y-1">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    isAtOrOverLimit
+                      ? 'bg-rose-500'
+                      : isNearLimit
+                      ? 'bg-amber-500'
+                      : 'bg-emerald-500'
+                  }`}
+                  style={{ width: `${Math.max(usedContacts > 0 ? 3 : 0, usedPercent)}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                <span>{usedContacts.toLocaleString('en-IN')} used</span>
+                <span className="text-emerald-500 font-medium">
+                  {remainingContacts.toLocaleString('en-IN')} left
+                </span>
+              </div>
+            </div>
+            <Link
+              href="/contacts"
+              className="inline-flex items-center justify-center gap-1 rounded-xl border border-border bg-background/80 px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted transition-colors shrink-0"
+            >
+              Manage Contacts <ArrowRight className="size-3.5" />
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Google Business Profile & Local Growth Quick Strip */}
       <div className="rounded-2xl border border-border/70 bg-gradient-to-r from-card via-card/90 to-primary/5 p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">

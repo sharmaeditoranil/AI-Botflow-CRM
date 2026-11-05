@@ -459,94 +459,124 @@ export function BillingPanel() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {/* Contacts */}
-              <div className="rounded-xl border border-border bg-muted/30 p-4 transition-colors hover:bg-muted/40">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-1.5 font-medium text-foreground">
-                    <Users className="h-4 w-4 text-primary" /> Contacts
-                  </span>
-                  <span className="font-semibold text-muted-foreground">
-                    {(usage?.contacts || 0).toLocaleString()} / {(currentPlan?.max_contacts || 1000).toLocaleString()}
-                  </span>
-                </div>
-                <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full bg-primary transition-all rounded-full"
-                    style={{ width: `${getPercent(usage?.contacts || 0, currentPlan?.max_contacts || 1000)}%` }}
-                  />
-                </div>
-                <div className="mt-2 text-[11px] text-muted-foreground">
-                  {getPercent(usage?.contacts || 0, currentPlan?.max_contacts || 1000)}% used
-                </div>
-              </div>
+              {(() => {
+                const usedC = usage?.contacts || 0;
+                const maxC = currentPlan?.max_contacts || 100;
+                const remC = Math.max(0, maxC - usedC);
+                const pctC = getPercent(usedC, maxC);
+                return (
+                  <div className="rounded-xl border border-border bg-muted/30 p-4 transition-colors hover:bg-muted/40">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-1.5 font-medium text-foreground">
+                        <Users className="h-4 w-4 text-primary" /> Active Contacts
+                      </span>
+                      <span className="font-semibold text-muted-foreground">
+                        {usedC.toLocaleString('en-IN')} / {maxC.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full bg-primary transition-all rounded-full"
+                        style={{ width: `${Math.max(usedC > 0 ? 3 : 0, pctC)}%` }}
+                      />
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+                      <span>Used: <strong className="text-foreground">{usedC.toLocaleString('en-IN')}</strong> ({pctC}%)</span>
+                      <span className="text-emerald-500 font-semibold">Left: {remC.toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Monthly Broadcasts */}
-              <div className="rounded-xl border border-border bg-muted/30 p-4 transition-colors hover:bg-muted/40">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-1.5 font-medium text-foreground">
-                    <Radio className="h-4 w-4 text-primary" /> Monthly Broadcasts
-                  </span>
-                  <span className="font-semibold text-muted-foreground">
-                    {(usage?.broadcasts_month || 0).toLocaleString()} / {(currentPlan?.max_broadcasts_monthly || 5000).toLocaleString()}
-                  </span>
-                </div>
-                <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full bg-primary transition-all rounded-full"
-                    style={{
-                      width: `${getPercent(usage?.broadcasts_month || 0, currentPlan?.max_broadcasts_monthly || 5000)}%`,
-                    }}
-                  />
-                </div>
-                <div className="mt-2 text-[11px] text-muted-foreground">
-                  {getPercent(usage?.broadcasts_month || 0, currentPlan?.max_broadcasts_monthly || 5000)}% used
-                </div>
-              </div>
+              {(() => {
+                const usedB = usage?.broadcasts_month || 0;
+                const maxB = currentPlan?.max_broadcasts_monthly || 100;
+                const remB = Math.max(0, maxB - usedB);
+                const pctB = getPercent(usedB, maxB);
+                return (
+                  <div className="rounded-xl border border-border bg-muted/30 p-4 transition-colors hover:bg-muted/40">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-1.5 font-medium text-foreground">
+                        <Radio className="h-4 w-4 text-primary" /> Monthly Broadcasts
+                      </span>
+                      <span className="font-semibold text-muted-foreground">
+                        {usedB.toLocaleString('en-IN')} / {maxB.toLocaleString('en-IN')}
+                      </span>
+                    </div>
+                    <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full bg-primary transition-all rounded-full"
+                        style={{ width: `${Math.max(usedB > 0 ? 3 : 0, pctB)}%` }}
+                      />
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+                      <span>Used: <strong className="text-foreground">{usedB.toLocaleString('en-IN')}</strong> ({pctB}%)</span>
+                      <span className="text-emerald-500 font-semibold">Left: {remB.toLocaleString('en-IN')}</span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Team Members */}
-              <div className="rounded-xl border border-border bg-muted/30 p-4 transition-colors hover:bg-muted/40">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-1.5 font-medium text-foreground">
-                    <Users className="h-4 w-4 text-primary" /> Team Seats
-                  </span>
-                  <span className="font-semibold text-muted-foreground">
-                    {usage?.team_members || 1} / {currentPlan?.max_team_members || 2}
-                  </span>
-                </div>
-                <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full bg-primary transition-all rounded-full"
-                    style={{
-                      width: `${getPercent(usage?.team_members || 1, currentPlan?.max_team_members || 2)}%`,
-                    }}
-                  />
-                </div>
-                <div className="mt-2 text-[11px] text-muted-foreground">
-                  {getPercent(usage?.team_members || 1, currentPlan?.max_team_members || 2)}% seats occupied
-                </div>
-              </div>
+              {(() => {
+                const usedT = usage?.team_members || 1;
+                const maxT = currentPlan?.max_team_members || 2;
+                const remT = Math.max(0, maxT - usedT);
+                const pctT = getPercent(usedT, maxT);
+                return (
+                  <div className="rounded-xl border border-border bg-muted/30 p-4 transition-colors hover:bg-muted/40">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-1.5 font-medium text-foreground">
+                        <Users className="h-4 w-4 text-primary" /> Team Seats
+                      </span>
+                      <span className="font-semibold text-muted-foreground">
+                        {usedT} / {maxT}
+                      </span>
+                    </div>
+                    <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full bg-primary transition-all rounded-full"
+                        style={{ width: `${pctT}%` }}
+                      />
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+                      <span>Used: <strong className="text-foreground">{usedT}</strong> ({pctT}%)</span>
+                      <span className="text-emerald-500 font-semibold">Left: {remT}</span>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Automations */}
-              <div className="rounded-xl border border-border bg-muted/30 p-4 transition-colors hover:bg-muted/40">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-1.5 font-medium text-foreground">
-                    <Zap className="h-4 w-4 text-primary" /> Automations & Flows
-                  </span>
-                  <span className="font-semibold text-muted-foreground">
-                    {(usage?.automations || 0) + (usage?.flows || 0)} / {currentPlan?.max_automations || 5}
-                  </span>
-                </div>
-                <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full bg-primary transition-all rounded-full"
-                    style={{
-                      width: `${getPercent((usage?.automations || 0) + (usage?.flows || 0), currentPlan?.max_automations || 5)}%`,
-                    }}
-                  />
-                </div>
-                <div className="mt-2 text-[11px] text-muted-foreground">
-                  {getPercent((usage?.automations || 0) + (usage?.flows || 0), currentPlan?.max_automations || 5)}% active
-                </div>
-              </div>
+              {(() => {
+                const usedA = (usage?.automations || 0) + (usage?.flows || 0);
+                const maxA = currentPlan?.max_automations || 5;
+                const remA = Math.max(0, maxA - usedA);
+                const pctA = getPercent(usedA, maxA);
+                return (
+                  <div className="rounded-xl border border-border bg-muted/30 p-4 transition-colors hover:bg-muted/40">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="flex items-center gap-1.5 font-medium text-foreground">
+                        <Zap className="h-4 w-4 text-primary" /> Automations & Flows
+                      </span>
+                      <span className="font-semibold text-muted-foreground">
+                        {usedA} / {maxA}
+                      </span>
+                    </div>
+                    <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full bg-primary transition-all rounded-full"
+                        style={{ width: `${pctA}%` }}
+                      />
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+                      <span>Used: <strong className="text-foreground">{usedA}</strong> ({pctA}%)</span>
+                      <span className="text-emerald-500 font-semibold">Left: {remA}</span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </CardContent>

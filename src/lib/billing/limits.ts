@@ -56,7 +56,31 @@ export async function getAccountUsage(accountId: string): Promise<AccountUsageIn
     .eq('id', accountId)
     .single();
 
-  const plan = (account?.plans as any) || null;
+  let plan = Array.isArray(account?.plans)
+    ? account.plans[0] || null
+    : (account?.plans as any) || null;
+
+  if (!plan) {
+    const { data: defaultPlan } = await supabase
+      .from('plans')
+      .select('*')
+      .or('slug.eq.trial,is_default_trial.eq.true')
+      .limit(1)
+      .maybeSingle();
+
+    plan = defaultPlan || {
+      id: 'trial',
+      name: 'Free Trial',
+      slug: 'trial',
+      description: '14-day free trial with core features',
+      max_contacts: 100,
+      max_team_members: 2,
+      max_broadcasts_monthly: 100,
+      max_automations: 3,
+      max_flows: 3,
+      ai_agents_enabled: false,
+    };
+  }
 
   // 2. Count contacts
   const { count: contactsCount } = await supabase

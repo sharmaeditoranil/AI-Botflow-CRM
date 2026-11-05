@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import { useAccountUsage } from "@/hooks/use-account-usage";
 import { useTotalUnread } from "@/hooks/use-total-unread";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import {
@@ -150,6 +151,16 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const { profile, profileLoading, account, accountRole, isSuperAdmin, signOut } = useAuth();
   const totalUnread = useTotalUnread();
   const unreadNotifications = useUnreadNotifications();
+  const {
+    planName,
+    maxContacts,
+    usedContacts,
+    remainingContacts,
+    usedPercent,
+    isNearLimit,
+    isAtOrOverLimit,
+    loading: usageLoading,
+  } = useAccountUsage();
 
   const showAccountStrip =
     !profileLoading &&
@@ -306,6 +317,16 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                             {unreadNotifications > 9 ? "9+" : unreadNotifications}
                           </span>
                         )}
+
+                        {/* Contacts Count Badge */}
+                        {item.href === "/contacts" && !usageLoading && (
+                          <span
+                            className="rounded-full border border-border/80 bg-muted/60 px-1.5 py-0.2 text-[9px] font-semibold tabular-nums text-muted-foreground"
+                            title={`${usedContacts.toLocaleString("en-IN")} used / ${remainingContacts.toLocaleString("en-IN")} remaining`}
+                          >
+                            {usedContacts.toLocaleString("en-IN")}
+                          </span>
+                        )}
                       </Link>
                     </li>
                   );
@@ -360,6 +381,65 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               ) : null}
             </div>
           ) : null}
+
+          {/* Active Contacts Plan Quota Box */}
+          {!usageLoading && (
+            <Link
+              href="/contacts"
+              className="group block rounded-xl border border-border/70 bg-card/80 px-2.5 py-2 transition-all hover:border-primary/40 hover:bg-card"
+            >
+              <div className="flex items-center justify-between gap-1.5">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Users className="size-3.5 text-primary shrink-0" />
+                  <span className="truncate text-[11px] font-semibold text-foreground">
+                    Active Contacts
+                  </span>
+                </div>
+                <span className="shrink-0 rounded-md border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary">
+                  {planName}
+                </span>
+              </div>
+
+              <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all duration-500",
+                    isAtOrOverLimit
+                      ? "bg-rose-500"
+                      : isNearLimit
+                      ? "bg-amber-500"
+                      : "bg-emerald-500"
+                  )}
+                  style={{ width: `${Math.max(usedContacts > 0 ? 3 : 0, usedPercent)}%` }}
+                />
+              </div>
+
+              <div className="mt-1.5 flex items-center justify-between text-[10px]">
+                <span className="text-muted-foreground">
+                  Used:{" "}
+                  <strong className="font-semibold text-foreground tabular-nums">
+                    {usedContacts.toLocaleString("en-IN")}
+                  </strong>
+                </span>
+                <span
+                  className={cn(
+                    "font-semibold tabular-nums",
+                    isAtOrOverLimit
+                      ? "text-rose-500"
+                      : isNearLimit
+                      ? "text-amber-500"
+                      : "text-emerald-500"
+                  )}
+                >
+                  Left: {remainingContacts.toLocaleString("en-IN")}
+                </span>
+              </div>
+              <div className="mt-0.5 flex items-center justify-between text-[9px] text-muted-foreground/80">
+                <span>Plan Limit: {maxContacts.toLocaleString("en-IN")}</span>
+                <span>{usedPercent}% used</span>
+              </div>
+            </Link>
+          )}
 
           {/* Trial banner */}
           {account?.subscription_status === "trialing" && account?.trial_ends_at && (
