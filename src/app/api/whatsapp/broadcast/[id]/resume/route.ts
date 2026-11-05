@@ -86,7 +86,8 @@ export async function POST(
       supabase,
       accountId,
       id,
-      scope
+      scope,
+      { checkPendingBeforeSend: true }
     );
 
     await markBroadcastSending(supabase, id);
@@ -99,6 +100,22 @@ export async function POST(
     after(async () => {
       try {
         await deliverBroadcast(admin, plan);
+        // Continue draining any remaining 'pending' slices beyond the 1,000-row PostgREST page cap
+        while (scope === 'pending' || scope === 'all') {
+          try {
+            const nextPass = await planBroadcastResume(
+              admin,
+              accountId,
+              id,
+              'pending',
+              { checkPendingBeforeSend: true }
+            );
+            if (nextPass.plan.planned.length === 0) break;
+            await deliverBroadcast(admin, nextPass.plan);
+          } catch {
+            break;
+          }
+        }
       } catch (err) {
         console.error(
           '[broadcast-resume] delivery threw:',

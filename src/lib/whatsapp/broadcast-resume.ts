@@ -143,11 +143,12 @@ export async function planBroadcastResume(
   db: SupabaseClient,
   accountId: string,
   broadcastId: string,
-  scope: ResumeScope
+  scope: ResumeScope,
+  options?: { maxPerRequest?: number; checkPendingBeforeSend?: boolean }
 ): Promise<ResumePlan> {
   const { data: broadcast, error: bcError } = await db
     .from('broadcasts')
-    .select('id, template_name, template_language, whatsapp_config_id')
+    .select('id, template_name, template_language, whatsapp_config_id, audience_filter, template_variables')
     .eq('id', broadcastId)
     .eq('account_id', accountId)
     .maybeSingle();
@@ -193,7 +194,8 @@ export async function planBroadcastResume(
       .in('id', unsendable);
   }
 
-  const slice = sendable.slice(0, RESUME_MAX_PER_REQUEST);
+  const cap = options?.maxPerRequest ?? RESUME_MAX_PER_REQUEST;
+  const slice = sendable.slice(0, cap);
   const remaining = sendable.length - slice.length;
 
   if (slice.length === 0) {
@@ -237,13 +239,21 @@ export async function planBroadcastResume(
     );
   }
 
+  const storedHeaderMediaUrl =
+    typeof (broadcast as { audience_filter?: { headerMediaUrl?: unknown } }).audience_filter?.headerMediaUrl === 'string'
+      ? ((broadcast as { audience_filter: { headerMediaUrl: string } }).audience_filter.headerMediaUrl.trim() || undefined)
+      : undefined;
+
   const plan: BroadcastPlan = {
     broadcastId,
+    accountId,
     templateName: broadcast.template_name,
     templateLanguage: resolvedTemplate.language,
     phoneNumberId: config.phone_number_id,
     accessToken: decrypt(config.access_token),
     templateRow: resolvedTemplate.row,
+    ...(storedHeaderMediaUrl ? { messageParams: { headerMediaUrl: storedHeaderMediaUrl } } : {}),
+    ...(options?.checkPendingBeforeSend ? { checkPendingBeforeSend: true } : {}),
     planned: slice.map((row) => ({
       recipientRowId: row.id,
       phone: sanitizePhoneForMeta(contactPhone(row) ?? ''),

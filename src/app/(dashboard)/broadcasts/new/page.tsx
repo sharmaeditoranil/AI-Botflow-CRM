@@ -25,7 +25,7 @@ export default function NewBroadcastPage() {
   const router = useRouter();
   const t = useTranslations('Broadcasts.new');
   const { accountId } = useAuth();
-  const { createAndSendBroadcast, isProcessing, progress } = useBroadcastSending();
+  const { createAndSendBroadcast, scheduleBroadcast, isProcessing, progress } = useBroadcastSending();
 
   const [currentStep, setCurrentStep] = useState(0);
   const [template, setTemplate] = useState<MessageTemplate | null>(null);
@@ -134,52 +134,36 @@ export default function NewBroadcastPage() {
   }
 
   async function handleSchedule(scheduledDate: Date) {
-    if (!template || !name.trim()) {
-      toast.error('Please enter a broadcast name.');
-      return;
-    }
-    const supabase = createClient();
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    const user = session?.user;
-    if (!user || !accountId) {
-      toast.error(t('toastNotSignedIn'));
+    if (!template || !name.trim() || isProcessing) {
+      if (!name.trim()) toast.error('Please enter a broadcast name.');
       return;
     }
 
-    const { error } = await supabase.from('broadcasts').insert({
-      user_id: user.id,
-      account_id: accountId,
-      name: name.trim(),
-      template_name: template.name,
-      template_language: template.language ?? 'en_US',
-      template_variables: variables,
-      audience_filter: {
-        type: audience.type,
-        tagIds: audience.tagIds,
-        customField: audience.customField,
-        csvContacts: audience.csvContacts,
-        excludeTagIds: audience.excludeTagIds,
-      },
-      scheduled_at: scheduledDate.toISOString(),
-      whatsapp_config_id: whatsappConfigId,
-      status: 'scheduled',
-      total_recipients: 0,
-      sent_count: 0,
-      delivered_count: 0,
-      read_count: 0,
-      replied_count: 0,
-      failed_count: 0,
-    });
-
-    if (error) {
-      toast.error('Failed to schedule broadcast: ' + error.message);
-      return;
+    try {
+      await scheduleBroadcast(
+        {
+          name: name.trim(),
+          template,
+          audience: {
+            type: audience.type,
+            tagIds: audience.tagIds,
+            customField: audience.customField,
+            csvContacts: audience.csvContacts,
+            excludeTagIds: audience.excludeTagIds,
+          },
+          variables,
+          headerMediaUrl,
+          whatsappConfigId,
+        },
+        scheduledDate,
+      );
+      toast.success(`Broadcast scheduled for ${scheduledDate.toLocaleString('en-IN')}!`);
+      router.push('/broadcasts');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to schedule broadcast';
+      console.error('Schedule broadcast failed:', err);
+      toast.error(message);
     }
-
-    toast.success(`Broadcast scheduled for ${scheduledDate.toLocaleString('en-IN')}!`);
-    router.push('/broadcasts');
   }
 
   return (

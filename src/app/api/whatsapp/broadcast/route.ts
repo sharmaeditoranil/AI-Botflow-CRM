@@ -205,89 +205,180 @@ export async function POST(request: Request) {
       console.warn('[broadcast] wallet check non-blocking error:', wErr)
     }
 
-    const results: BroadcastResult[] = []
+    const results: BroadcastResult[] = new Array(recipients.length)
     let sentCount = 0
+    let newlySentCount = 0
     let failedCount = 0
 
-    for (const recipient of recipients) {
-      const sanitized = sanitizePhoneForMeta(recipient.phone)
+    // Duplicate-send guard: if a broadcast for this account + template is
+    // already in-flight (or was simultaneously completed by a server-side
+    // resume / cron pass while the browser tab was still looping), reuse
+    // the already-sent whatsapp_message_id instead of messaging the
+    // customer a second time.
+    const alreadySentBySanitizedPhone = new Map<string, string>()
+    try {
+      const targetBroadcastId =
+        typeof body.broadcast_id === 'string' && body.broadcast_id
+          ? body.broadcast_id
+          : null
 
-      if (!isValidE164(sanitized)) {
-        results.push({
-          phone: recipient.phone,
-          status: 'failed',
-          error: 'Invalid phone number format',
-        })
-        failedCount++
-        continue
+      let activeBroadcastId = targetBroadcastId
+      if (!activeBroadcastId) {
+        const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
+        const { data: recentBc } = await supabase
+          .from('broadcasts')
+          .select('id')
+          .eq('account_id', accountId)
+          .eq('template_name', template_name)
+          .gte('created_at', sixHoursAgo)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        activeBroadcastId = recentBc?.id ?? null
       }
 
-      // Retry with phone variants on "not in allowed list" so numbers
-      // that differ only in a trunk-prefix 0 still reach recipients.
-      const variants = phoneVariants(sanitized)
-      let sentMessageId: string | null = null
-      let lastError: string | null = null
+      if (activeBroadcastId) {
+        const rawPhones = recipients.map((r) => r.phone).filter(Boolean)
+        const { data: matchingContacts } = await supabase
+          .from('contacts')
+          .select('id, phone')
+          .eq('account_id', accountId)
+          .in('phone', rawPhones)
 
-      for (const variant of variants) {
-        try {
-          const result = await sendTemplateMessage({
-            phoneNumberId: config.phone_number_id,
-            accessToken,
-            to: variant,
-            templateName: template_name,
-            language: resolvedTemplate.language,
-            template: templateRow ?? undefined,
-            messageParams: recipient.messageParams,
-            params: recipient.params ?? [],
-          })
-          sentMessageId = result.messageId
-          lastError = null
-          break
-        } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : 'Unknown error'
-          if (!isRecipientNotAllowedError(errorMessage)) {
-            lastError = errorMessage
-            break
+        if (matchingContacts && matchingContacts.length > 0) {
+          const phoneByContactId = new Map<string, string>()
+          for (const c of matchingContacts) {
+            if (c.id && c.phone) {
+              phoneByContactId.set(c.id, sanitizePhoneForMeta(c.phone))
+            }
           }
-          lastError = errorMessage
-          // retry with next variant
+          const { data: existingRecs } = await supabase
+            .from('broadcast_recipients')
+            .select('contact_id, status, whatsapp_message_id')
+            .eq('broadcast_id', activeBroadcastId)
+            .in('contact_id', [...phoneByContactId.keys()])
+            .in('status', ['sent', 'delivered', 'read', 'replied'])
+
+          for (const rec of existingRecs ?? []) {
+            const sanitizedPhone = phoneByContactId.get(rec.contact_id)
+            if (sanitizedPhone && rec.whatsapp_message_id) {
+              alreadySentBySanitizedPhone.set(
+                sanitizedPhone,
+                rec.whatsapp_message_id
+              )
+            }
+          }
         }
       }
+    } catch {
+      // Non-blocking guard: proceed with normal sending if lookup fails
+    }
 
-      if (sentMessageId) {
-        results.push({
-          phone: recipient.phone,
-          status: 'sent',
-          whatsapp_message_id: sentMessageId,
-        })
-        sentCount++
-      } else {
-        console.error(
-          `Failed to send broadcast to ${recipient.phone}:`,
-          lastError
-        )
-        results.push({
-          phone: recipient.phone,
-          status: 'failed',
-          error: lastError || 'Unknown error',
-        })
-        failedCount++
+    const SEND_CONCURRENCY = 10
+    let cursor = 0
+    const workerCount = Math.min(
+      SEND_CONCURRENCY,
+      Math.max(1, recipients.length)
+    )
+
+    const runWorker = async () => {
+      while (true) {
+        const idx = cursor++
+        if (idx >= recipients.length) break
+        const recipient = recipients[idx]
+        const sanitized = sanitizePhoneForMeta(recipient.phone)
+
+        if (!isValidE164(sanitized)) {
+          results[idx] = {
+            phone: recipient.phone,
+            status: 'failed',
+            error: 'Invalid phone number format',
+          }
+          failedCount++
+          continue
+        }
+
+        const alreadySentMsgId = alreadySentBySanitizedPhone.get(sanitized)
+        if (alreadySentMsgId) {
+          results[idx] = {
+            phone: recipient.phone,
+            status: 'sent',
+            whatsapp_message_id: alreadySentMsgId,
+          }
+          sentCount++
+          continue
+        }
+
+        // Retry with phone variants on "not in allowed list" so numbers
+        // that differ only in a trunk-prefix 0 still reach recipients.
+        const variants = phoneVariants(sanitized)
+        let sentMessageId: string | null = null
+        let lastError: string | null = null
+
+        for (const variant of variants) {
+          try {
+            const result = await sendTemplateMessage({
+              phoneNumberId: config.phone_number_id,
+              accessToken,
+              to: variant,
+              templateName: template_name,
+              language: resolvedTemplate.language,
+              template: templateRow ?? undefined,
+              messageParams: recipient.messageParams,
+              params: recipient.params ?? [],
+            })
+            sentMessageId = result.messageId
+            lastError = null
+            break
+          } catch (error) {
+            const errorMessage =
+              error instanceof Error ? error.message : 'Unknown error'
+            if (!isRecipientNotAllowedError(errorMessage)) {
+              lastError = errorMessage
+              break
+            }
+            lastError = errorMessage
+            // retry with next variant
+          }
+        }
+
+        if (sentMessageId) {
+          results[idx] = {
+            phone: recipient.phone,
+            status: 'sent',
+            whatsapp_message_id: sentMessageId,
+          }
+          sentCount++
+          newlySentCount++
+        } else {
+          console.error(
+            `Failed to send broadcast to ${recipient.phone}:`,
+            lastError
+          )
+          results[idx] = {
+            phone: recipient.phone,
+            status: 'failed',
+            error: lastError || 'Unknown error',
+          }
+          failedCount++
+        }
       }
     }
 
-    // Deduct actual sent message credits from wallet
-    if (isWalletControlled && sentCount > 0) {
-      const actualDeduct = sentCount * costPerMsg
+    await Promise.all(Array.from({ length: workerCount }, () => runWorker()))
+
+    // Deduct actual newly sent message credits from wallet
+    if (isWalletControlled && newlySentCount > 0) {
+      const actualDeduct = newlySentCount * costPerMsg
       void deductWalletCredits({
         accountId,
         amount: actualDeduct,
         referenceType: 'broadcast',
         referenceId: template_name,
-        description: `WhatsApp Broadcast (${template_name}): ${sentCount} sent`,
+        description: `WhatsApp Broadcast (${template_name}): ${newlySentCount} sent`,
         metadata: {
           templateName: template_name,
-          sentCount,
+          sentCount: newlySentCount,
           failedCount,
           costPerMsg,
         },

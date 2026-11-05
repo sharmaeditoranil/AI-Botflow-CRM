@@ -7,6 +7,10 @@
     {
       "path": "/api/flows/cron",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/broadcasts/process-scheduled",
+      "schedule": "* * * * *"
     }
   ]
 }

@@ -19,6 +19,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { sendTemplateMessage } from '@/lib/whatsapp/meta-api';
+import type { SendTimeParams } from '@/lib/whatsapp/template-send-builder';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import {
   sanitizePhoneForMeta,
@@ -79,12 +80,15 @@ export interface BroadcastPlan {
   phoneNumberId: string;
   accessToken: string;
   templateRow: MessageTemplate | null;
+  messageParams?: SendTimeParams;
+  checkPendingBeforeSend?: boolean;
   planned: PlannedRecipient[];
   /** Phones rejected up front (invalid E.164) — counted as failed. */
   rejected: number;
 }
 
 const MAX_RECIPIENTS = 1000;
+const DELIVER_CONCURRENCY = 10;
 
 /**
  * Validate + persist a broadcast, resolving each recipient to a
@@ -294,54 +298,82 @@ export async function deliverBroadcast(
   plan: BroadcastPlan
 ): Promise<void> {
   let sentSuccessCount = 0;
-  for (const recipient of plan.planned) {
-    const variants = phoneVariants(recipient.phone);
-    let sentMessageId: string | null = null;
-    let lastError: string | null = null;
+  let cursor = 0;
+  const total = plan.planned.length;
+  const workerCount = Math.min(DELIVER_CONCURRENCY, Math.max(1, total));
 
-    for (const variant of variants) {
-      try {
-        const result = await sendTemplateMessage({
-          phoneNumberId: plan.phoneNumberId,
-          accessToken: plan.accessToken,
-          to: variant,
-          templateName: plan.templateName,
-          language: plan.templateLanguage,
-          template: plan.templateRow ?? undefined,
-          params: recipient.params,
-        });
-        sentMessageId = result.messageId;
-        lastError = null;
-        break;
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        lastError = message;
-        // Only a "recipient not allowed" error is worth another variant.
-        if (!isRecipientNotAllowedError(message)) break;
+  const runWorker = async () => {
+    while (true) {
+      const idx = cursor++;
+      if (idx >= total) break;
+      const recipient = plan.planned[idx];
+
+      if (plan.checkPendingBeforeSend) {
+        const { data: current } = await db
+          .from('broadcast_recipients')
+          .select('status')
+          .eq('id', recipient.recipientRowId)
+          .maybeSingle();
+        if (
+          current &&
+          current.status !== 'pending' &&
+          current.status !== 'failed'
+        ) {
+          continue;
+        }
+      }
+
+      const variants = phoneVariants(recipient.phone);
+      let sentMessageId: string | null = null;
+      let lastError: string | null = null;
+
+      for (const variant of variants) {
+        try {
+          const result = await sendTemplateMessage({
+            phoneNumberId: plan.phoneNumberId,
+            accessToken: plan.accessToken,
+            to: variant,
+            templateName: plan.templateName,
+            language: plan.templateLanguage,
+            template: plan.templateRow ?? undefined,
+            ...(plan.messageParams ? { messageParams: plan.messageParams } : {}),
+            params: recipient.params,
+          });
+          sentMessageId = result.messageId;
+          lastError = null;
+          break;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unknown error';
+          lastError = message;
+          // Only a "recipient not allowed" error is worth another variant.
+          if (!isRecipientNotAllowedError(message)) break;
+        }
+      }
+
+      if (sentMessageId) {
+        sentSuccessCount++;
+        await db
+          .from('broadcast_recipients')
+          .update({
+            status: 'sent',
+            sent_at: new Date().toISOString(),
+            whatsapp_message_id: sentMessageId,
+            error_message: null,
+          })
+          .eq('id', recipient.recipientRowId);
+      } else {
+        await db
+          .from('broadcast_recipients')
+          .update({
+            status: 'failed',
+            error_message: lastError || 'Unknown error',
+          })
+          .eq('id', recipient.recipientRowId);
       }
     }
+  };
 
-    if (sentMessageId) {
-      sentSuccessCount++;
-      await db
-        .from('broadcast_recipients')
-        .update({
-          status: 'sent',
-          sent_at: new Date().toISOString(),
-          whatsapp_message_id: sentMessageId,
-          error_message: null,
-        })
-        .eq('id', recipient.recipientRowId);
-    } else {
-      await db
-        .from('broadcast_recipients')
-        .update({
-          status: 'failed',
-          error_message: lastError || 'Unknown error',
-        })
-        .eq('id', recipient.recipientRowId);
-    }
-  }
+  await Promise.all(Array.from({ length: workerCount }, () => runWorker()));
 
   // Deduct credits for delivered recipients
   if (plan.accountId && sentSuccessCount > 0) {

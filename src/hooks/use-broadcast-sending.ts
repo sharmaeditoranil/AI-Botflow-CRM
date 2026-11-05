@@ -64,22 +64,19 @@ interface BroadcastPayload {
 
 interface UseBroadcastSendingReturn {
   createAndSendBroadcast: (payload: BroadcastPayload) => Promise<string>;
+  scheduleBroadcast: (payload: BroadcastPayload, scheduledAt: Date) => Promise<string>;
   isProcessing: boolean;
   progress: number;
 }
 
 /**
- * Meta rate-limit buffer. 10 per batch + 1 s pause matches the spec
- * and keeps us comfortably under Meta's per-phone-number messaging
- * rate so a large broadcast never trips the upstream limiter.
- *
- * Note this shape when touching `RATE_LIMITS.broadcast`: a campaign is
- * many calls to `/api/whatsapp/broadcast`, not one. A 1 000-recipient
- * send is ~100 calls over several minutes, and a bucket sized for
- * "one call per campaign" throttles most of it away (issue #472).
+ * Meta rate-limit buffer. 50 per batch (processed with 10 concurrent
+ * workers server-side) + 200 ms pause keeps us comfortably under Meta's
+ * 80 msg/s per-phone-number rate and under our 60 req/min API limit,
+ * while completing a 4 600-recipient broadcast in ~2 minutes.
  */
-const SEND_BATCH_SIZE = 10;
-const SEND_BATCH_DELAY_MS = 1000;
+const SEND_BATCH_SIZE = 50;
+const SEND_BATCH_DELAY_MS = 200;
 
 /** `broadcast_recipients` inserts are independent of the send rate. */
 const INSERT_BATCH_SIZE = 200;
@@ -457,6 +454,9 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
             tagIds: payload.audience.tagIds,
             customField: payload.audience.customField,
             excludeTagIds: payload.audience.excludeTagIds,
+            ...(payload.headerMediaUrl?.trim()
+              ? { headerMediaUrl: payload.headerMediaUrl.trim() }
+              : {}),
           },
           status: 'sending',
           total_recipients: contacts.length,
@@ -583,6 +583,7 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
+                broadcast_id: broadcast.id,
                 recipients: apiRecipients,
                 template_name: payload.template.name,
                 template_language: payload.template.language ?? 'en_US',
@@ -608,54 +609,59 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
             resultsByPhone.set(r.phone, r);
           }
 
-          for (const recipient of batch) {
-            const phone = recipient.contact?.phone;
-            const result = phone ? resultsByPhone.get(phone) : undefined;
+          await Promise.all(
+            batch.map(async (recipient) => {
+              const phone = recipient.contact?.phone;
+              const result = phone ? resultsByPhone.get(phone) : undefined;
 
-            if (!result) {
-              failedCount++;
-              await supabase
-                .from('broadcast_recipients')
-                .update({
-                  status: 'failed',
-                  error_message: 'No phone number on contact',
-                })
-                .eq('id', recipient.id);
-              continue;
-            }
+              if (!result) {
+                failedCount++;
+                await supabase
+                  .from('broadcast_recipients')
+                  .update({
+                    status: 'failed',
+                    error_message: 'No phone number on contact',
+                  })
+                  .eq('id', recipient.id);
+                return;
+              }
 
-            if (result.status === 'sent') {
-              await supabase
-                .from('broadcast_recipients')
-                .update({
-                  status: 'sent',
-                  sent_at: new Date().toISOString(),
-                  whatsapp_message_id: result.whatsapp_message_id ?? null,
-                  error_message: null,
-                })
-                .eq('id', recipient.id);
-            } else {
-              failedCount++;
-              await supabase
-                .from('broadcast_recipients')
-                .update({
-                  status: 'failed',
-                  error_message: result.error ?? 'Unknown error',
-                })
-                .eq('id', recipient.id);
-            }
-          }
+              if (result.status === 'sent') {
+                await supabase
+                  .from('broadcast_recipients')
+                  .update({
+                    status: 'sent',
+                    sent_at: new Date().toISOString(),
+                    whatsapp_message_id: result.whatsapp_message_id ?? null,
+                    error_message: null,
+                  })
+                  .eq('id', recipient.id);
+              } else {
+                failedCount++;
+                await supabase
+                  .from('broadcast_recipients')
+                  .update({
+                    status: 'failed',
+                    error_message: result.error ?? 'Unknown error',
+                  })
+                  .eq('id', recipient.id);
+              }
+            }),
+          );
         } catch (err) {
-          for (const recipient of batch) {
-            failedCount++;
-            await supabase
-              .from('broadcast_recipients')
-              .update({
-                status: 'failed',
-                error_message: err instanceof Error ? err.message : 'Unknown error',
-              })
-              .eq('id', recipient.id);
-          }
+          await Promise.all(
+            batch.map(async (recipient) => {
+              failedCount++;
+              await supabase
+                .from('broadcast_recipients')
+                .update({
+                  status: 'failed',
+                  error_message:
+                    err instanceof Error ? err.message : 'Unknown error',
+                })
+                .eq('id', recipient.id);
+            }),
+          );
         }
 
         const progressPct =
@@ -684,5 +690,118 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
     }
   }
 
-  return { createAndSendBroadcast, isProcessing, progress };
+  async function scheduleBroadcast(
+    payload: BroadcastPayload,
+    scheduledAt: Date,
+  ): Promise<string> {
+    setIsProcessing(true);
+    setProgress(0);
+
+    const supabase = createClient();
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const user = session?.user;
+      if (!user) {
+        throw new Error('You are not signed in.');
+      }
+      if (!accountId) {
+        throw new Error('Your profile is not linked to an account.');
+      }
+
+      setProgress(10);
+      const contacts = await resolveAudience(payload.audience);
+      if (contacts.length === 0) {
+        throw new Error('No contacts found for this audience.');
+      }
+
+      setProgress(30);
+      const { data: broadcast, error: broadcastError } = await supabase
+        .from('broadcasts')
+        .insert({
+          user_id: user.id,
+          account_id: accountId,
+          name: payload.name,
+          template_name: payload.template.name,
+          template_language: payload.template.language ?? 'en_US',
+          template_variables: payload.variables,
+          whatsapp_config_id: payload.whatsappConfigId || null,
+          audience_filter: {
+            type: payload.audience.type,
+            tagIds: payload.audience.tagIds,
+            customField: payload.audience.customField,
+            excludeTagIds: payload.audience.excludeTagIds,
+            ...(payload.headerMediaUrl?.trim()
+              ? { headerMediaUrl: payload.headerMediaUrl.trim() }
+              : {}),
+          },
+          scheduled_at: scheduledAt.toISOString(),
+          status: 'scheduled',
+          total_recipients: contacts.length,
+          sent_count: 0,
+          delivered_count: 0,
+          read_count: 0,
+          replied_count: 0,
+          failed_count: 0,
+        })
+        .select()
+        .single();
+
+      if (broadcastError || !broadcast) {
+        throw new Error(
+          `Failed to schedule broadcast: ${broadcastError?.message ?? 'unknown error'}`,
+        );
+      }
+
+      setProgress(50);
+      const customValueIndex = await fetchCustomValueIndex(
+        supabase,
+        contacts.map((c) => c.id),
+      );
+      const paramsByContact = new Map(
+        contacts.map((contact) => [
+          contact.id,
+          resolveVariables(
+            payload.variables,
+            contact,
+            customValueIndex.get(contact.id),
+          ),
+        ]),
+      );
+      const recipientRows = contacts.map((contact) => ({
+        broadcast_id: broadcast.id,
+        contact_id: contact.id,
+        status: 'pending' as const,
+        template_params: paramsByContact.get(contact.id) ?? [],
+      }));
+
+      for (let i = 0; i < recipientRows.length; i += INSERT_BATCH_SIZE) {
+        const batch = recipientRows.slice(i, i + INSERT_BATCH_SIZE);
+        const { error: recipientError } = await supabase
+          .from('broadcast_recipients')
+          .insert(batch);
+        if (recipientError) {
+          await supabase
+            .from('broadcasts')
+            .update({
+              status: 'failed',
+              failed_count: contacts.length,
+            })
+            .eq('id', broadcast.id);
+          throw new Error(
+            `Failed to insert recipient batch ${i / INSERT_BATCH_SIZE + 1}: ${recipientError.message}`,
+          );
+        }
+      }
+
+      setProgress(100);
+      return broadcast.id;
+    } finally {
+      setIsProcessing(false);
+    }
+  }
+
+  return { createAndSendBroadcast, scheduleBroadcast, isProcessing, progress };
 }
