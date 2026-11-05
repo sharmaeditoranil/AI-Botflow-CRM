@@ -48,6 +48,7 @@ export default function NewBroadcastPage() {
   const [name, setName] = useState('');
   // Number to send from (migration 057); null = the account default.
   const [whatsappConfigId, setWhatsappConfigId] = useState<string | null>(null);
+  const [selectedWabaId, setSelectedWabaId] = useState<string | null>(null);
 
   async function handleSend() {
     if (!template || isProcessing) return;
@@ -236,6 +237,10 @@ export default function NewBroadcastPage() {
                     '1': { type: 'field', value: 'name', fallback: 'Friend' },
                   }));
                 }
+                // On Official API, custom (no-template) messages are for the 24-Hour Active Window
+                if (selectedWabaId !== 'waha' && audience.type === 'all') {
+                  setAudience((prev) => ({ ...prev, type: 'active_24h' }));
+                }
               } else if (template?.id !== nextTpl.id) {
                 setHeaderMediaUrl(nextTpl.header_media_url ?? '');
               }
@@ -243,14 +248,22 @@ export default function NewBroadcastPage() {
             numberId={whatsappConfigId}
             onNumberChange={(id, wabaId) => {
               setWhatsappConfigId(id);
+              setSelectedWabaId(wabaId);
+              if (wabaId === 'waha' && audience.type === 'active_24h') {
+                setAudience((prev) => ({ ...prev, type: 'all' }));
+              } else if (
+                wabaId !== 'waha' &&
+                isCustomBroadcastTemplate(template?.name) &&
+                audience.type === 'all'
+              ) {
+                setAudience((prev) => ({ ...prev, type: 'active_24h' }));
+              }
               // A template from another WABA can't be sent from this number.
               if (
                 template &&
                 !isCustomBroadcastTemplate(template.name) &&
-                template.waba_id &&
-                wabaId &&
-                wabaId !== 'waha' &&
-                template.waba_id !== wabaId
+                (wabaId === 'waha' ||
+                  (template.waba_id && wabaId && template.waba_id !== wabaId))
               ) {
                 setTemplate(null);
               }

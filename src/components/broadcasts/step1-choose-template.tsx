@@ -84,6 +84,7 @@ export function Step1ChooseTemplate({
   const [mode, setMode] = useState<BroadcastMode>(() =>
     isCustomBroadcastTemplate(selectedTemplate?.name) ? 'custom' : 'template'
   );
+  const effectiveMode: BroadcastMode = isWahaSender ? 'custom' : mode;
 
   const [templates, setTemplates] = useState<MessageTemplate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -162,17 +163,17 @@ export function Step1ChooseTemplate({
     fetchTemplates();
   }, [t]);
 
-  // If user switches to a WhatsApp Web number and hasn't chosen a template yet,
-  // default to Custom Message mode so they can immediately compose without template restrictions.
+  // When a WhatsApp Web number is selected, always use Custom Message mode
+  // because Meta Approved Templates only exist on Official Cloud API numbers.
   useEffect(() => {
-    if (isWahaSender && !selectedTemplate) {
+    if (isWahaSender) {
       setMode('custom');
     }
-  }, [isWahaSender, selectedTemplate]);
+  }, [isWahaSender]);
 
   // Keep parent `selectedTemplate` synced when in `custom` mode
   useEffect(() => {
-    if (mode !== 'custom') return;
+    if (effectiveMode !== 'custom') return;
 
     const validButtons: TemplateButton[] = customButtons
       .filter((b) => b.text.trim().length > 0)
@@ -208,7 +209,7 @@ export function Step1ChooseTemplate({
     onSelect(synthetic);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    mode,
+    effectiveMode,
     customBodyText,
     customMediaType,
     customMediaUrl,
@@ -217,13 +218,15 @@ export function Step1ChooseTemplate({
   ]);
 
   // Templates belong to a WABA: offer only the sender's (plus legacy rows).
-  // For WhatsApp Web ('waha'), show all approved templates in the account so they can be reused too.
+  // WhatsApp Web ('waha') does not use Meta approved templates.
   const senderTemplates = useMemo(
     () =>
-      sender?.waba_id && sender.waba_id !== 'waha'
-        ? templates.filter((tpl) => !tpl.waba_id || tpl.waba_id === sender.waba_id)
-        : templates,
-    [templates, sender?.waba_id]
+      isWahaSender
+        ? []
+        : sender?.waba_id
+          ? templates.filter((tpl) => !tpl.waba_id || tpl.waba_id === sender.waba_id)
+          : templates,
+    [templates, sender?.waba_id, isWahaSender]
   );
 
   const filteredTemplates = useMemo(() => {
@@ -334,7 +337,7 @@ export function Step1ChooseTemplate({
   }, [customBodyText, customMediaType, customMediaUrl, customButtons]);
 
   const canProceed =
-    mode === 'custom'
+    effectiveMode === 'custom'
       ? isCustomValid
       : Boolean(selectedTemplate && !isCustomBroadcastTemplate(selectedTemplate.name));
 
@@ -428,86 +431,88 @@ export function Step1ChooseTemplate({
         </div>
       )}
 
-      {/* Broadcast Mode Switcher: Approved Template vs Custom Message (24h Window / WhatsApp Web) */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <button
-          type="button"
-          onClick={() => setMode('template')}
-          className={cn(
-            'flex items-start gap-3.5 rounded-xl border p-4 text-left transition-all',
-            mode === 'template'
-              ? 'border-primary bg-primary/5 ring-2 ring-primary/25 shadow-sm'
-              : 'border-border bg-card/60 hover:border-primary/40 hover:bg-card'
-          )}
-        >
-          <div
+      {/* Broadcast Mode Switcher: shown only for Official API numbers (WhatsApp Web always uses Custom Message) */}
+      {!isWahaSender && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <button
+            type="button"
+            onClick={() => setMode('template')}
             className={cn(
-              'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
+              'flex items-start gap-3.5 rounded-xl border p-4 text-left transition-all',
               mode === 'template'
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground'
+                ? 'border-primary bg-primary/5 ring-2 ring-primary/25 shadow-sm'
+                : 'border-border bg-card/60 hover:border-primary/40 hover:bg-card'
             )}
           >
-            <FileText className="h-5 w-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-foreground">
-                Approved Template Message
-              </p>
-              {mode === 'template' && (
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+            <div
+              className={cn(
+                'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
+                mode === 'template'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground'
               )}
+            >
+              <FileText className="h-5 w-5" />
             </div>
-            <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
-              Send Meta pre-approved templates to any contact list anytime (outside or inside 24h window).
-            </p>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setMode('custom')}
-          className={cn(
-            'flex items-start gap-3.5 rounded-xl border p-4 text-left transition-all',
-            mode === 'custom'
-              ? 'border-emerald-500 bg-emerald-500/5 ring-2 ring-emerald-500/25 shadow-sm'
-              : 'border-border bg-card/60 hover:border-emerald-500/40 hover:bg-card'
-          )}
-        >
-          <div
-            className={cn(
-              'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
-              mode === 'custom'
-                ? 'bg-emerald-500 text-white'
-                : 'bg-muted text-muted-foreground'
-            )}
-          >
-            <MessageSquarePlus className="h-5 w-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-foreground">
-                  Custom Message (No Template)
+                  Approved Template Message
                 </p>
-                <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-500">
-                  24h Window / Web
-                </span>
+                {mode === 'template' && (
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-primary" />
+                )}
               </div>
-              {mode === 'custom' && (
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-              )}
+              <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
+                Send Meta pre-approved templates to any contact list anytime (outside or inside 24h window).
+              </p>
             </div>
-            <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
-              Attach Image or Video + write custom text + add interactive buttons without needing template approval.
-            </p>
-          </div>
-        </button>
-      </div>
+          </button>
 
-      {/* ── MODE 1: APPROVED TEMPLATES ──────────────────────────────── */}
-      {mode === 'template' && (
+          <button
+            type="button"
+            onClick={() => setMode('custom')}
+            className={cn(
+              'flex items-start gap-3.5 rounded-xl border p-4 text-left transition-all',
+              mode === 'custom'
+                ? 'border-emerald-500 bg-emerald-500/5 ring-2 ring-emerald-500/25 shadow-sm'
+                : 'border-border bg-card/60 hover:border-emerald-500/40 hover:bg-card'
+            )}
+          >
+            <div
+              className={cn(
+                'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
+                mode === 'custom'
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-muted text-muted-foreground'
+              )}
+            >
+              <MessageSquarePlus className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="text-sm font-semibold text-foreground">
+                    24-Hour Window Message (No Template)
+                  </p>
+                  <span className="rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-500">
+                    24h Active Chats
+                  </span>
+                </div>
+                {mode === 'custom' && (
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                )}
+              </div>
+              <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
+                Attach Image or Video + write custom text + add interactive buttons for 24-hour active window contacts.
+              </p>
+            </div>
+          </button>
+        </div>
+      )}
+
+      {/* ── MODE 1: APPROVED TEMPLATES (Only for Official API) ──────── */}
+      {effectiveMode === 'template' && (
         <>
           {/* Search & Category Filter Bar */}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -690,7 +695,7 @@ export function Step1ChooseTemplate({
       )}
 
       {/* ── MODE 2: CUSTOM MESSAGE COMPOSER (24H WINDOW / WHATSAPP WEB) ─ */}
-      {mode === 'custom' && (
+      {effectiveMode === 'custom' && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
           {/* Left Column: Composer Controls */}
           <div className="space-y-5 lg:col-span-7">
