@@ -9,6 +9,7 @@ import {
 } from '@/lib/broadcast-retry';
 import { normalizeKey } from '@/lib/contacts/dedupe';
 import { fetchAllRows, fetchInChunks } from '@/lib/supabase/fetch-all';
+import { WAHA_DISCONNECTED_CODE } from '@/lib/waha/session-codes';
 import { BroadcastRecipient, Contact, MessageTemplate } from '@/types';
 import {
   isCustomBroadcastTemplate,
@@ -92,7 +93,8 @@ function sleep(ms: number) {
 
 interface BroadcastApiResult {
   phone: string;
-  status: 'sent' | 'failed';
+  /** 'pending': not attempted (WhatsApp Web disconnected) — left to resume. */
+  status: 'sent' | 'failed' | 'pending';
   whatsapp_message_id?: string;
   error?: string;
 }
@@ -578,6 +580,9 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       const messageParams =
         isMediaHeader && headerMediaUrl ? { headerMediaUrl } : undefined;
 
+      // Set when WhatsApp Web drops: the rest stay pending for Resume.
+      let stoppedReason: string | null = null;
+
       for (let i = 0; i < recipients.length; i += SEND_BATCH_SIZE) {
         const batch = recipients.slice(i, i + SEND_BATCH_SIZE);
 
@@ -597,7 +602,8 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
           // Send the batch, waiting out a 429 rather than writing the
           // whole batch off as failed. Only 429 is replayed — see
           // batchRetryDelayMs for why nothing else can be.
-          let data: { error?: string; results?: BroadcastApiResult[] } = {};
+          let data: { error?: string; code?: string; results?: BroadcastApiResult[] } = {};
+          let disconnected = false;
           for (let attempt = 1; ; attempt++) {
             const res = await fetch('/api/whatsapp/broadcast', {
               method: 'POST',
@@ -614,6 +620,10 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
 
             data = await res.json();
             if (res.ok) break;
+            if (data.code === WAHA_DISCONNECTED_CODE) {
+              disconnected = true;
+              break;
+            }
 
             const retryIn =
               attempt < BATCH_SEND_ATTEMPTS
@@ -624,6 +634,11 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
             }
             await sleep(retryIn);
           }
+
+          if (disconnected || data.code === WAHA_DISCONNECTED_CODE) {
+            stoppedReason = data.error || 'WhatsApp Web is disconnected.';
+          }
+          if (disconnected) break;
 
           const resultsByPhone = new Map<string, BroadcastApiResult>();
           for (const r of (data.results ?? []) as BroadcastApiResult[]) {
@@ -646,6 +661,8 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
                   .eq('id', recipient.id);
                 return;
               }
+
+              if (result.status === 'pending') return;
 
               if (result.status === 'sent') {
                 await supabase
@@ -685,6 +702,8 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
           );
         }
 
+        if (stoppedReason) break;
+
         const progressPct =
           30 + Math.round(((i + batch.length) / totalRecipients) * 60);
         setProgress(progressPct);
@@ -698,11 +717,16 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
       // Aggregate counts are maintained by the DB trigger (migration
       // 003); we only flip the final status here.
       setProgress(95);
-      const finalStatus = failedCount === totalRecipients ? 'failed' : 'sent';
+      const finalStatus =
+        stoppedReason || failedCount === totalRecipients ? 'failed' : 'sent';
       await supabase
         .from('broadcasts')
         .update({ status: finalStatus })
         .eq('id', broadcast.id);
+      if (stoppedReason) {
+        // Unsent recipients are still 'pending' — the broadcast page offers Resume.
+        throw new Error(stoppedReason);
+      }
 
       setProgress(100);
       return broadcast.id;

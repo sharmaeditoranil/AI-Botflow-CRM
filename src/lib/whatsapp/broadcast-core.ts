@@ -27,6 +27,11 @@ import {
 } from '@/lib/whatsapp/meta-api';
 import { sendWahaText, sendWahaMedia } from '@/lib/waha/client';
 import {
+  isWahaSessionLostError,
+  markWahaDisconnected,
+  wahaSendGapMs,
+} from '@/lib/waha/session-guard';
+import {
   isCustomBroadcastTemplate,
   formatBroadcastTemplateDisplayName,
 } from '@/lib/whatsapp/custom-broadcast';
@@ -544,10 +549,16 @@ export async function deliverBroadcast(
   let sentSuccessCount = 0;
   let cursor = 0;
   const total = plan.planned.length;
-  const workerCount = Math.min(DELIVER_CONCURRENCY, Math.max(1, total));
+  const isWaha = plan.wabaId === 'waha';
+  // WhatsApp Web: one at a time with a pause; stop if the session drops
+  // (the rest stay pending for the next resume).
+  const workerCount = Math.min(isWaha ? 1 : DELIVER_CONCURRENCY, Math.max(1, total));
+  let sessionLost = false;
+  let wahaAttempts = 0;
 
   const runWorker = async () => {
     while (true) {
+      if (sessionLost) break;
       const idx = cursor++;
       if (idx >= total) break;
       const recipient = plan.planned[idx];
@@ -567,6 +578,9 @@ export async function deliverBroadcast(
         }
       }
 
+      if (isWaha && wahaAttempts++ > 0) {
+        await new Promise((r) => setTimeout(r, wahaSendGapMs()));
+      }
       const variants =
         plan.wabaId === 'waha'
           ? [recipient.phone]
@@ -624,6 +638,9 @@ export async function deliverBroadcast(
             sentAt,
           }).catch(() => {});
         }
+      } else if (isWaha && isWahaSessionLostError(lastError)) {
+        sessionLost = true;
+        await markWahaDisconnected(db, plan.phoneNumberId);
       } else {
         await db
           .from('broadcast_recipients')

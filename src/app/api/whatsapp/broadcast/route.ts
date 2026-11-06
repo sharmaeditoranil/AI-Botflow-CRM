@@ -4,6 +4,15 @@ import { decrypt } from '@/lib/whatsapp/encryption'
 import type { SendTimeParams } from '@/lib/whatsapp/template-send-builder'
 import { resolveTemplateRow } from '@/lib/whatsapp/template-body'
 import { resolveWhatsAppNumber } from '@/lib/whatsapp/numbers'
+import { supabaseAdmin } from '@/lib/flows/admin-client'
+import {
+  WAHA_DISCONNECTED_CODE,
+  WAHA_DISCONNECTED_MESSAGE,
+  isWahaSessionLostError,
+  isWahaSessionWorking,
+  markWahaDisconnected,
+  wahaSendGapMs,
+} from '@/lib/waha/session-guard'
 import {
   recordBroadcastMessageInInbox,
   sendBroadcastMessageToRecipient,
@@ -34,7 +43,8 @@ import {
 
 interface BroadcastResult {
   phone: string
-  status: 'sent' | 'failed'
+  /** 'pending': not attempted — WhatsApp Web dropped mid-batch; resume later. */
+  status: 'sent' | 'failed' | 'pending'
   whatsapp_message_id?: string
   error?: string
 }
@@ -169,8 +179,18 @@ export async function POST(request: Request) {
       )
     }
 
-    const accessToken =
-      config.waba_id === 'waha' ? '' : decrypt(config.access_token)
+    const isWaha = config.waba_id === 'waha'
+    const accessToken = isWaha ? '' : decrypt(config.access_token)
+
+    // A dead WhatsApp Web session would fail every recipient — stop before
+    // sending so they stay pending and can be resumed after reconnecting.
+    if (isWaha && !(await isWahaSessionWorking(config.phone_number_id))) {
+      await markWahaDisconnected(supabaseAdmin(), config.phone_number_id)
+      return NextResponse.json(
+        { error: WAHA_DISCONNECTED_MESSAGE, code: WAHA_DISCONNECTED_CODE },
+        { status: 409 }
+      )
+    }
 
     let templateRow: MessageTemplate | null = null
     let sendLanguage = template_language || 'en_US'
@@ -313,8 +333,12 @@ export async function POST(request: Request) {
       // Non-blocking guard: proceed with normal sending if lookup fails
     }
 
-    const SEND_CONCURRENCY = 10
+    // WhatsApp Web: one at a time with a pause, like a person sending —
+    // parallel bulk sends get the session cut off by WhatsApp.
+    const SEND_CONCURRENCY = isWaha ? 1 : 10
     let cursor = 0
+    let sessionLost = false
+    let wahaSent = 0
     const workerCount = Math.min(
       SEND_CONCURRENCY,
       Math.max(1, recipients.length)
@@ -325,6 +349,15 @@ export async function POST(request: Request) {
         const idx = cursor++
         if (idx >= recipients.length) break
         const recipient = recipients[idx]
+
+        if (sessionLost) {
+          results[idx] = {
+            phone: recipient.phone,
+            status: 'pending',
+            error: WAHA_DISCONNECTED_MESSAGE,
+          }
+          continue
+        }
         const sanitized = sanitizePhoneForMeta(recipient.phone)
 
         if (!isValidE164(sanitized)) {
@@ -355,6 +388,9 @@ export async function POST(request: Request) {
         let sentMessageId: string | null = null
         let lastError: string | null = null
 
+        if (isWaha && wahaSent > 0) {
+          await new Promise((r) => setTimeout(r, wahaSendGapMs()))
+        }
         for (const variant of variants) {
           try {
             const result = await sendBroadcastMessageToRecipient({
@@ -381,6 +417,18 @@ export async function POST(request: Request) {
             lastError = errorMessage
             // retry with next variant
           }
+        }
+
+        if (isWaha) wahaSent++
+        if (!sentMessageId && isWaha && isWahaSessionLostError(lastError)) {
+          sessionLost = true
+          await markWahaDisconnected(supabaseAdmin(), config.phone_number_id)
+          results[idx] = {
+            phone: recipient.phone,
+            status: 'pending',
+            error: WAHA_DISCONNECTED_MESSAGE,
+          }
+          continue
         }
 
         if (sentMessageId) {
@@ -446,6 +494,7 @@ export async function POST(request: Request) {
       sent: sentCount,
       failed: failedCount,
       results,
+      ...(sessionLost ? { code: WAHA_DISCONNECTED_CODE, error: WAHA_DISCONNECTED_MESSAGE } : {}),
     })
   } catch (error) {
     // requireRole throws Unauthorized/Forbidden; toErrorResponse maps
