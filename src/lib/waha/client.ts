@@ -230,6 +230,18 @@ async function wahaFetch<T = any>(
   }
 }
 
+/** Poll until a (re)starting session settles on WORKING / SCAN_QR_CODE / FAILED (≈8 s max). */
+async function waitForWahaSession(sessionName: string, maxAttempts = 8): Promise<WahaSession | null> {
+  let last: WahaSession | null = null;
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    const res = await wahaFetch<WahaSession>(`/api/sessions/${sessionName}`);
+    last = res.ok ? res.data : last;
+    if (last && last.status !== 'STARTING' && last.status !== 'STOPPED') return last;
+  }
+  return last;
+}
+
 /**
  * Get or create a session for an account.
  */
@@ -249,33 +261,49 @@ export async function getOrCreateWahaSession(sessionName: string): Promise<WahaS
 
   const getRes = await wahaFetch<WahaSession>(`/api/sessions/${sessionName}`);
   if (getRes.ok && getRes.data) {
-    if (getRes.data.status === 'STOPPED') {
-      await wahaFetch(`/api/sessions/${sessionName}/start`, { method: 'POST' });
+    if (getRes.data.status === 'WORKING' || getRes.data.status === 'SCAN_QR_CODE') {
+      await syncWahaSessionWebhooks(sessionName);
+      return getRes.data;
     }
-    return getRes.data;
+    if (getRes.data.status === 'STARTING') {
+      await syncWahaSessionWebhooks(sessionName);
+      return (await waitForWahaSession(sessionName)) ?? getRes.data;
+    }
+    if (getRes.data.status === 'STOPPED') {
+      await syncWahaSessionWebhooks(sessionName);
+      await wahaFetch(`/api/sessions/${sessionName}/start`, { method: 'POST' });
+      return (await waitForWahaSession(sessionName)) ?? getRes.data;
+    }
+    if (getRes.data.status === 'FAILED') {
+      // Cleanly remove the failed/unlinked session so we can recreate it fresh with full webhook config
+      await wahaFetch(`/api/sessions/${sessionName}/logout`, { method: 'POST' });
+      await wahaFetch(`/api/sessions/${sessionName}`, { method: 'DELETE' });
+    }
   }
 
-  // Create session
+  // Create session with full webhook & store config
   const createRes = await wahaFetch<WahaSession>('/api/sessions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       name: sessionName,
+      start: true,
       config: sessionConfig,
     }),
   });
 
   if (!createRes.ok) {
-    // If already exists or error, try starting it
+    // If already exists, ensure webhooks and start it
+    await syncWahaSessionWebhooks(sessionName);
     await wahaFetch(`/api/sessions/${sessionName}/start`, { method: 'POST' });
-    const retry = await wahaFetch<WahaSession>(`/api/sessions/${sessionName}`);
-    return retry.data;
+    return await waitForWahaSession(sessionName);
   }
 
-  // Start the newly created session
-  await wahaFetch(`/api/sessions/${sessionName}/start`, { method: 'POST' });
-  const started = await wahaFetch<WahaSession>(`/api/sessions/${sessionName}`);
-  return started.data;
+  if (createRes.data?.status === 'STOPPED') {
+    await wahaFetch(`/api/sessions/${sessionName}/start`, { method: 'POST' });
+  }
+
+  return (await waitForWahaSession(sessionName)) ?? createRes.data;
 }
 
 /**
@@ -297,6 +325,9 @@ export async function syncWahaSessionWebhooks(sessionName: string): Promise<bool
               events: ['message', 'message.any', 'message.ack', 'message.ack.group', 'session.status'],
             },
           ],
+          noweb: {
+            store: { enabled: true },
+          },
         },
       }),
     });
@@ -309,11 +340,17 @@ export async function syncWahaSessionWebhooks(sessionName: string): Promise<bool
 
 /**
  * Get QR code PNG image buffer for a session.
+ * Retries briefly if the session is still transitioning to SCAN_QR_CODE.
  */
 export async function getWahaQrCodeBuffer(sessionName: string): Promise<Buffer | null> {
-  const res = await wahaFetch<Buffer>(`/api/${sessionName}/auth/qr`);
-  if (res.ok && res.data && Buffer.isBuffer(res.data)) {
-    return res.data;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const res = await wahaFetch<Buffer>(`/api/${sessionName}/auth/qr`);
+    if (res.ok && res.data && Buffer.isBuffer(res.data)) {
+      return res.data;
+    }
+    if (attempt < 5) {
+      await new Promise((r) => setTimeout(r, 800));
+    }
   }
   return null;
 }

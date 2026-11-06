@@ -26,11 +26,35 @@ export async function GET() {
     const sessionName = config.phone_number_id;
     const wahaSession = await getWahaSessionStatus(sessionName);
 
+    const isWorking = wahaSession?.status === 'WORKING';
+    const mePhone = wahaSession?.me?.id
+      ? `+${wahaSession.me.id.replace('@c.us', '').replace('@s.whatsapp.net', '').replace(/\D/g, '')}`
+      : null;
+
+    if (isWorking && (config.status !== 'connected' || (mePhone && config.display_phone_number !== mePhone))) {
+      await supabaseAdmin()
+        .from('whatsapp_config')
+        .update({
+          status: 'connected',
+          display_phone_number: mePhone || config.display_phone_number,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', config.id);
+    } else if (wahaSession && !isWorking && config.status === 'connected') {
+      await supabaseAdmin()
+        .from('whatsapp_config')
+        .update({
+          status: 'disconnected',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', config.id);
+    }
+
     return NextResponse.json({
-      connected: config.status === 'connected',
+      connected: isWorking,
       sessionName,
       status: wahaSession?.status || config.status,
-      displayPhoneNumber: config.display_phone_number,
+      displayPhoneNumber: mePhone || config.display_phone_number,
       label: config.label || 'WhatsApp Web',
       configId: config.id,
       me: wahaSession?.me || null,

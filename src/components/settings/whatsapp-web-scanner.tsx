@@ -40,8 +40,10 @@ export function WhatsAppWebScanner({ onNumberChanged }: WhatsAppWebScannerProps)
   const [initiating, setInitiating] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
   const [qrTimestamp, setQrTimestamp] = useState(Date.now());
   const [qrError, setQrError] = useState(false);
+  const qrRetryCountRef = useRef(0);
 
   const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -53,6 +55,7 @@ export function WhatsAppWebScanner({ onNumberChanged }: WhatsAppWebScannerProps)
       setSessionData(data);
 
       if (data.status === 'WORKING' || data.connected) {
+        setScannerOpen(false);
         if (pollTimerRef.current) {
           clearInterval(pollTimerRef.current);
           pollTimerRef.current = null;
@@ -83,6 +86,7 @@ export function WhatsAppWebScanner({ onNumberChanged }: WhatsAppWebScannerProps)
         setSessionData(data);
 
         if (data.status === 'WORKING' || data.connected) {
+          setScannerOpen(false);
           if (pollTimerRef.current) {
             clearInterval(pollTimerRef.current);
             pollTimerRef.current = null;
@@ -99,17 +103,36 @@ export function WhatsAppWebScanner({ onNumberChanged }: WhatsAppWebScannerProps)
   const handleStartSession = async () => {
     setInitiating(true);
     setQrError(false);
+    qrRetryCountRef.current = 0;
     try {
       const res = await fetch('/api/waha/session', { method: 'POST' });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || 'Failed to start session');
 
-      setQrTimestamp(Date.now());
-      await checkStatus();
       if (json.sessionName) {
+        setScannerOpen(json.status !== 'WORKING');
+        setSessionData((prev) => ({
+          connected: json.status === 'WORKING',
+          sessionName: json.sessionName,
+          status: json.status || 'SCAN_QR_CODE',
+          displayPhoneNumber: prev?.displayPhoneNumber || null,
+          label: prev?.label || 'WhatsApp Web',
+          configId: prev?.configId,
+          me: prev?.me || null,
+        }));
         startPolling(json.sessionName);
       }
-      toast.info('QR Code generated. Scan with your phone.');
+
+      setQrTimestamp(Date.now());
+      await checkStatus();
+
+      if (json.status === 'FAILED') {
+        toast.error('WhatsApp Web could not restart. Please try again in a minute.');
+      } else if (json.status === 'WORKING') {
+        toast.success('WhatsApp Web is connected.');
+      } else {
+        toast.info('QR Code generated. Scan with your phone.');
+      }
     } catch (err: any) {
       toast.error(err.message || 'Error generating QR code');
     } finally {
@@ -124,6 +147,7 @@ export function WhatsAppWebScanner({ onNumberChanged }: WhatsAppWebScannerProps)
       const res = await fetch('/api/waha/session', { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to disconnect');
 
+      setScannerOpen(false);
       if (pollTimerRef.current) {
         clearInterval(pollTimerRef.current);
         pollTimerRef.current = null;
@@ -140,7 +164,21 @@ export function WhatsAppWebScanner({ onNumberChanged }: WhatsAppWebScannerProps)
   };
 
   const isConnected = sessionData?.connected || sessionData?.status === 'WORKING';
-  const isScanning = !isConnected && (sessionData?.status === 'SCAN_QR_CODE' || sessionData?.status === 'STARTING');
+  const isScanning =
+    !isConnected &&
+    Boolean(sessionData?.sessionName) &&
+    (scannerOpen || sessionData?.status === 'SCAN_QR_CODE' || sessionData?.status === 'STARTING');
+
+  // Auto-refresh QR image every 20s while scanning so it stays fresh
+  useEffect(() => {
+    if (!isScanning) return;
+    const interval = setInterval(() => {
+      qrRetryCountRef.current = 0;
+      setQrError(false);
+      setQrTimestamp(Date.now());
+    }, 20000);
+    return () => clearInterval(interval);
+  }, [isScanning]);
 
   if (loading) {
     return (
@@ -231,12 +269,27 @@ export function WhatsAppWebScanner({ onNumberChanged }: WhatsAppWebScannerProps)
           <div className="grid gap-6 md:grid-cols-[220px_1fr] items-center">
             {/* QR Code Container */}
             <div className="flex flex-col items-center justify-center p-3 rounded-xl border border-border bg-white dark:bg-card shadow-inner">
-              {qrError ? (
+              {sessionData.status === 'STARTING' ? (
+                <div className="flex flex-col items-center justify-center size-48 text-center p-4">
+                  <Loader2 className="size-8 animate-spin text-[#25D366] mb-2" />
+                  <p className="text-xs text-muted-foreground">Preparing QR code...</p>
+                </div>
+              ) : qrError ? (
                 <div className="flex flex-col items-center justify-center size-48 text-center p-4">
                   <AlertCircle className="size-8 text-amber-500 mb-2" />
                   <p className="text-xs text-muted-foreground mb-3">QR code expired or failed to load</p>
-                  <Button size="sm" variant="outline" onClick={() => setQrTimestamp(Date.now())} className="text-xs">
-                    <RefreshCw className="size-3.5 mr-1" /> Retry
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      qrRetryCountRef.current = 0;
+                      setQrError(false);
+                      handleStartSession();
+                    }}
+                    disabled={initiating}
+                    className="text-xs"
+                  >
+                    <RefreshCw className={cn("size-3.5 mr-1", initiating && "animate-spin")} /> Retry
                   </Button>
                 </div>
               ) : (
@@ -246,7 +299,18 @@ export function WhatsAppWebScanner({ onNumberChanged }: WhatsAppWebScannerProps)
                     src={`/api/waha/qr?session=${encodeURIComponent(sessionData.sessionName)}&t=${qrTimestamp}`}
                     alt="Scan WhatsApp QR"
                     className="size-full object-contain"
-                    onError={() => setQrError(true)}
+                    onLoad={() => {
+                      qrRetryCountRef.current = 0;
+                      setQrError(false);
+                    }}
+                    onError={() => {
+                      if (qrRetryCountRef.current < 3) {
+                        qrRetryCountRef.current += 1;
+                        setTimeout(() => setQrTimestamp(Date.now()), 1200);
+                      } else {
+                        setQrError(true);
+                      }
+                    }}
                   />
                 </div>
               )}
@@ -254,12 +318,14 @@ export function WhatsAppWebScanner({ onNumberChanged }: WhatsAppWebScannerProps)
                 variant="ghost"
                 size="sm"
                 onClick={() => {
+                  qrRetryCountRef.current = 0;
                   setQrError(false);
-                  setQrTimestamp(Date.now());
+                  handleStartSession();
                 }}
+                disabled={initiating}
                 className="mt-2 text-xs text-muted-foreground hover:text-foreground h-7"
               >
-                <RefreshCw className="size-3 mr-1" /> Reload QR Code
+                <RefreshCw className={cn("size-3 mr-1", initiating && "animate-spin")} /> Reload QR Code
               </Button>
             </div>
 

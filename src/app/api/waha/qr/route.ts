@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getWahaQrCodeBuffer } from '@/lib/waha/client';
+import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account';
+import { supabaseAdmin } from '@/lib/automations/admin-client';
 
 export async function GET(request: Request) {
   try {
@@ -8,6 +10,25 @@ export async function GET(request: Request) {
 
     if (!session) {
       return NextResponse.json({ error: 'Missing session parameter' }, { status: 400 });
+    }
+
+    // Only a member of the account that owns this WhatsApp Web session may
+    // see its QR code (scanning it links a phone to that account's CRM).
+    let accountId: string;
+    try {
+      ({ accountId } = await getCurrentAccount());
+    } catch (err) {
+      return toErrorResponse(err);
+    }
+    const { data: owned } = await supabaseAdmin()
+      .from('whatsapp_config')
+      .select('id')
+      .eq('account_id', accountId)
+      .eq('waba_id', 'waha')
+      .eq('phone_number_id', session)
+      .maybeSingle();
+    if (!owned) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
     const buffer = await getWahaQrCodeBuffer(session);
