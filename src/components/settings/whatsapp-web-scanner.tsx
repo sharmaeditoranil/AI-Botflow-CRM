@@ -269,12 +269,7 @@ export function WhatsAppWebScanner({ onNumberChanged }: WhatsAppWebScannerProps)
           <div className="grid gap-6 md:grid-cols-[220px_1fr] items-center">
             {/* QR Code Container */}
             <div className="flex flex-col items-center justify-center p-3 rounded-xl border border-border bg-white dark:bg-card shadow-inner">
-              {sessionData.status === 'STARTING' ? (
-                <div className="flex flex-col items-center justify-center size-48 text-center p-4">
-                  <Loader2 className="size-8 animate-spin text-[#25D366] mb-2" />
-                  <p className="text-xs text-muted-foreground">Preparing QR code...</p>
-                </div>
-              ) : qrError ? (
+              {qrError ? (
                 <div className="flex flex-col items-center justify-center size-48 text-center p-4">
                   <AlertCircle className="size-8 text-amber-500 mb-2" />
                   <p className="text-xs text-muted-foreground mb-3">QR code expired or failed to load</p>
@@ -304,7 +299,7 @@ export function WhatsAppWebScanner({ onNumberChanged }: WhatsAppWebScannerProps)
                       setQrError(false);
                     }}
                     onError={() => {
-                      if (qrRetryCountRef.current < 3) {
+                      if (qrRetryCountRef.current < 4) {
                         qrRetryCountRef.current += 1;
                         setTimeout(() => setQrTimestamp(Date.now()), 1200);
                       } else {

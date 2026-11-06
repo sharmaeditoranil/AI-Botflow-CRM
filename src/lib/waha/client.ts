@@ -230,14 +230,14 @@ async function wahaFetch<T = any>(
   }
 }
 
-/** Poll until a (re)starting session settles on WORKING / SCAN_QR_CODE / FAILED (≈8 s max). */
-async function waitForWahaSession(sessionName: string, maxAttempts = 8): Promise<WahaSession | null> {
+/** Poll briefly until a (re)starting session settles on WORKING / SCAN_QR_CODE (≈3 s max). */
+async function waitForWahaSession(sessionName: string, maxAttempts = 3): Promise<WahaSession | null> {
   let last: WahaSession | null = null;
   for (let i = 0; i < maxAttempts; i++) {
-    await new Promise((r) => setTimeout(r, 1000));
+    await new Promise((r) => setTimeout(r, 800));
     const res = await wahaFetch<WahaSession>(`/api/sessions/${sessionName}`);
     last = res.ok ? res.data : last;
-    if (last && last.status !== 'STARTING' && last.status !== 'STOPPED') return last;
+    if (last && (last.status === 'SCAN_QR_CODE' || last.status === 'WORKING')) return last;
   }
   return last;
 }
@@ -261,21 +261,24 @@ export async function getOrCreateWahaSession(sessionName: string): Promise<WahaS
 
   const getRes = await wahaFetch<WahaSession>(`/api/sessions/${sessionName}`);
   if (getRes.ok && getRes.data) {
+    await syncWahaSessionWebhooks(sessionName);
     if (getRes.data.status === 'WORKING' || getRes.data.status === 'SCAN_QR_CODE') {
-      await syncWahaSessionWebhooks(sessionName);
       return getRes.data;
     }
     if (getRes.data.status === 'STARTING') {
-      await syncWahaSessionWebhooks(sessionName);
       return (await waitForWahaSession(sessionName)) ?? getRes.data;
     }
     if (getRes.data.status === 'STOPPED') {
-      await syncWahaSessionWebhooks(sessionName);
       await wahaFetch(`/api/sessions/${sessionName}/start`, { method: 'POST' });
       return (await waitForWahaSession(sessionName)) ?? getRes.data;
     }
     if (getRes.data.status === 'FAILED') {
-      // Cleanly remove the failed/unlinked session so we can recreate it fresh with full webhook config
+      await wahaFetch(`/api/sessions/${sessionName}/restart`, { method: 'POST' });
+      const restarted = await waitForWahaSession(sessionName);
+      if (restarted && restarted.status !== 'FAILED') {
+        return restarted;
+      }
+      // If restart still failed, logout + delete so we recreate cleanly below
       await wahaFetch(`/api/sessions/${sessionName}/logout`, { method: 'POST' });
       await wahaFetch(`/api/sessions/${sessionName}`, { method: 'DELETE' });
     }
@@ -340,16 +343,29 @@ export async function syncWahaSessionWebhooks(sessionName: string): Promise<bool
 
 /**
  * Get QR code PNG image buffer for a session.
- * Retries briefly if the session is still transitioning to SCAN_QR_CODE.
+ * Automatically restarts/creates the session if it timed out to FAILED/STOPPED,
+ * and retries briefly while the QR code is being generated.
  */
 export async function getWahaQrCodeBuffer(sessionName: string): Promise<Buffer | null> {
-  for (let attempt = 0; attempt < 6; attempt++) {
+  let restarted = false;
+  for (let attempt = 0; attempt < 8; attempt++) {
     const res = await wahaFetch<Buffer>(`/api/${sessionName}/auth/qr`);
     if (res.ok && res.data && Buffer.isBuffer(res.data)) {
       return res.data;
     }
-    if (attempt < 5) {
-      await new Promise((r) => setTimeout(r, 800));
+
+    if (!restarted && (res.status === 422 || res.status === 404)) {
+      restarted = true;
+      const statusRes = await wahaFetch<WahaSession>(`/api/sessions/${sessionName}`);
+      if (!statusRes.ok || !statusRes.data) {
+        await getOrCreateWahaSession(sessionName);
+      } else if (statusRes.data.status === 'FAILED' || statusRes.data.status === 'STOPPED') {
+        await wahaFetch(`/api/sessions/${sessionName}/restart`, { method: 'POST' });
+      }
+    }
+
+    if (attempt < 7) {
+      await new Promise((r) => setTimeout(r, 900));
     }
   }
   return null;
