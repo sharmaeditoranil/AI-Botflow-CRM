@@ -205,6 +205,11 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  // Trigger background sync of recent Facebook & Instagram conversations
+  import('@/app/api/meta/social/sync/route')
+    .then(({ syncAccountSocialConversations }) => syncAccountSocialConversations(targetAccountId!))
+    .catch(() => {});
+
   const successParams = new URLSearchParams({
     tab: 'social',
     connected: 'true',

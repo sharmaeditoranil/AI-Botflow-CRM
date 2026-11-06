@@ -81,6 +81,10 @@ export async function POST(req: NextRequest) {
       })
       .eq('account_id', profile.account_id);
 
+    import('@/app/api/meta/social/sync/route')
+      .then(({ syncAccountSocialConversations }) => syncAccountSocialConversations(profile.account_id))
+      .catch(() => {});
+
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
     console.error('[Meta Social Switch Page Error]:', err);

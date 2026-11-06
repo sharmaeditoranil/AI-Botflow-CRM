@@ -189,28 +189,71 @@ export function ConversationList({
 
     (async () => {
       try {
-        // 1. Stage 1: Fetch top 40 most recent conversations FIRST for instant display
-        const { data: firstRows, error: firstErr } = await supabase
-          .from("conversations")
-          .select(CONVERSATION_SELECT)
-          .order("last_message_at", { ascending: false })
-          .order("id", { ascending: false })
-          .range(0, FAST_INITIAL_BATCH - 1);
+        // 1. Stage 1: Fetch top 40 most recent conversations + all FB/IG social conversations in parallel
+        const [firstRes, socialRes] = await Promise.all([
+          supabase
+            .from("conversations")
+            .select(CONVERSATION_SELECT)
+            .order("last_message_at", { ascending: false })
+            .order("id", { ascending: false })
+            .range(0, FAST_INITIAL_BATCH - 1),
+          supabase
+            .from("conversations")
+            .select(CONVERSATION_SELECT)
+            .in("channel", ["facebook", "instagram"])
+            .order("last_message_at", { ascending: false })
+            .limit(200),
+        ]);
 
         if (cancelled) return;
-        if (firstErr) throw firstErr;
+        if (firstRes.error) throw firstRes.error;
 
         const firstBatch = normalizeConversations(
-          (firstRows ?? []) as Parameters<typeof normalizeConversations>[0]
+          (firstRes.data ?? []) as Parameters<typeof normalizeConversations>[0]
         );
-        onConversationsLoadedRef.current(firstBatch);
+        const socialBatch = normalizeConversations(
+          (socialRes.data ?? []) as Parameters<typeof normalizeConversations>[0]
+        );
+
+        const seenIds = new Set(firstBatch.map((c) => c.id));
+        const mergedInitial = [...firstBatch];
+        for (const sc of socialBatch) {
+          if (!seenIds.has(sc.id)) {
+            seenIds.add(sc.id);
+            mergedInitial.push(sc);
+          }
+        }
+
+        onConversationsLoadedRef.current(mergedInitial);
         setInitialLoading(false);
 
         try {
-          localStorage.setItem(storageKey, JSON.stringify(firstBatch.slice(0, FAST_INITIAL_BATCH)));
+          localStorage.setItem(storageKey, JSON.stringify(mergedInitial.slice(0, 120)));
         } catch {
           // Ignore storage quota errors
         }
+
+        // Fire-and-forget live Graph API sync for Facebook Messenger & Instagram DMs
+        void fetch("/api/meta/social/sync", { method: "POST" })
+          .then((r) => (r.ok ? r.json() : null))
+          .then(async (syncJson) => {
+            if (cancelled || !syncJson) return;
+            if (syncJson.syncedThreads > 0 || syncJson.syncedMessages > 0) {
+              const { data: freshSocial } = await supabase
+                .from("conversations")
+                .select(CONVERSATION_SELECT)
+                .in("channel", ["facebook", "instagram"])
+                .order("last_message_at", { ascending: false })
+                .limit(200);
+              if (!cancelled && freshSocial) {
+                const normalizedFresh = normalizeConversations(
+                  freshSocial as Parameters<typeof normalizeConversations>[0]
+                );
+                onConversationsLoadedRef.current(normalizedFresh);
+              }
+            }
+          })
+          .catch(() => {});
 
         // If fewer than FAST_INITIAL_BATCH rows exist, or if we already finished the full
         // background load in this session (and this is just a tab-focus resync), we're done!
@@ -223,7 +266,7 @@ export function ConversationList({
         }
 
         // 2. Stage 2: Slowly & silently load older conversations in background batches
-        const accumulated: Conversation[] = [...firstBatch];
+        const accumulated: Conversation[] = [...mergedInitial];
         let offset = FAST_INITIAL_BATCH;
 
         while (!cancelled) {
@@ -251,7 +294,12 @@ export function ConversationList({
           }
 
           const normalizedBatch = normalizeConversations(rows);
-          accumulated.push(...normalizedBatch);
+          for (const item of normalizedBatch) {
+            if (!seenIds.has(item.id)) {
+              seenIds.add(item.id);
+              accumulated.push(item);
+            }
+          }
           onConversationsLoadedRef.current([...accumulated]);
 
           if (rows.length < BG_BATCH_SIZE) {
@@ -355,8 +403,42 @@ export function ConversationList({
       });
     }
 
-    return result;
+    return [...result].sort((a, b) => {
+      const ta = a.last_message_at ? new Date(a.last_message_at).getTime() : 0;
+      const tb = b.last_message_at ? new Date(b.last_message_at).getTime() : 0;
+      return tb - ta;
+    });
   }, [conversations, platformFilter, activeNumberFilter, tabFilter, filter, userId, selectedTagIds, selectedCompany, search]);
+
+  // Trigger a live Graph API sync when user switches to Facebook or Instagram filter
+  useEffect(() => {
+    if (platformFilter !== "facebook" && platformFilter !== "instagram") return;
+    let cancelled = false;
+    const supabase = createClient();
+    void fetch("/api/meta/social/sync", { method: "POST" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then(async (syncJson) => {
+        if (cancelled || !syncJson) return;
+        if (syncJson.syncedThreads > 0 || syncJson.syncedMessages > 0) {
+          const { data: freshSocial } = await supabase
+            .from("conversations")
+            .select(CONVERSATION_SELECT)
+            .in("channel", ["facebook", "instagram"])
+            .order("last_message_at", { ascending: false })
+            .limit(200);
+          if (!cancelled && freshSocial) {
+            const normalizedFresh = normalizeConversations(
+              freshSocial as Parameters<typeof normalizeConversations>[0]
+            );
+            onConversationsLoadedRef.current(normalizedFresh);
+          }
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [platformFilter]);
 
   const numberCounts = useMemo(() => {
     const m = new Map<string, number>();

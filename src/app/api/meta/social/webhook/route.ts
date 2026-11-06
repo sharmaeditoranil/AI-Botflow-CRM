@@ -220,25 +220,35 @@ export async function POST(request: Request) {
       for (const event of messagingEvents) {
         // Skip message echoes (messages sent by our own page)
         if (event.message?.is_echo) continue;
-        if (!event.sender?.id || !event.message) continue;
+        if (!event.sender?.id || (!event.message && !event.postback)) continue;
 
         const senderId = event.sender.id;
-        const metaMessageId = event.message.mid;
-        let contentText = event.message.text || '';
+        // Skip if sender is the page/IG account itself
+        if (senderId === entryId || senderId === configRow.facebook_page_id) continue;
+
+        const metaMessageId =
+          event.message?.mid ||
+          event.postback?.mid ||
+          `${channel}_${senderId}_${event.timestamp || Date.now()}`;
+        let contentText =
+          event.message?.text ||
+          event.postback?.title ||
+          event.postback?.payload ||
+          '';
         let mediaUrl: string | undefined = undefined;
         let contentType: 'text' | 'image' | 'video' | 'audio' | 'document' = 'text';
 
         // Check attachments
-        const attachments = event.message.attachments;
+        const attachments = event.message?.attachments;
         if (attachments && attachments.length > 0) {
           const firstAtt = attachments[0];
           mediaUrl = firstAtt.payload?.url;
-          if (firstAtt.type === 'image') contentType = 'image';
-          else if (firstAtt.type === 'video') contentType = 'video';
+          if (firstAtt.type === 'image' || firstAtt.type === 'sticker') contentType = 'image';
+          else if (firstAtt.type === 'video' || firstAtt.type === 'ig_reel' || firstAtt.type === 'reel') contentType = 'video';
           else if (firstAtt.type === 'audio') contentType = 'audio';
           else if (firstAtt.type === 'file') contentType = 'document';
-          if (!contentText && mediaUrl) {
-            contentText = `Sent an ${firstAtt.type}`;
+          if (!contentText) {
+            contentText = firstAtt.title || `Sent a ${firstAtt.type || 'media'}`;
           }
         }
 

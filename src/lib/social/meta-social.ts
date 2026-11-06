@@ -551,7 +551,7 @@ export async function fetchUserFacebookPages(
 }
 
 /**
- * Subscribes a Facebook Page to the Meta App so incoming webhooks (messages) are dispatched.
+ * Subscribes a Facebook Page to the Meta App so incoming webhooks (messages & standby) are dispatched.
  */
 export async function subscribePageToApp(
   pageId: string,
@@ -559,15 +559,34 @@ export async function subscribePageToApp(
 ): Promise<{ success: boolean; error?: string }> {
   const url = `${META_GRAPH_BASE_URL}/${encodeURIComponent(pageId)}/subscribed_apps`;
   try {
-    const res = await fetch(url, {
+    let res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        subscribed_fields: ['messages', 'messaging_postbacks'],
+        subscribed_fields: [
+          'messages',
+          'messaging_postbacks',
+          'message_echoes',
+          'messaging_optins',
+          'messaging_referrals',
+          'standby',
+        ],
         access_token: pageAccessToken,
       }),
     });
-    const data = (await res.json()) as { success?: boolean; error?: { message?: string } };
+    let data = (await res.json()) as { success?: boolean; error?: { message?: string } };
+    if (!res.ok || !data.success) {
+      // Fallback to core fields if extended fields are rejected
+      res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subscribed_fields: ['messages', 'messaging_postbacks', 'standby'],
+          access_token: pageAccessToken,
+        }),
+      });
+      data = (await res.json()) as { success?: boolean; error?: { message?: string } };
+    }
     if (!res.ok || !data.success) {
       console.warn(`[Meta Social] Subscribed apps warning for page ${pageId}:`, data);
       return { success: false, error: data.error?.message };
