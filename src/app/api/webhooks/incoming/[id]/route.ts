@@ -391,9 +391,9 @@ async function executeIncomingWebhook(
     // payment.captured, order.paid) from triggering the automation multiple times
     // and sending 4-5 duplicate WhatsApp messages to the customer.
     // -------------------------------------------------------------
-    // 0. Ignore failure / cancelled events (e.g. payment.failed, order.cancelled)
-    if (isIgnorableWebhookEvent(payload)) {
-      console.log(`[Webhook ${method}] Ignored failure/non-actionable event for automation: ${automation.id}`);
+    // 0. Ignore failure / cancelled events unless the automation itself targets failed/cancelled events
+    if (isIgnorableWebhookEvent(payload, automation)) {
+      console.log(`[Webhook ${method}] Ignored failure/non-actionable event for automation: ${automation.id} (${automation.name})`);
       return NextResponse.json(
         {
           success: true,
@@ -581,9 +581,11 @@ async function executeIncomingWebhook(
       for (const [k, v] of Object.entries(flattened)) {
         enrichedVars[`webhook.${k}`] = v;
       }
-      enrichedVars.name = contactName;
+      const templateDisplayName =
+        contactName && contactName !== 'Webhook Lead' ? contactName : 'Customer';
+      enrichedVars.name = templateDisplayName;
       enrichedVars.phone = String(rawPhone);
-      enrichedVars['webhook.name'] = contactName;
+      enrichedVars['webhook.name'] = templateDisplayName;
       enrichedVars['webhook.phone'] = String(rawPhone);
       if (email) {
         enrichedVars.email = email;
@@ -618,6 +620,12 @@ async function executeIncomingWebhook(
         extractValueByPath(payload, 'notes.student');
       const autoDate = extractValueByPath(payload, 'date');
       const autoCreatedAt = extractValueByPath(payload, 'created_at');
+      const autoErrorDesc =
+        extractValueByPath(payload, 'error_description') ||
+        extractValueByPath(payload, 'payload.payment.entity.error_description');
+      const autoErrorReason =
+        extractValueByPath(payload, 'error_reason') ||
+        extractValueByPath(payload, 'payload.payment.entity.error_reason');
 
       if (autoAmount) {
         enrichedVars.amount = autoAmount;
@@ -654,6 +662,14 @@ async function executeIncomingWebhook(
       if (autoCreatedAt) {
         enrichedVars.created_at = autoCreatedAt;
         enrichedVars['webhook.created_at'] = autoCreatedAt;
+      }
+      if (autoErrorDesc) {
+        enrichedVars.error_description = autoErrorDesc;
+        enrichedVars['webhook.error_description'] = autoErrorDesc;
+      }
+      if (autoErrorReason) {
+        enrichedVars.error_reason = autoErrorReason;
+        enrichedVars['webhook.error_reason'] = autoErrorReason;
       }
 
       await executeAutomation(automation as any, {

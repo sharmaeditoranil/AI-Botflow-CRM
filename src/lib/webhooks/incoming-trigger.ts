@@ -698,7 +698,7 @@ export function findSmartName(payload: unknown, configuredPath?: string | null):
     'card',
   ];
   for (const prefix of nestedPrefixes) {
-    for (const key of ['name', 'full_name', 'first_name', 'customer_name', 'cardholder_name', 'billing_name']) {
+    for (const key of ['name', 'full_name', 'first_name', 'customer_name', 'student', 'student_name', 'cardholder_name', 'billing_name']) {
       const val = extractValueByPath(payload, `${prefix}.${key}`);
       if (val && String(val).trim()) return String(val).trim();
     }
@@ -1421,19 +1421,63 @@ export function extractWebhookIdempotencyKey(
 
 /**
  * Checks whether an incoming webhook payload represents a failure or non-actionable event
- * (e.g. payment.failed, order.cancelled) for a payment confirmation automation.
+ * (e.g. payment.failed, order.cancelled) for a payment confirmation automation,
+ * while allowing failure events when the automation itself targets failed/cancelled payments.
  */
-export function isIgnorableWebhookEvent(payload: Record<string, unknown>): boolean {
+export function isIgnorableWebhookEvent(
+  payload: Record<string, unknown>,
+  automation?: {
+    id?: string;
+    name?: string | null;
+    trigger_config?: Record<string, any> | null;
+  } | null
+): boolean {
+  const cfg = (automation?.trigger_config || {}) as Record<string, any>;
+  const nameLower = String(automation?.name || '').toLowerCase();
+  const sampleEventLower = String(cfg?.sample_payload?.event || '').toLowerCase();
+
+  const isFailureAutomation =
+    automation?.id === '3d2e6100-d09f-400c-8fdc-666e67755737' ||
+    automation?.id === 'ace913d5-8d8f-43c7-9f1d-1e87687a5ffc' ||
+    cfg.allow_failed_events === true ||
+    nameLower.includes('fail') ||
+    nameLower.includes('unsuccessful') ||
+    nameLower.includes('declined') ||
+    nameLower.includes('cancel') ||
+    nameLower.includes('abandon') ||
+    nameLower.includes('incomplete') ||
+    nameLower.includes('retry') ||
+    sampleEventLower.includes('.failed') ||
+    sampleEventLower.includes('cancelled');
+
   const event = extractValueByPath(payload, 'event');
   if (typeof event === 'string') {
-    const evLower = event.toLowerCase();
-    if (
+    const evLower = event.toLowerCase().trim();
+    const isFailureEvent =
       evLower === 'payment.failed' ||
       evLower === 'order.cancelled' ||
       evLower === 'payment.dispute.created' ||
       evLower.includes('.failed') ||
-      evLower.includes('cancelled')
-    ) {
+      evLower.includes('cancelled');
+
+    if (isFailureAutomation) {
+      // Allow failure/cancelled events for failure-recovery automations
+      if (isFailureEvent) {
+        return false;
+      }
+      // Ignore success events if accidentally sent to a failure-only automation
+      if (
+        evLower === 'payment.captured' ||
+        evLower === 'payment.authorized' ||
+        evLower === 'order.paid' ||
+        evLower === 'invoice.paid'
+      ) {
+        return true;
+      }
+      return false;
+    }
+
+    if (isFailureEvent) {
       return true;
     }
   }
