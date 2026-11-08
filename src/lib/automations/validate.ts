@@ -133,7 +133,8 @@ function validateOne(step: StepLike, path: string, issues: ValidationIssue[]): v
         break
       }
       try {
-        const u = new URL(String(c.url))
+        const sanitizedUrl = String(c.url).trim().replace(/\{\{[^}]*\}\}/g, 'var')
+        const u = new URL(sanitizedUrl)
         if (u.protocol !== 'http:' && u.protocol !== 'https:') {
           issues.push({
             path: `${path}.url`,

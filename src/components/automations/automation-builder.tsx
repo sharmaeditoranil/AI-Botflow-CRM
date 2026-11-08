@@ -142,6 +142,7 @@ const ADDABLE_STEPS: AutomationStepType[] = [
   "send_buttons",
   "send_list",
   "send_template",
+  "send_webhook",
   "add_tag",
   "remove_tag",
   "assign_conversation",
@@ -149,7 +150,6 @@ const ADDABLE_STEPS: AutomationStepType[] = [
   "create_deal",
   "wait",
   "condition",
-  "send_webhook",
   "close_conversation",
 ]
 
@@ -210,7 +210,25 @@ function blankConfig(type: AutomationStepType): Record<string, unknown> {
     case "condition":
       return { subject: "tag_presence", operand: "", value: "" }
     case "send_webhook":
-      return { url: "", headers: {}, body_template: "" }
+      return {
+        url: "",
+        method: "POST",
+        payload_mode: "auto",
+        auth_type: "none",
+        headers: {},
+        header_items: [],
+        body_fields: [
+          { key: "name", value: "{{contact.name}}" },
+          { key: "phone", value: "{{contact.phone}}" },
+          { key: "message", value: "{{message.text}}" },
+        ],
+        body_template: "",
+        query_params: [],
+        response_mappings: [],
+        timeout_ms: 10000,
+        retry_count: 1,
+        continue_on_error: false,
+      }
     case "close_conversation":
       return {}
     default:
@@ -1981,7 +1999,9 @@ function StepRenderer({
     ? "w-full"
     : isCondition
       ? "w-full max-w-[600px] sm:w-[600px]"
-      : "w-full max-w-[320px] sm:w-80"
+      : step.step_type === "send_webhook" && expanded
+        ? "w-full max-w-[560px] sm:w-[560px]"
+        : "w-full max-w-[320px] sm:w-80"
 
   return (
     <>
@@ -2138,14 +2158,19 @@ function AddButton({ onPick }: { onPick: (t: AutomationStepType) => void }) {
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="start"
-          className="max-h-80 min-w-56 overflow-y-auto border-border bg-popover"
+          className="max-h-[520px] min-w-60 overflow-y-auto border-border bg-popover"
         >
           {ADDABLE_STEPS.map((tp) => {
             const Icon = STEP_META[tp].icon
             return (
               <DropdownMenuItem key={tp} onClick={() => onPick(tp)}>
                 <Icon className="h-4 w-4" />
-                {t(`steps.${STEP_META[tp].label}`)}
+                <span>{t(`steps.${STEP_META[tp].label}`)}</span>
+                {tp === "send_webhook" && (
+                  <span className="ml-auto rounded bg-primary/15 px-1.5 py-0.5 text-[9px] font-semibold text-primary">
+                    Universal
+                  </span>
+                )}
               </DropdownMenuItem>
             )
           })}
@@ -2361,22 +2386,11 @@ function StepEditor({
       )
     case "send_webhook":
       return (
-        <>
-          <FieldBlock label={t("config.urlLabel")}>
-            <Input
-              value={(cfg.url as string) ?? ""}
-              onChange={(e) => set({ url: e.target.value })}
-              className="bg-muted text-foreground"
-            />
-          </FieldBlock>
-          <FieldBlock label={t("config.bodyTemplateLabel")}>
-            <Textarea
-              value={(cfg.body_template as string) ?? ""}
-              onChange={(e) => set({ body_template: e.target.value })}
-              className="min-h-20 bg-muted font-mono text-xs text-foreground"
-            />
-          </FieldBlock>
-        </>
+        <UniversalWebhookStepEditor
+          cfg={cfg}
+          onChange={(patch) => set(patch)}
+          t={t}
+        />
       )
     case "close_conversation":
       return (
@@ -2387,6 +2401,1020 @@ function StepEditor({
     default:
       return null
   }
+}
+
+const UNIVERSAL_VARIABLES: Array<{ label: string; token: string; group: string }> = [
+  { label: "Contact Name", token: "{{contact.name}}", group: "Contact" },
+  { label: "Contact Phone", token: "{{contact.phone}}", group: "Contact" },
+  { label: "Contact Email", token: "{{contact.email}}", group: "Contact" },
+  { label: "Contact Company", token: "{{contact.company}}", group: "Contact" },
+  { label: "Contact ID", token: "{{contact.id}}", group: "Contact" },
+  { label: "Incoming Message Text", token: "{{message.text}}", group: "Message" },
+  { label: "Conversation ID", token: "{{conversation.id}}", group: "Message" },
+  { label: "Lead Service / Product", token: "{{service}}", group: "Lead" },
+  { label: "Lead City / Location", token: "{{city}}", group: "Lead" },
+  { label: "Lead Extra Message", token: "{{extra_message}}", group: "Lead" },
+  { label: "Webhook Amount", token: "{{webhook.amount}}", group: "Webhook" },
+  { label: "Webhook Order ID", token: "{{webhook.order.id}}", group: "Webhook" },
+  { label: "Webhook Payment ID", token: "{{webhook.payment.id}}", group: "Webhook" },
+  { label: "Webhook Course / Title", token: "{{webhook.course}}", group: "Webhook" },
+]
+
+const JSON_PRESETS: Record<string, { label: string; body: string }> = {
+  crm_lead: {
+    label: "CRM / Zapier / Make Lead",
+    body: JSON.stringify(
+      {
+        event: "whatsapp_lead_captured",
+        name: "{{contact.name}}",
+        phone: "{{contact.phone}}",
+        email: "{{contact.email}}",
+        service: "{{service}}",
+        city: "{{city}}",
+        message: "{{message.text}}",
+        source: "WhatsApp Bot",
+      },
+      null,
+      2
+    ),
+  },
+  order_payment: {
+    label: "Order / Payment Sync",
+    body: JSON.stringify(
+      {
+        event: "payment_notification",
+        customer_name: "{{contact.name}}",
+        customer_phone: "{{contact.phone}}",
+        customer_email: "{{contact.email}}",
+        amount: "{{webhook.amount}}",
+        order_id: "{{webhook.order.id}}",
+        payment_id: "{{webhook.payment.id}}",
+        course: "{{webhook.course}}",
+      },
+      null,
+      2
+    ),
+  },
+  bot_event: {
+    label: "WhatsApp Bot Reply Event",
+    body: JSON.stringify(
+      {
+        contact_id: "{{contact.id}}",
+        conversation_id: "{{conversation.id}}",
+        phone: "{{contact.phone}}",
+        name: "{{contact.name}}",
+        last_message: "{{message.text}}",
+      },
+      null,
+      2
+    ),
+  },
+}
+
+function UniversalVarInsertMenu({
+  onSelect,
+  webhookFields = [],
+}: {
+  onSelect: (token: string) => void
+  webhookFields?: string[]
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onDocClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", onDocClick)
+    return () => document.removeEventListener("mousedown", onDocClick)
+  }, [open])
+
+  const extraWebhookVars = useMemo(() => {
+    return webhookFields
+      .map((f) => (f.startsWith("webhook.") ? f : `webhook.${f}`))
+      .filter((f) => !UNIVERSAL_VARIABLES.some((u) => u.token === `{{${f}}}`))
+      .slice(0, 25)
+  }, [webhookFields])
+
+  return (
+    <div className="relative inline-block" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center gap-1 rounded border border-border bg-muted px-2 py-1 text-[10px] font-medium text-foreground hover:border-primary/50 hover:bg-primary/10 hover:text-primary transition-colors"
+      >
+        <span>+ &#123;&#123;Variable&#125;&#125;</span>
+        <ChevronDown className="h-2.5 w-2.5" />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full z-50 mt-1 max-h-64 w-64 overflow-y-auto rounded-md border border-border bg-popover p-1.5 shadow-xl">
+          <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Contact &amp; Message Variables
+          </div>
+          {UNIVERSAL_VARIABLES.map((v) => (
+            <button
+              key={v.token}
+              type="button"
+              onClick={() => {
+                onSelect(v.token)
+                setOpen(false)
+              }}
+              className="flex w-full items-center justify-between rounded px-2 py-1 text-left text-[11px] hover:bg-primary/10 hover:text-primary"
+            >
+              <span className="truncate font-medium">{v.label}</span>
+              <code className="ml-2 shrink-0 text-[10px] text-muted-foreground">{v.token}</code>
+            </button>
+          ))}
+          {extraWebhookVars.length > 0 && (
+            <>
+              <div className="mt-1 border-t border-border/60 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-emerald-500">
+                Detected Webhook Fields
+              </div>
+              {extraWebhookVars.map((wf) => (
+                <button
+                  key={wf}
+                  type="button"
+                  onClick={() => {
+                    onSelect(`{{${wf}}}`)
+                    setOpen(false)
+                  }}
+                  className="flex w-full items-center justify-between rounded px-2 py-1 text-left font-mono text-[10px] hover:bg-primary/10 hover:text-primary"
+                >
+                  <span className="truncate">{`{{${wf}}}`}</span>
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function UniversalWebhookStepEditor({
+  cfg,
+  onChange,
+  t,
+}: {
+  cfg: Record<string, unknown>
+  onChange: (patch: Record<string, unknown>) => void
+  t: ReturnType<typeof useTranslations>
+}) {
+  const { webhookFields = [], samplePayload } = useResources()
+  const [activeTab, setActiveTab] = useState<"payload" | "auth" | "response" | "test">("payload")
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<{
+    ok: boolean
+    status: number
+    statusText: string
+    durationMs: number
+    requestUrl?: string
+    requestMethod?: string
+    requestBody?: string | null
+    responseBody?: string
+    mappedVariables?: Record<string, string>
+    error?: string
+  } | null>(null)
+
+  const url = (cfg.url as string) ?? ""
+  const method = ((cfg.method as string) || "POST").toUpperCase()
+  const payloadMode =
+    (cfg.payload_mode as "auto" | "key_value" | "json" | "form") ||
+    (cfg.body_template && String(cfg.body_template).trim().length > 0 ? "json" : "auto")
+  const includeSystemPayload = (cfg.include_system_payload as boolean) ?? true
+  const authType = (cfg.auth_type as "none" | "bearer" | "api_key" | "basic" | "hmac_sha256") || "none"
+  const bodyTemplate = (cfg.body_template as string) ?? ""
+  const timeoutMs = (cfg.timeout_ms as number) ?? 10000
+  const retryCount = (cfg.retry_count as number) ?? 1
+  const continueOnError = (cfg.continue_on_error as boolean) ?? false
+
+  const bodyFields = useMemo<Array<{ key: string; value: string }>>(() => {
+    if (Array.isArray(cfg.body_fields)) {
+      return cfg.body_fields as Array<{ key: string; value: string }>
+    }
+    return [
+      { key: "name", value: "{{contact.name}}" },
+      { key: "phone", value: "{{contact.phone}}" },
+      { key: "message", value: "{{message.text}}" },
+    ]
+  }, [cfg.body_fields])
+
+  const headerItems = useMemo<Array<{ key: string; value: string }>>(() => {
+    if (Array.isArray(cfg.header_items)) {
+      return cfg.header_items as Array<{ key: string; value: string }>
+    }
+    if (cfg.headers && typeof cfg.headers === "object") {
+      return Object.entries(cfg.headers as Record<string, string>).map(([k, v]) => ({
+        key: k,
+        value: String(v ?? ""),
+      }))
+    }
+    return []
+  }, [cfg.header_items, cfg.headers])
+
+  const queryParams = useMemo<Array<{ key: string; value: string }>>(() => {
+    if (Array.isArray(cfg.query_params)) {
+      return cfg.query_params as Array<{ key: string; value: string }>
+    }
+    return []
+  }, [cfg.query_params])
+
+  const responseMappings = useMemo<Array<{ response_path: string; variable_name: string }>>(() => {
+    if (Array.isArray(cfg.response_mappings)) {
+      return cfg.response_mappings as Array<{ response_path: string; variable_name: string }>
+    }
+    return []
+  }, [cfg.response_mappings])
+
+  const updateBodyField = (idx: number, patch: Partial<{ key: string; value: string }>) => {
+    const next = bodyFields.map((item, i) => (i === idx ? { ...item, ...patch } : item))
+    onChange({ body_fields: next })
+  }
+
+  const addBodyField = () => {
+    onChange({ body_fields: [...bodyFields, { key: "", value: "" }] })
+  }
+
+  const removeBodyField = (idx: number) => {
+    onChange({ body_fields: bodyFields.filter((_, i) => i !== idx) })
+  }
+
+  const syncHeaders = (nextItems: Array<{ key: string; value: string }>) => {
+    const record: Record<string, string> = {}
+    for (const item of nextItems) {
+      if (item.key.trim()) record[item.key.trim()] = item.value
+    }
+    onChange({ header_items: nextItems, headers: record })
+  }
+
+  const handleRunTest = async () => {
+    if (!url.trim()) {
+      toast.error("Please enter a valid Webhook Endpoint URL first")
+      return
+    }
+    setTesting(true)
+    setActiveTab("test")
+    try {
+      const res = await fetch("/api/automations/test-webhook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          step_config: cfg,
+          sample_payload: samplePayload,
+        }),
+      })
+      const data = await res.json()
+      setTestResult(data)
+      if (data.ok) {
+        toast.success(`Webhook test succeeded (${data.status} in ${data.durationMs}ms)`)
+      } else {
+        toast.error(data.error || `Webhook returned HTTP ${data.status}`)
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to test webhook")
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3 text-xs">
+      {/* Header Banner */}
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-primary/25 bg-primary/5 px-2.5 py-2">
+        <div className="flex items-center gap-2">
+          <Webhook className="h-4 w-4 text-primary shrink-0" />
+          <div>
+            <div className="font-semibold text-foreground text-xs">
+              Universal Outbound Webhook Integration
+            </div>
+            <div className="text-[10px] text-muted-foreground">
+              Connect Zapier, Make, Pabbly, n8n, Google Sheets, CRM &amp; custom REST APIs
+            </div>
+          </div>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={testing || !url.trim()}
+          onClick={handleRunTest}
+          className="h-7 px-2.5 text-[11px] border-primary/40 text-primary hover:bg-primary/10"
+        >
+          {testing ? (
+            <>
+              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              Testing...
+            </>
+          ) : (
+            <>
+              <Zap className="mr-1 h-3 w-3" />
+              Test Webhook
+            </>
+          )}
+        </Button>
+      </div>
+
+      {/* HTTP Method + Endpoint URL */}
+      <div>
+        <div className="mb-1 flex items-center justify-between">
+          <label className="font-medium text-muted-foreground">
+            {t("config.urlLabel")} *
+          </label>
+          <UniversalVarInsertMenu
+            webhookFields={webhookFields}
+            onSelect={(token) => onChange({ url: `${url}${token}` })}
+          />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <select
+            value={method}
+            onChange={(e) => onChange({ method: e.target.value })}
+            aria-label="HTTP Method"
+            className="h-9 w-24 shrink-0 rounded-md border border-border bg-muted px-2 font-mono text-xs font-semibold text-primary focus:border-primary focus:outline-none"
+          >
+            <option value="POST">POST</option>
+            <option value="GET">GET</option>
+            <option value="PUT">PUT</option>
+            <option value="PATCH">PATCH</option>
+            <option value="DELETE">DELETE</option>
+          </select>
+          <Input
+            aria-label={t("config.urlLabel")}
+            value={url}
+            onChange={(e) => onChange({ url: e.target.value })}
+            placeholder="https://hooks.zapier.com/hooks/catch/... or https://api.yourdomain.com/webhook"
+            className="bg-muted font-mono text-xs text-foreground"
+          />
+        </div>
+      </div>
+
+      {/* Navigation Tabs */}
+      <div className="grid grid-cols-4 gap-1 rounded-md border border-border bg-muted/50 p-1">
+        {(
+          [
+            { id: "payload", label: "Payload & Data" },
+            { id: "auth", label: "Auth & Headers" },
+            { id: "response", label: "Response & Retry" },
+            { id: "test", label: "Live Test" },
+          ] as const
+        ).map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+            className={cn(
+              "rounded px-2 py-1 text-[11px] font-medium transition-colors",
+              activeTab === tab.id
+                ? "bg-card text-primary shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* TAB 1: PAYLOAD & DATA */}
+      {activeTab === "payload" && (
+        <div className="space-y-3 rounded-md border border-border/70 bg-muted/20 p-2.5">
+          <div>
+            <label className="mb-1 block font-medium text-muted-foreground">
+              Payload Format Mode
+            </label>
+            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
+              {(
+                [
+                  { id: "auto", title: "Smart Auto JSON", desc: "Full contact + custom fields" },
+                  { id: "key_value", title: "Key-Value Builder", desc: "Visual field mapper" },
+                  { id: "json", title: "Custom JSON", desc: "Raw JSON template" },
+                  { id: "form", title: "Form Data", desc: "x-www-form-urlencoded" },
+                ] as const
+              ).map((mode) => (
+                <button
+                  key={mode.id}
+                  type="button"
+                  onClick={() =>
+                    onChange({
+                      payload_mode: mode.id,
+                      content_type:
+                        mode.id === "form"
+                          ? "application/x-www-form-urlencoded"
+                          : "application/json",
+                    })
+                  }
+                  className={cn(
+                    "flex flex-col items-start rounded-md border p-2 text-left transition-colors",
+                    payloadMode === mode.id
+                      ? "border-primary bg-primary/10 text-foreground"
+                      : "border-border bg-card text-muted-foreground hover:border-border/80 hover:text-foreground"
+                  )}
+                >
+                  <span className="font-semibold text-[11px]">{mode.title}</span>
+                  <span className="text-[9px] opacity-80">{mode.desc}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {method === "GET" || method === "DELETE" ? (
+            <div className="rounded border border-amber-500/30 bg-amber-500/10 p-2 text-[11px] text-amber-300">
+              <strong>{method}</strong> requests do not send a body payload. Use the{" "}
+              <strong>Auth &amp; Headers</strong> tab to add URL Query Parameters if needed.
+            </div>
+          ) : payloadMode === "json" ? (
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-1">
+                <label className="font-medium text-muted-foreground">
+                  {t("config.bodyTemplateLabel")}
+                </label>
+                <div className="flex items-center gap-1">
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      const preset = JSON_PRESETS[e.target.value]
+                      if (preset) onChange({ body_template: preset.body, payload_mode: "json" })
+                    }}
+                    className="rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] text-foreground"
+                  >
+                    <option value="">Load Preset JSON...</option>
+                    {Object.entries(JSON_PRESETS).map(([k, p]) => (
+                      <option key={k} value={k}>
+                        {p.label}
+                      </option>
+                    ))}
+                  </select>
+                  <UniversalVarInsertMenu
+                    webhookFields={webhookFields}
+                    onSelect={(token) =>
+                      onChange({
+                        body_template: bodyTemplate ? `${bodyTemplate}${token}` : token,
+                        payload_mode: "json",
+                      })
+                    }
+                  />
+                </div>
+              </div>
+              <Textarea
+                aria-label={t("config.bodyTemplateLabel")}
+                value={bodyTemplate}
+                onChange={(e) => onChange({ body_template: e.target.value, payload_mode: "json" })}
+                placeholder='{"name": "{{contact.name}}", "phone": "{{contact.phone}}", "message": "{{message.text}}"}'
+                className="min-h-32 bg-muted font-mono text-xs text-foreground"
+              />
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {payloadMode === "auto" && (
+                <div className="rounded border border-emerald-500/25 bg-emerald-500/5 p-2 text-[10px] text-muted-foreground">
+                  <strong className="text-emerald-400">Smart Auto Payload:</strong> Automatically sends{" "}
+                  <code>contact</code> (name, phone, email, company, custom_fields),{" "}
+                  <code>message</code>, <code>lead</code> (service, city, summary),{" "}
+                  <code>conversation</code>, and <code>variables</code> — plus any custom fields mapped below.
+                </div>
+              )}
+
+              {payloadMode === "key_value" && (
+                <div className="flex items-center justify-between rounded border border-border bg-card px-2.5 py-1.5">
+                  <span className="text-[11px] text-muted-foreground">
+                    Also include full contact &amp; lead metadata object
+                  </span>
+                  <Switch
+                    checked={includeSystemPayload}
+                    onCheckedChange={(checked) => onChange({ include_system_payload: checked })}
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center justify-between">
+                <label className="font-medium text-muted-foreground">
+                  {payloadMode === "form"
+                    ? "Form Fields (application/x-www-form-urlencoded)"
+                    : "Mapped Payload Fields (Key → Value / Variable)"}
+                </label>
+                <button
+                  type="button"
+                  onClick={addBodyField}
+                  className="inline-flex items-center gap-1 rounded bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary hover:bg-primary/25"
+                >
+                  <Plus className="h-3 w-3" /> Add Field
+                </button>
+              </div>
+
+              <div className="space-y-1.5">
+                {bodyFields.map((field, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5">
+                    <Input
+                      value={field.key}
+                      onChange={(e) => updateBodyField(idx, { key: e.target.value })}
+                      placeholder="key (e.g. customer_phone)"
+                      className="h-8 w-2/5 bg-muted font-mono text-[11px]"
+                    />
+                    <Input
+                      value={field.value}
+                      onChange={(e) => updateBodyField(idx, { value: e.target.value })}
+                      placeholder="{{contact.phone}} or static value"
+                      className="h-8 flex-1 bg-muted font-mono text-[11px]"
+                    />
+                    <UniversalVarInsertMenu
+                      webhookFields={webhookFields}
+                      onSelect={(token) => updateBodyField(idx, { value: token })}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeBodyField(idx)}
+                      className="rounded p-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+                      title="Remove field"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Legacy/Quick Raw JSON fallback disclosure */}
+              <details className="pt-1">
+                <summary className="cursor-pointer text-[10px] text-muted-foreground hover:text-foreground">
+                  {t("config.bodyTemplateLabel")} (Optional raw JSON override)
+                </summary>
+                <div className="mt-1.5">
+                  <Textarea
+                    aria-label={t("config.bodyTemplateLabel")}
+                    value={bodyTemplate}
+                    onChange={(e) =>
+                      onChange({
+                        body_template: e.target.value,
+                        ...(e.target.value.trim() ? { payload_mode: "json" } : {}),
+                      })
+                    }
+                    placeholder='{"name": "{{contact.name}}", "phone": "{{contact.phone}}"}'
+                    className="min-h-20 bg-muted font-mono text-xs text-foreground"
+                  />
+                </div>
+              </details>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 2: AUTH & HEADERS */}
+      {activeTab === "auth" && (
+        <div className="space-y-3 rounded-md border border-border/70 bg-muted/20 p-2.5">
+          <div>
+            <label className="mb-1 block font-medium text-muted-foreground">
+              Authentication Type
+            </label>
+            <select
+              value={authType}
+              onChange={(e) => onChange({ auth_type: e.target.value })}
+              className={SELECT_CLASS}
+            >
+              <option value="none">No Authentication</option>
+              <option value="bearer">Bearer Token (Authorization: Bearer ...)</option>
+              <option value="api_key">API Key Header (e.g. X-API-Key)</option>
+              <option value="basic">Basic Auth (Username &amp; Password)</option>
+              <option value="hmac_sha256">HMAC-SHA256 Webhook Signature</option>
+            </select>
+          </div>
+
+          {authType === "bearer" && (
+            <div>
+              <label className="mb-1 block font-medium text-muted-foreground">
+                Bearer Token
+              </label>
+              <Input
+                type="password"
+                value={(cfg.auth_token as string) ?? ""}
+                onChange={(e) => onChange({ auth_token: e.target.value })}
+                placeholder="eyJhbGciOiJIUzI1NiIs..."
+                className="bg-muted font-mono text-xs"
+              />
+            </div>
+          )}
+
+          {authType === "api_key" && (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="mb-1 block font-medium text-muted-foreground">
+                  Header Name
+                </label>
+                <Input
+                  value={(cfg.api_key_header as string) ?? "X-API-Key"}
+                  onChange={(e) => onChange({ api_key_header: e.target.value })}
+                  placeholder="X-API-Key"
+                  className="bg-muted font-mono text-xs"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block font-medium text-muted-foreground">
+                  API Key Value
+                </label>
+                <Input
+                  type="password"
+                  value={(cfg.api_key_value as string) ?? ""}
+                  onChange={(e) => onChange({ api_key_value: e.target.value })}
+                  placeholder="sk_live_..."
+                  className="bg-muted font-mono text-xs"
+                />
+              </div>
+            </div>
+          )}
+
+          {authType === "basic" && (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="mb-1 block font-medium text-muted-foreground">
+                  Username
+                </label>
+                <Input
+                  value={(cfg.basic_username as string) ?? ""}
+                  onChange={(e) => onChange({ basic_username: e.target.value })}
+                  placeholder="username"
+                  className="bg-muted text-xs"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block font-medium text-muted-foreground">
+                  Password
+                </label>
+                <Input
+                  type="password"
+                  value={(cfg.basic_password as string) ?? ""}
+                  onChange={(e) => onChange({ basic_password: e.target.value })}
+                  placeholder="••••••••"
+                  className="bg-muted text-xs"
+                />
+              </div>
+            </div>
+          )}
+
+          {authType === "hmac_sha256" && (
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="mb-1 block font-medium text-muted-foreground">
+                  Signature Header
+                </label>
+                <Input
+                  value={(cfg.hmac_header as string) ?? "X-Webhook-Signature"}
+                  onChange={(e) => onChange({ hmac_header: e.target.value })}
+                  placeholder="X-Webhook-Signature"
+                  className="bg-muted font-mono text-xs"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block font-medium text-muted-foreground">
+                  Signing Secret
+                </label>
+                <Input
+                  type="password"
+                  value={(cfg.hmac_secret as string) ?? ""}
+                  onChange={(e) => onChange({ hmac_secret: e.target.value })}
+                  placeholder="whsec_..."
+                  className="bg-muted font-mono text-xs"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Custom HTTP Headers */}
+          <div className="border-t border-border/60 pt-2.5">
+            <div className="mb-1.5 flex items-center justify-between">
+              <label className="font-medium text-muted-foreground">
+                Custom HTTP Headers
+              </label>
+              <button
+                type="button"
+                onClick={() => syncHeaders([...headerItems, { key: "", value: "" }])}
+                className="inline-flex items-center gap-1 rounded bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary hover:bg-primary/25"
+              >
+                <Plus className="h-3 w-3" /> Add Header
+              </button>
+            </div>
+            {headerItems.length === 0 ? (
+              <p className="text-[10px] text-muted-foreground">
+                No custom headers configured. Default <code>Content-Type</code> is sent automatically.
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {headerItems.map((h, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5">
+                    <Input
+                      value={h.key}
+                      onChange={(e) => {
+                        const next = headerItems.map((item, i) =>
+                          i === idx ? { ...item, key: e.target.value } : item
+                        )
+                        syncHeaders(next)
+                      }}
+                      placeholder="Header-Name"
+                      className="h-7 w-2/5 bg-muted font-mono text-[11px]"
+                    />
+                    <Input
+                      value={h.value}
+                      onChange={(e) => {
+                        const next = headerItems.map((item, i) =>
+                          i === idx ? { ...item, value: e.target.value } : item
+                        )
+                        syncHeaders(next)
+                      }}
+                      placeholder="Header value"
+                      className="h-7 flex-1 bg-muted font-mono text-[11px]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => syncHeaders(headerItems.filter((_, i) => i !== idx))}
+                      className="rounded p-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* URL Query Params */}
+          <div className="border-t border-border/60 pt-2.5">
+            <div className="mb-1.5 flex items-center justify-between">
+              <label className="font-medium text-muted-foreground">
+                URL Query Parameters
+              </label>
+              <button
+                type="button"
+                onClick={() => onChange({ query_params: [...queryParams, { key: "", value: "" }] })}
+                className="inline-flex items-center gap-1 rounded bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary hover:bg-primary/25"
+              >
+                <Plus className="h-3 w-3" /> Add Query Param
+              </button>
+            </div>
+            {queryParams.length === 0 ? (
+              <p className="text-[10px] text-muted-foreground">
+                Optional query parameters appended to the Webhook URL (e.g. <code>?source=whatsapp</code>).
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                {queryParams.map((qp, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5">
+                    <Input
+                      value={qp.key}
+                      onChange={(e) => {
+                        const next = queryParams.map((item, i) =>
+                          i === idx ? { ...item, key: e.target.value } : item
+                        )
+                        onChange({ query_params: next })
+                      }}
+                      placeholder="param_name"
+                      className="h-7 w-2/5 bg-muted font-mono text-[11px]"
+                    />
+                    <Input
+                      value={qp.value}
+                      onChange={(e) => {
+                        const next = queryParams.map((item, i) =>
+                          i === idx ? { ...item, value: e.target.value } : item
+                        )
+                        onChange({ query_params: next })
+                      }}
+                      placeholder="{{contact.phone}}"
+                      className="h-7 flex-1 bg-muted font-mono text-[11px]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onChange({ query_params: queryParams.filter((_, i) => i !== idx) })
+                      }
+                      className="rounded p-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: RESPONSE & RETRY */}
+      {activeTab === "response" && (
+        <div className="space-y-3 rounded-md border border-border/70 bg-muted/20 p-2.5">
+          <div>
+            <div className="mb-1.5 flex items-center justify-between">
+              <div>
+                <label className="block font-medium text-foreground">
+                  Capture Webhook Response into Variables
+                </label>
+                <p className="text-[10px] text-muted-foreground">
+                  Extract values from JSON response to use in next steps as <code>&#123;&#123;vars.variable_name&#125;&#125;</code>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  onChange({
+                    response_mappings: [
+                      ...responseMappings,
+                      { response_path: "", variable_name: "" },
+                    ],
+                  })
+                }
+                className="inline-flex items-center gap-1 rounded bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary hover:bg-primary/25"
+              >
+                <Plus className="h-3 w-3" /> Add Mapping
+              </button>
+            </div>
+
+            {responseMappings.length > 0 && (
+              <div className="space-y-1.5 pt-1">
+                {responseMappings.map((rm, idx) => (
+                  <div key={idx} className="flex items-center gap-1.5">
+                    <Input
+                      value={rm.response_path}
+                      onChange={(e) => {
+                        const next = responseMappings.map((item, i) =>
+                          i === idx ? { ...item, response_path: e.target.value } : item
+                        )
+                        onChange({ response_mappings: next })
+                      }}
+                      placeholder="JSON path (e.g. data.lead_id)"
+                      className="h-7 flex-1 bg-muted font-mono text-[11px]"
+                    />
+                    <span className="text-muted-foreground">→</span>
+                    <Input
+                      value={rm.variable_name}
+                      onChange={(e) => {
+                        const next = responseMappings.map((item, i) =>
+                          i === idx ? { ...item, variable_name: e.target.value } : item
+                        )
+                        onChange({ response_mappings: next })
+                      }}
+                      placeholder="var name (e.g. lead_id)"
+                      className="h-7 flex-1 bg-muted font-mono text-[11px]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onChange({
+                          response_mappings: responseMappings.filter((_, i) => i !== idx),
+                        })
+                      }
+                      className="rounded p-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 border-t border-border/60 pt-2.5">
+            <div>
+              <label className="mb-1 block font-medium text-muted-foreground">
+                Request Timeout
+              </label>
+              <select
+                value={timeoutMs}
+                onChange={(e) => onChange({ timeout_ms: Number(e.target.value) })}
+                className={SELECT_CLASS}
+              >
+                <option value={5000}>5 seconds</option>
+                <option value={10000}>10 seconds (Default)</option>
+                <option value={15000}>15 seconds</option>
+                <option value={30000}>30 seconds</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block font-medium text-muted-foreground">
+                Auto-Retry on Failure
+              </label>
+              <select
+                value={retryCount}
+                onChange={(e) => onChange({ retry_count: Number(e.target.value) })}
+                className={SELECT_CLASS}
+              >
+                <option value={0}>No retries (0)</option>
+                <option value={1}>1 retry</option>
+                <option value={2}>2 retries</option>
+                <option value={3}>3 retries</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between rounded border border-border bg-card px-2.5 py-2">
+            <div>
+              <div className="font-medium text-foreground text-[11px]">
+                Continue workflow even if webhook fails
+              </div>
+              <div className="text-[10px] text-muted-foreground">
+                Prevents external API downtime from stopping subsequent WhatsApp steps
+              </div>
+            </div>
+            <Switch
+              checked={continueOnError}
+              onCheckedChange={(checked) => onChange({ continue_on_error: checked })}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* TAB 4: LIVE TEST CONSOLE */}
+      {activeTab === "test" && (
+        <div className="space-y-2.5 rounded-md border border-border/70 bg-muted/20 p-2.5">
+          <div className="flex items-center justify-between">
+            <span className="font-medium text-muted-foreground">
+              Send a real test request with sample contact &amp; lead data
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              disabled={testing || !url.trim()}
+              onClick={handleRunTest}
+              className="h-7 px-3 text-xs"
+            >
+              {testing ? (
+                <>
+                  <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Zap className="mr-1.5 h-3 w-3" />
+                  Send Test Request
+                </>
+              )}
+            </Button>
+          </div>
+
+          {testResult && (
+            <div className="space-y-2 rounded border border-border bg-card p-2.5 font-mono text-[11px]">
+              <div className="flex items-center justify-between border-b border-border/60 pb-1.5">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      "rounded px-1.5 py-0.5 text-[10px] font-bold",
+                      testResult.ok
+                        ? "bg-emerald-500/15 text-emerald-400"
+                        : "bg-rose-500/15 text-rose-400"
+                    )}
+                  >
+                    {testResult.status
+                      ? `HTTP ${testResult.status} ${testResult.statusText || ""}`
+                      : "FAILED"}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {testResult.durationMs}ms
+                  </span>
+                </div>
+                <span className="truncate text-[10px] text-muted-foreground max-w-[240px]">
+                  {testResult.requestMethod} {testResult.requestUrl}
+                </span>
+              </div>
+
+              {testResult.error && (
+                <div className="rounded bg-rose-500/10 p-1.5 text-rose-400">
+                  {testResult.error}
+                </div>
+              )}
+
+              {testResult.mappedVariables &&
+                Object.keys(testResult.mappedVariables).length > 0 && (
+                  <div>
+                    <div className="mb-1 text-[10px] font-sans font-semibold text-emerald-400">
+                      Captured Variables:
+                    </div>
+                    <pre className="overflow-x-auto rounded bg-muted p-1.5 text-[10px]">
+                      {JSON.stringify(testResult.mappedVariables, null, 2)}
+                    </pre>
+                  </div>
+                )}
+
+              {testResult.requestBody && (
+                <details>
+                  <summary className="cursor-pointer font-sans text-[10px] text-muted-foreground hover:text-foreground">
+                    Sent Request Payload
+                  </summary>
+                  <pre className="mt-1 max-h-36 overflow-auto rounded bg-muted p-1.5 text-[10px]">
+                    {testResult.requestBody}
+                  </pre>
+                </details>
+              )}
+
+              <div>
+                <div className="mb-1 font-sans text-[10px] text-muted-foreground">
+                  Response Body:
+                </div>
+                <pre className="max-h-40 overflow-auto rounded bg-muted p-1.5 text-[10px] text-foreground">
+                  {testResult.responseBody || "(empty response body)"}
+                </pre>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function FieldBlock({
@@ -2417,8 +3445,11 @@ function previewFor(step: BuilderStep): string {
       return `${step.step_config.amount ?? "?"} ${step.step_config.unit ?? ""}`
     case "condition":
       return `when ${step.step_config.subject ?? "?"}`
-    case "send_webhook":
-      return (step.step_config.url as string) || "no url"
+    case "send_webhook": {
+      const m = ((step.step_config.method as string) || "POST").toUpperCase()
+      const u = (step.step_config.url as string) || ""
+      return u ? `${m} ${u}` : "no url"
+    }
     default:
       return ""
   }

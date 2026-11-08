@@ -25,6 +25,7 @@ import { engineSendText, engineSendTemplate, engineSendInteractive } from './met
 import { validateInteractivePayload } from '@/lib/whatsapp/interactive'
 import { isDeliverableUrl } from '@/lib/webhooks/ssrf'
 import { extractVariableIndices } from '@/lib/whatsapp/template-validators'
+import { executeUniversalOutboundWebhook } from './outbound-webhook'
 import {
   findAndMergeOrCreateDeal,
   parseDealLeadDetails,
@@ -762,26 +763,32 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
     case 'send_webhook': {
       const cfg = step.step_config as SendWebhookStepConfig
       if (!cfg.url) throw new Error('send_webhook needs url')
-      // SSRF guard: the URL and headers are account-controlled and the
-      // server makes the request, so refuse any destination that resolves
-      // to a private / loopback / link-local / reserved address. Mirrors
-      // the webhook_endpoints delivery path (see lib/webhooks/deliver.ts).
-      if (!(await isDeliverableUrl(cfg.url))) {
-        throw new Error('send_webhook: destination not allowed')
-      }
-      const body = cfg.body_template ? interpolate(cfg.body_template, args) : JSON.stringify(args.context)
-      const res = await fetch(cfg.url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', ...(cfg.headers ?? {}) },
-        body,
-        // Do NOT follow redirects — a public URL could 3xx-bounce to an
-        // internal address, defeating the guard above. Bound the request
-        // so a hung/slow internal host can't tie up the runner.
-        redirect: 'manual',
-        signal: AbortSignal.timeout(10_000),
+
+      const result = await executeUniversalOutboundWebhook({
+        cfg,
+        automation: args.automation,
+        contact: args.contactId
+          ? {
+              id: args.contactId,
+              name: (args.context.vars?.name as string) || null,
+              phone: (args.context.vars?.phone as string) || null,
+              email: (args.context.vars?.email as string) || null,
+            }
+          : null,
+        context: args.context,
+        interpolate: (tmpl: string) => interpolate(tmpl, args),
       })
-      if (!res.ok) throw new Error(`webhook returned ${res.status}`)
-      return `webhook ${res.status}`
+
+      if (!result.ok) {
+        if (cfg.continue_on_error) {
+          return `webhook failed (ignored): ${result.error || result.status}`
+        }
+        throw new Error(result.error || `webhook returned ${result.status}`)
+      }
+      const mappedCount = Object.keys(result.mappedVariables || {}).length
+      return mappedCount > 0
+        ? `webhook ${result.status} (${mappedCount} vars captured)`
+        : `webhook ${result.status}`
     }
 
     case 'close_conversation': {
@@ -1132,8 +1139,18 @@ function interpolate(s: string, args: ExecuteArgs): string {
       if (pLower === 'email') return (args.context.vars?.email as string) || findSmartEmail(args.context.vars) || ''
     }
     if (ns === 'contact') {
+      if (prop === 'id') return String(args.contactId ?? '')
       if (prop === 'name') return (args.context.vars?.name as string) || findSmartName(args.context.vars) || ''
       if (prop === 'phone') return (args.context.vars?.phone as string) || ''
+      if (prop === 'email') return (args.context.vars?.email as string) || findSmartEmail(args.context.vars) || ''
+      if (prop === 'company') return (args.context.vars?.company as string) || ''
+    }
+    if (ns === 'conversation' && prop === 'id') {
+      return String(args.context.conversation_id ?? '')
+    }
+    if (ns === 'automation') {
+      if (prop === 'id') return String(args.automation.id ?? '')
+      if (prop === 'name') return String(args.automation.name ?? '')
     }
     if (lower === 'name') return (args.context.vars?.name as string) || findSmartName(args.context.vars) || ''
     if (lower === 'phone' || lower === 'mobile') return (args.context.vars?.phone as string) || ''

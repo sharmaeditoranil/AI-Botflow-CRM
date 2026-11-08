@@ -714,10 +714,39 @@ export interface ConditionStepConfig {
   value?: string;
 }
 
+export interface WebhookKeyValueItem {
+  key: string;
+  value: string;
+}
+
+export interface WebhookResponseMapping {
+  response_path: string;
+  variable_name: string;
+}
+
 export interface SendWebhookStepConfig {
   url: string;
+  method?: 'POST' | 'GET' | 'PUT' | 'PATCH' | 'DELETE';
+  content_type?: 'application/json' | 'application/x-www-form-urlencoded';
+  auth_type?: 'none' | 'bearer' | 'api_key' | 'basic' | 'hmac_sha256';
+  auth_token?: string;
+  api_key_header?: string;
+  api_key_value?: string;
+  basic_username?: string;
+  basic_password?: string;
+  hmac_secret?: string;
+  hmac_header?: string;
   headers?: Record<string, string>;
+  header_items?: WebhookKeyValueItem[];
+  payload_mode?: 'auto' | 'key_value' | 'json' | 'form';
+  include_system_payload?: boolean;
+  body_fields?: WebhookKeyValueItem[];
   body_template?: string;
+  query_params?: WebhookKeyValueItem[];
+  response_mappings?: WebhookResponseMapping[];
+  timeout_ms?: number;
+  retry_count?: number;
+  continue_on_error?: boolean;
 }
 
 export type AutomationStepConfig =
