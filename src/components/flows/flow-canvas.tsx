@@ -60,6 +60,7 @@ import '@xyflow/react/dist/style.css';
 import { Plus, Trash2 } from 'lucide-react';
 
 import { useTranslations } from 'next-intl';
+import { useAccountTags } from '@/hooks/use-account-tags';
 
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -139,7 +140,8 @@ function FlowNodeCard({ data, selected }: NodeProps) {
   const meta = NODE_META[node.node_type];
   const c = nodeColors(node.node_type);
   const tSummary = useTranslations('Flows.summary');
-  const summary = summarizeNode(node, tSummary);
+  const { tags } = useAccountTags();
+  const summary = summarizeNode(node, tSummary, (id) => tags.find((tag) => tag.id === id)?.name);
   const slots = outgoingSlots(node);
   // Start nodes are entry-only; nothing ever targets them, so they
   // don't need an incoming Handle. Every other node type accepts

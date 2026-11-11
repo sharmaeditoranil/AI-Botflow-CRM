@@ -1347,7 +1347,6 @@
         "actionLabel": "Ação",
         "addTag": "Adicionar tag",
         "removeTag": "Remover tag",
-        "tagUuidPlaceholder": "UUID da tag",
         "thenAdvanceTo": "Depois avançar para",
         "mediaTypeLabel": "Tipo de mídia",
         "imageLabel": "Imagem (PNG, JPEG, WebP)",
@@ -1367,7 +1366,11 @@
         "fileUploaded": "Arquivo enviado.",
         "uploadFailed": "Falha no upload.",
         "fileTooLarge": "O arquivo tem {size} MB — o limite é 16 MB.",
-        "defaultOptionTitle": "Opção"
+        "defaultOptionTitle": "Opção",
+        "loadingTags": "Carregando tags…",
+        "noTagsYet": "Ainda não há tags.",
+        "createTag": "Criar uma tag",
+        "deletedTag": "Tag excluída (escolha outra)"
       },
       "categories": {
         "messaging": "Mensagens",
@@ -1445,7 +1448,7 @@
       "opMissing": "ausente",
       "modeAdd": "Adicionar",
       "modeRemove": "Remover",
-      "tagPicked": "{mode} tag {tag}…",
+      "tagPicked": "{mode} tag {tag}",
       "tagNone": "{mode} tag (nenhuma escolhida)"
     },
     "header": {

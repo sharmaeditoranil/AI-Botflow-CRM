@@ -297,7 +297,9 @@ export function truncate(s: string, max = 80): string {
 
 export function summarizeNode(
   node: BuilderNode,
-  t?: (key: string, values?: Record<string, string | number>) => string
+  t?: (key: string, values?: Record<string, string | number>) => string,
+  /** Tag id → name, so tag nodes read "Add tag Interested" not a UUID. */
+  tagName?: (id: string) => string | undefined
 ): string | null {
   const cfg = node.config;
   switch (node.node_type) {
@@ -379,9 +381,10 @@ export function summarizeNode(
           : cfg.subject === 'contact_field'
             ? 'field'
             : 'var';
+      const tagLabel = truncate(tagName?.(subjectKey) ?? subjectKey, 24);
       const subjectStr =
         subject === 'tag'
-          ? t ? t('hasTag', { tag: truncate(subjectKey, 24) }) : `has tag ${truncate(subjectKey, 24)}`
+          ? t ? t('hasTag', { tag: tagLabel }) : `has tag ${tagLabel}`
           : `${subject}.${subjectKey}`;
       const op =
         cfg.operator === 'equals'
@@ -403,11 +406,11 @@ export function summarizeNode(
     case 'set_tag': {
       const mode = cfg.mode === 'remove' ? (t ? t('modeRemove') : 'Remove') : (t ? t('modeAdd') : 'Add');
       const tagId = typeof cfg.tag_id === 'string' ? cfg.tag_id : '';
-      // No tag name available without an async lookup here; show a
-      // short prefix of the UUID so users can disambiguate between
-      // multiple set_tag nodes at a glance.
+      // The tag's name when known; else a short UUID prefix so several
+      // set_tag nodes stay distinguishable.
+      const tag = tagId ? truncate(tagName?.(tagId) ?? `${tagId.slice(0, 8)}…`, 24) : '';
       return tagId
-        ? t ? t('tagPicked', { mode, tag: tagId.slice(0, 8) }) : `${mode} tag ${tagId.slice(0, 8)}…`
+        ? t ? t('tagPicked', { mode, tag }) : `${mode} tag ${tag}`
         : t ? t('tagNone', { mode }) : `${mode} tag (none picked)`;
     }
     case 'handoff': {

@@ -33,8 +33,10 @@ import {
   Upload,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
+import { useAccountTags } from "@/hooks/use-account-tags";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -598,12 +600,6 @@ interface ConditionCfg {
   false_next?: string;
 }
 
-interface UserTag {
-  id: string;
-  name: string;
-  color?: string;
-}
-
 function ConditionForm({
   cfg,
   allNodes,
@@ -617,8 +613,6 @@ function ConditionForm({
   onUpdateConfig: (patch: Record<string, unknown>) => void;
   t: ReturnType<typeof useTranslations>;
 }) {
-  const tags = useUserTags();
-
   const subject = cfg.subject ?? "var";
   const operator = cfg.operator ?? "equals";
   const showValue = operator === "equals" || operator === "contains";
@@ -652,22 +646,12 @@ function ConditionForm({
                 ? t("tagLabel")
                 : t("fieldLabel")}
           </label>
-          {subject === "tag" && tags.length > 0 ? (
-            <Select
+          {subject === "tag" ? (
+            <TagSelect
               value={cfg.subject_key ?? ""}
-              onValueChange={(v) => onUpdateConfig({ subject_key: v })}
-            >
-              <SelectTrigger className="bg-muted">
-                <SelectValue placeholder={t("pickTag")} />
-              </SelectTrigger>
-              <SelectContent>
-                {tags.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onChange={(v) => onUpdateConfig({ subject_key: v })}
+              t={t}
+            />
           ) : subject === "contact_field" ? (
             <Select
               value={cfg.subject_key ?? ""}
@@ -689,7 +673,7 @@ function ConditionForm({
               onChange={(e) =>
                 onUpdateConfig({ subject_key: e.target.value })
               }
-              placeholder={subject === "var" ? t("varKeyPlaceholder") : t("tagUuidPlaceholder")}
+              placeholder={t("varKeyPlaceholder")}
               className="bg-muted font-mono text-xs"
             />
           )}
@@ -776,8 +760,6 @@ function SetTagForm({
   onUpdateConfig: (patch: Record<string, unknown>) => void;
   t: ReturnType<typeof useTranslations>;
 }) {
-  const tags = useUserTags();
-
   return (
     <>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -800,30 +782,11 @@ function SetTagForm({
         </div>
         <div>
           <label className="mb-1 block text-xs text-muted-foreground">{t("tagLabel")}</label>
-          {tags.length > 0 ? (
-            <Select
-              value={cfg.tag_id ?? ""}
-              onValueChange={(v) => onUpdateConfig({ tag_id: v })}
-            >
-              <SelectTrigger className="bg-muted">
-                <SelectValue placeholder={t("pickTag")} />
-              </SelectTrigger>
-              <SelectContent>
-                {tags.map((t) => (
-                  <SelectItem key={t.id} value={t.id}>
-                    {t.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <Input
-              value={cfg.tag_id ?? ""}
-              onChange={(e) => onUpdateConfig({ tag_id: e.target.value })}
-              placeholder={t("tagUuidPlaceholder")}
-              className="bg-muted font-mono text-xs"
-            />
-          )}
+          <TagSelect
+            value={cfg.tag_id ?? ""}
+            onChange={(v) => onUpdateConfig({ tag_id: v })}
+            t={t}
+          />
         </div>
       </div>
       <NextNodeRow
@@ -838,29 +801,59 @@ function SetTagForm({
 }
 
 /**
- * Shared loader for both `condition` (subject=tag) and `set_tag`.
- * Falls back to raw UUID input if the endpoint is absent on older
- * deployments — the form remains authorable in that case.
+ * Tag picker for `condition` (subject=tag) and `set_tag`: the account's
+ * tags by name — never a raw UUID to type. A tag that was picked before
+ * and later deleted still shows, flagged, so the node isn't silently
+ * blank.
  */
-function useUserTags(): UserTag[] {
-  const [tags, setTags] = useState<UserTag[]>([]);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/tags").catch(() => null);
-        if (!res || !res.ok) return;
-        const json = (await res.json()) as { tags?: UserTag[] };
-        if (!cancelled) setTags(json.tags ?? []);
-      } catch {
-        // Tags endpoint absent — caller falls back to raw input.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  return tags;
+function TagSelect({
+  value,
+  onChange,
+  t,
+}: {
+  value: string;
+  onChange: (tagId: string) => void;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const { tags, loading } = useAccountTags();
+  const missing = value !== "" && !loading && !tags.some((tag) => tag.id === value);
+
+  if (!loading && tags.length === 0 && !missing) {
+    return (
+      <p className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+        {t("noTagsYet")}{" "}
+        <Link href="/settings?tab=tags" className="font-medium text-primary hover:underline">
+          {t("createTag")}
+        </Link>
+      </p>
+    );
+  }
+
+  return (
+    <Select value={value} onValueChange={(v) => onChange(v ?? "")} disabled={loading}>
+      <SelectTrigger className="bg-muted">
+        <SelectValue placeholder={loading ? t("loadingTags") : t("pickTag")} />
+      </SelectTrigger>
+      <SelectContent>
+        {missing && (
+          <SelectItem value={value} disabled>
+            {t("deletedTag")}
+          </SelectItem>
+        )}
+        {tags.map((tag) => (
+          <SelectItem key={tag.id} value={tag.id}>
+            <span className="flex items-center gap-2">
+              <span
+                className="size-2 shrink-0 rounded-full"
+                style={{ backgroundColor: tag.color || "var(--muted-foreground)" }}
+              />
+              {tag.name}
+            </span>
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
 }
 
 // ============================================================

@@ -1322,7 +1322,6 @@
         "actionLabel": "Action",
         "addTag": "Add tag",
         "removeTag": "Remove tag",
-        "tagUuidPlaceholder": "Tag UUID",
         "thenAdvanceTo": "Then advance to",
         "mediaTypeLabel": "Media type",
         "imageLabel": "Image (PNG, JPEG, WebP)",
@@ -1342,7 +1341,11 @@
         "fileUploaded": "File uploaded.",
         "uploadFailed": "Upload failed.",
         "fileTooLarge": "File is {size} MB — limit is 16 MB.",
-        "defaultOptionTitle": "Option"
+        "defaultOptionTitle": "Option",
+        "loadingTags": "Loading tags…",
+        "noTagsYet": "No tags yet.",
+        "createTag": "Create a tag",
+        "deletedTag": "Deleted tag (pick another)"
       },
       "categories": {
         "messaging": "Messaging",
@@ -1420,7 +1423,7 @@
       "opMissing": "missing",
       "modeAdd": "Add",
       "modeRemove": "Remove",
-      "tagPicked": "{mode} tag {tag}…",
+      "tagPicked": "{mode} tag {tag}",
       "tagNone": "{mode} tag (none picked)"
     },
     "header": {

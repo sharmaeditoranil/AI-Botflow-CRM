@@ -4,6 +4,7 @@ import {
   NODE_CATEGORIES,
   NODE_META,
   groupNodeTypesByCategory,
+  summarizeNode,
   type NodeType,
 } from './shared';
 
@@ -42,5 +43,25 @@ describe('groupNodeTypesByCategory', () => {
   it('partitions the full type list without losing or duplicating a type', () => {
     const grouped = groupNodeTypesByCategory(ALL_TYPES).flatMap((g) => g.types);
     expect([...grouped].sort()).toEqual([...ALL_TYPES].sort());
+  });
+});
+
+describe('summarizeNode tag names', () => {
+  const ID = '3f2b9c1e-0000-4000-8000-000000000000';
+  const names = (id: string) => (id === ID ? 'Interested' : undefined);
+
+  it('shows the tag name on set_tag and condition nodes', () => {
+    expect(
+      summarizeNode({ node_key: 'a', node_type: 'set_tag', config: { mode: 'add', tag_id: ID } }, undefined, names),
+    ).toBe('Add tag Interested');
+    expect(
+      summarizeNode({ node_key: 'b', node_type: 'condition', config: { subject: 'tag', subject_key: ID } }, undefined, names),
+    ).toBe('has tag Interested');
+  });
+
+  it('falls back to a short id when the tag is unknown', () => {
+    expect(
+      summarizeNode({ node_key: 'a', node_type: 'set_tag', config: { tag_id: ID } }),
+    ).toBe('Add tag 3f2b9c1e…');
   });
 });

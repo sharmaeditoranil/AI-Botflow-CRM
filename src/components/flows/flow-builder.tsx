@@ -19,6 +19,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { useAccountTags } from '@/hooks/use-account-tags';
 import {
   CircleAlert,
   Plus,
@@ -406,7 +407,8 @@ function NodeCard({
   const c = nodeColors(node.node_type);
   const hasError = issues.some((i) => i.severity === 'error');
   const tSummary = useTranslations('Flows.summary');
-  const preview = summarizeNode(node, tSummary);
+  const { tags } = useAccountTags();
+  const preview = summarizeNode(node, tSummary, (id) => tags.find((tag) => tag.id === id)?.name);
   return (
     <div
       ref={cardRef}

@@ -1347,7 +1347,6 @@
         "actionLabel": "액션",
         "addTag": "태그 추가",
         "removeTag": "태그 제거",
-        "tagUuidPlaceholder": "태그 UUID",
         "thenAdvanceTo": "이후 다음 진행",
         "mediaTypeLabel": "미디어 유형",
         "imageLabel": "이미지 (PNG, JPEG, WebP)",
@@ -1367,7 +1366,11 @@
         "fileUploaded": "파일이 업로드되었습니다.",
         "uploadFailed": "업로드에 실패했습니다.",
         "fileTooLarge": "파일이 {size}MB입니다 — 제한은 16MB입니다.",
-        "defaultOptionTitle": "옵션"
+        "defaultOptionTitle": "옵션",
+        "loadingTags": "태그 불러오는 중…",
+        "noTagsYet": "아직 태그가 없습니다.",
+        "createTag": "태그 만들기",
+        "deletedTag": "삭제된 태그 (다른 태그 선택)"
       },
       "categories": {
         "messaging": "메시징",
@@ -1445,7 +1448,7 @@
       "opMissing": "존재하지 않음",
       "modeAdd": "추가",
       "modeRemove": "제거",
-      "tagPicked": "{tag} 태그 {mode}…",
+      "tagPicked": "{tag} 태그 {mode}",
       "tagNone": "태그 {mode} (선택된 태그 없음)"
     },
     "header": {
