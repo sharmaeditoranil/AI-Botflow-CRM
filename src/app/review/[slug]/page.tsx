@@ -59,6 +59,10 @@ export default function PublicReviewPage({
   // 4-5 Stars Auto-Generated Review State
   const [autoReviewText, setAutoReviewText] = useState("");
   const [hasCopied, setHasCopied] = useState(false);
+  // A fresh, different draft for every customer (business keywords woven in).
+  const [drafting, setDrafting] = useState(false);
+  const [keywords, setKeywords] = useState<string[]>([]);
+  const [liked, setLiked] = useState<string[]>([]);
 
   // Private feedback form state (for 1-3 stars)
   const [feedbackText, setFeedbackText] = useState("");
@@ -75,10 +79,6 @@ export default function PublicReviewPage({
         const json = await res.json();
         if (res.ok && json.data) {
           setData(json.data);
-          const biz = json.data.business_name || "this business";
-          setAutoReviewText(
-            `Outstanding experience with ${biz}! Highly professional team, top-notch quality, and very quick service. Best in the area, 100% recommended to everyone!`
-          );
         } else {
           setError(json.error || "Review link is inactive or not found.");
         }
@@ -91,19 +91,44 @@ export default function PublicReviewPage({
     fetchConfig();
   }, [slug]);
 
+  const fetchDraft = async (rating: number, likedNow: string[]) => {
+    if (!data) return;
+    setDrafting(true);
+    setHasCopied(false);
+    try {
+      const res = await fetch("/api/gmb/magic-qr/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: data.slug, rating, liked: likedNow }),
+      });
+      const json = await res.json();
+      if (res.ok && json.text) {
+        setAutoReviewText(json.text);
+        if (Array.isArray(json.keywords)) setKeywords(json.keywords.slice(0, 8));
+      } else if (!autoReviewText) {
+        setAutoReviewText(`Very good experience with ${data.business_name}. Helpful team and good service. Recommended!`);
+      }
+    } catch {
+      if (!autoReviewText) {
+        setAutoReviewText(`Very good experience with ${data.business_name}. Helpful team and good service. Recommended!`);
+      }
+    } finally {
+      setDrafting(false);
+    }
+  };
+
+  const toggleLiked = (k: string) => {
+    const next = liked.includes(k) ? liked.filter((x) => x !== k) : [...liked, k].slice(-2);
+    setLiked(next);
+    void fetchDraft(selectedRating ?? 5, next);
+  };
+
   const handleSelectRating = async (rating: number) => {
     setSelectedRating(rating);
     setHasCopied(false);
 
     const minStars = data?.min_star_for_google ?? 4;
-    if (rating >= minStars && autoReviewText.trim()) {
-      try {
-        await navigator.clipboard.writeText(autoReviewText.trim());
-        setHasCopied(true);
-      } catch {
-        // Fallback for browsers requiring explicit button click
-      }
-    }
+    if (rating >= minStars) void fetchDraft(rating, liked);
 
     // Auto-scroll to the action section on mobile smoothly
     setTimeout(() => {
@@ -292,53 +317,52 @@ export default function PublicReviewPage({
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
                       <Sparkles className="size-3 text-amber-400" />
-                      Automatic 5-Star Review (Ready to Post)
+                      Suggested Review — apne shabd jod sakte hain
                     </span>
                     <span className="text-[10px] text-slate-400 bg-slate-900 px-2 py-0.5 rounded-md border border-slate-800">
                       Editable
                     </span>
                   </div>
                   <Textarea
-                    rows={3}
-                    value={autoReviewText}
+                    rows={4}
+                    value={drafting && !autoReviewText ? "" : autoReviewText}
+                    placeholder={drafting ? "Aapke liye review likh rahe hain…" : ""}
+                    readOnly={drafting}
                     onChange={(e) => setAutoReviewText(e.target.value)}
                     className="bg-transparent border-0 p-0 text-xs text-white leading-relaxed resize-none focus-visible:ring-0 placeholder:text-slate-500 font-medium"
                   />
 
-                  {/* 1-Tap Quick Style Chips */}
-                  <div className="pt-2 border-t border-slate-800 flex flex-wrap gap-1.5">
+                  {/* What did you like? — rewrites the draft around it */}
+                  <div className="pt-2 border-t border-slate-800 space-y-2">
+                    {keywords.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        <span className="w-full text-[10px] text-slate-400">Aapko kya pasand aaya? (tap karein)</span>
+                        {keywords.map((k) => (
+                          <button
+                            key={k}
+                            type="button"
+                            disabled={drafting}
+                            onClick={() => toggleLiked(k)}
+                            className={`px-2.5 py-1 rounded-lg border text-[10px] transition-colors disabled:opacity-60 ${
+                              liked.includes(k)
+                                ? "bg-amber-500/20 border-amber-500/60 text-amber-200"
+                                : "bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-300"
+                            }`}
+                          >
+                            {liked.includes(k) ? "✓ " : ""}
+                            {k}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     <button
                       type="button"
-                      onClick={() =>
-                        handlePresetSelect(
-                          `⚡ Fast service, outstanding quality, and polite staff! Very happy with ${data.business_name}. Highly recommended!`
-                        )
-                      }
-                      className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[10px] text-slate-300 transition-colors"
+                      disabled={drafting}
+                      onClick={() => fetchDraft(selectedRating ?? 5, liked)}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[10px] font-semibold text-amber-300 transition-colors disabled:opacity-60"
                     >
-                      ⚡ Fast & Polite
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handlePresetSelect(
-                          `🏆 Best quality and experience in town! ${data.business_name} exceeded all our expectations. 100% recommended!`
-                        )
-                      }
-                      className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[10px] text-slate-300 transition-colors"
-                    >
-                      🏆 Best Quality
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handlePresetSelect(
-                          `🤝 Excellent team, great training, and reasonable pricing! Truly delighted with ${data.business_name}. Will visit again!`
-                        )
-                      }
-                      className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-[10px] text-slate-300 transition-colors"
-                    >
-                      🤝 Best Pricing
+                      <Sparkles className="size-3" />
+                      {drafting ? "Likh rahe hain…" : "Naya review likhein"}
                     </button>
                   </div>
                 </div>

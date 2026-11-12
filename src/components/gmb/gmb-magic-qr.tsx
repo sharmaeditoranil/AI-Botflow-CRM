@@ -45,6 +45,7 @@ interface MagicQrConfig {
   qr_scans_count?: number;
   positive_redirects_count?: number;
   negative_feedbacks_count?: number;
+  metadata?: { keywords?: string[] | string } | null;
 }
 
 interface PrivateFeedback {
@@ -71,6 +72,7 @@ export function GmbMagicQr() {
   const [minStar, setMinStar] = useState(4);
   const [heading, setHeading] = useState("");
   const [subheading, setSubheading] = useState("");
+  const [keywords, setKeywords] = useState("");
   const [activeTab, setActiveTab] = useState<"qr" | "feedbacks" | "settings">("qr");
 
   const [siteOrigin, setSiteOrigin] = useState("https://dash.aibotflow.in");
@@ -94,6 +96,8 @@ export function GmbMagicQr() {
         setMinStar(data.config.min_star_for_google || 4);
         setHeading(data.config.heading || "How was your experience with us?");
         setSubheading(data.config.subheading || "Your feedback helps us continuously improve.");
+        const kw = data.config.metadata?.keywords;
+        setKeywords(Array.isArray(kw) ? kw.join(", ") : typeof kw === "string" ? kw : "");
         setFeedbacks(data.feedbacks || []);
       }
     } catch (err: any) {
@@ -152,6 +156,7 @@ export function GmbMagicQr() {
           min_star_for_google: Number(minStar),
           heading,
           subheading,
+          keywords,
         }),
       });
 
@@ -679,6 +684,20 @@ export function GmbMagicQr() {
                     className="text-xs h-9"
                   />
                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Review Keywords</Label>
+                <Textarea
+                  rows={2}
+                  value={keywords}
+                  onChange={(e) => setKeywords(e.target.value)}
+                  placeholder="e.g. wedding photography, video editing course, album design, photography classes in Bihar"
+                  className="text-xs"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Comma se alag likhiye. Har customer ko alag review draft milega jisme in me se 1–2 keywords naturally aayenge, aur customer bhi tap karke chun sakta hai ki use kya pasand aaya. Khaali chhodne pe Google profile ki category use hogi.
+                </p>
               </div>
 
               <div className="pt-2">

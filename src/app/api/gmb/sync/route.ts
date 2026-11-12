@@ -95,6 +95,20 @@ export async function POST() {
       const locations = await fetchGoogleBusinessLocations(accessToken, gAcc.name);
       if (locations && locations.length > 0) {
         for (const loc of locations) {
+          // Keep our own flags (is_active…) and add what the profile says the
+          // business offers — Magic QR review drafts use these as keywords.
+          const { data: prevLoc } = await adminDb
+            .from("google_business_locations")
+            .select("metadata")
+            .eq("account_id", profile.account_id)
+            .eq("location_id", loc.name || "")
+            .maybeSingle();
+          const services = (loc.serviceItems || [])
+            .map((it: any) => it?.freeFormServiceItem?.label?.displayName || it?.structuredServiceItem?.description || "")
+            .filter(Boolean);
+          const additionalCategories = (loc.categories?.additionalCategories || [])
+            .map((c: any) => c?.displayName)
+            .filter(Boolean);
           const locPayload = {
             account_id: profile.account_id,
             google_account_id: gAccount.id,
@@ -104,7 +118,13 @@ export async function POST() {
             phone: loc.phoneNumbers?.primaryPhone || "",
             website: loc.websiteUri || "",
             primary_category: loc.categories?.primaryCategory?.displayName || "",
-            metadata: loc.metadata || {},
+            metadata: {
+              ...((prevLoc?.metadata as Record<string, unknown>) || {}),
+              ...(loc.metadata || {}),
+              ...(services.length ? { services } : {}),
+              ...(additionalCategories.length ? { additional_categories: additionalCategories } : {}),
+              ...(loc.profile?.description ? { description: String(loc.profile.description).slice(0, 750) } : {}),
+            },
             status: "active",
             is_verified: true,
             updated_at: new Date().toISOString(),

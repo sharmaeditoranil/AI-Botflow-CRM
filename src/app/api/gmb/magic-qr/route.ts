@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { parseKeywords } from "@/lib/gmb/review-draft";
 import { getAdminSupabase } from "@/lib/auth/super-admin";
 
 export async function GET(req: NextRequest) {
@@ -182,6 +183,7 @@ export async function POST(req: NextRequest) {
       subheading,
       thank_you_title,
       thank_you_message,
+      keywords,
     } = body;
 
     if (!business_name?.trim() || !slug?.trim()) {
@@ -196,8 +198,19 @@ export async function POST(req: NextRequest) {
 
     const adminDb = getAdminSupabase();
 
+    // Keep the rest of metadata (e.g. recent review drafts) when saving keywords.
+    const { data: existing } = await adminDb
+      .from("google_business_magic_qr")
+      .select("metadata")
+      .eq("account_id", profile.account_id)
+      .eq("slug", sanitizedSlug)
+      .maybeSingle();
+    const metadata: Record<string, unknown> = { ...((existing?.metadata as Record<string, unknown>) || {}) };
+    if (keywords !== undefined) metadata.keywords = parseKeywords(keywords);
+
     const payload = {
       account_id: profile.account_id,
+      metadata,
       business_name: business_name.trim(),
       slug: sanitizedSlug,
       google_review_url: google_review_url?.trim() || "",
