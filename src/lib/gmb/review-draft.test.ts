@@ -70,7 +70,17 @@ describe('fallbackReview', () => {
       drafts.add(fallbackReview({ ...base, style }, ['album design']))
     }
     expect(drafts.size).toBeGreaterThan(10)
-    for (const d of drafts) expect(d).toContain('album design')
+    for (const d of drafts) expect(d.toLowerCase()).toContain('album design')
+  })
+})
+
+describe('fallbackReview phrasing', () => {
+  it('lower-cases a keyword mid-sentence but keeps acronyms', () => {
+    const style = { language: 'english' as const, length: 'short' as const, opening: '', tone: '' }
+    const d = fallbackReview({ businessName: 'X', keywords: [], rating: 5, style }, ['Photography Class'], () => 0)
+    expect(d).toContain('photography class')
+    const a = fallbackReview({ businessName: 'X', keywords: [], rating: 5, style }, ['AI Video Editing'], () => 0)
+    expect(a).toContain('AI video editing')
   })
 })
 

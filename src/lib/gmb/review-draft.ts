@@ -128,6 +128,10 @@ const EN_OPEN = [
   'Had a great experience.',
   'Honestly impressed.',
   'Good experience overall.',
+  'Nice experience from start to finish.',
+  'Satisfied with everything.',
+  'One of the better places I have been to.',
+  'Pleasant experience.',
 ]
 const EN_MID = [
   'The {k} was handled with care and the team explained everything clearly.',
@@ -135,23 +139,56 @@ const EN_MID = [
   'I came for {k} and the quality was better than I expected.',
   'Everything about the {k} felt professional and well organised.',
   'The team knows {k} well and was patient with all my questions.',
+  'For {k} this is a place I can trust.',
+  'I liked how they handled the {k}, very smooth.',
+  'Good guidance on {k} and nothing felt rushed.',
 ]
-const EN_CLOSE = ['Would recommend.', 'Will definitely come back.', 'Recommended to friends already.', 'Worth it.', 'Thanks to the whole team.']
-const HI_OPEN = ['Bahut accha experience raha.', 'Kaafi badhiya laga yahan.', 'Sach mein accha experience tha.', 'Yahan aakar khushi hui.']
+const EN_EXTRA = [
+  'Staff were polite and quick to respond.',
+  'Communication was clear the whole time.',
+  'The atmosphere is friendly.',
+  'They were on time and easy to deal with.',
+  '',
+]
+const EN_CLOSE = ['Would recommend.', 'Will definitely come back.', 'Recommended to friends already.', 'Worth it.', 'Thanks to the whole team.', 'Keep it up!', 'Happy to recommend them.']
+const HI_OPEN = [
+  'Bahut accha experience raha.',
+  'Kaafi badhiya laga yahan.',
+  'Sach mein accha experience tha.',
+  'Yahan aakar khushi hui.',
+  'Ekdum mast experience.',
+  'Bahut satisfied hoon.',
+]
 const HI_MID = [
   '{k} ka kaam bahut acche se hua aur team ne sab clearly samjhaya.',
   'Inka {k} sach mein accha hai, staff bhi helpful hai.',
   '{k} ke liye aaya tha aur quality expectation se better thi.',
   '{k} me inki team ka experience saaf dikhta hai.',
+  '{k} ke liye ye jagah bharose layak hai.',
+  '{k} me guidance bahut acchi mili, koi jaldbaazi nahi.',
 ]
-const HI_CLOSE = ['Recommend karunga.', 'Dobara zaroor aaunga.', 'Sabko suggest karta hoon.', 'Thank you team!']
+const HI_EXTRA = ['Staff ka behaviour bhi accha tha.', 'Har sawaal ka jawab aaram se diya.', 'Time pe kaam ho gaya.', '']
+const HI_CLOSE = ['Recommend karunga.', 'Dobara zaroor aaunga.', 'Sabko suggest karta hoon.', 'Thank you team!', 'Keep it up!']
+
+/** "Photography Class" → "photography class" mid-sentence; keeps acronyms (AI, DSLR). */
+function asPhrase(k: string): string {
+  return k
+    .split(' ')
+    .map((w) => (w.length > 1 && w === w.toUpperCase() ? w : w.toLowerCase()))
+    .join(' ')
+}
 
 export function fallbackReview(input: DraftInput, focus: string[], random: Rand = Math.random): string {
   const hindi = input.style.language === 'hinglish'
-  const k = focus[0] || input.category || 'service'
+  const k = asPhrase(focus[0] || input.category || 'service')
   const mid = pick(hindi ? HI_MID : EN_MID, random).replace('{k}', k)
-  const parts = [pick(hindi ? HI_OPEN : EN_OPEN, random), mid]
-  if (focus[1]) parts.push(hindi ? `${focus[1]} bhi accha laga.` : `The ${focus[1]} was good too.`)
+  const midSentence = /^[a-z]/.test(mid) ? mid[0].toUpperCase() + mid.slice(1) : mid
+  const parts = [pick(hindi ? HI_OPEN : EN_OPEN, random), midSentence]
+  if (focus[1]) {
+    const k2 = asPhrase(focus[1])
+    parts.push(hindi ? `${k2} bhi accha laga.` : `The ${k2} was good too.`)
+  }
+  if (input.style.length === 'long') parts.push(pick(hindi ? HI_EXTRA : EN_EXTRA, random))
   if (input.style.length !== 'short') parts.push(pick(hindi ? HI_CLOSE : EN_CLOSE, random))
-  return parts.join(' ')
+  return parts.filter(Boolean).join(' ')
 }
